@@ -18,18 +18,23 @@ remain explicit validation work.
   view because MIDI files do not contain complete engraving information.
 - Groups simultaneous pitched note attacks by exact rational score time, even across enabled parts.
   Rests and tied continuations do not create extra conducting events.
-- Conducts from Space, Enter, the large pointer target, score targets, or MIDI Note On. MIDI input
+- Conducts from Space, Enter, the large pointer target, or MIDI Note On. MIDI input
   velocity controls the whole sounded note/chord; the MIDI key's pitch is intentionally ignored.
 - Highlights the most recently played slice separately from the next live cursor.
-- Auditions any event without moving the live cursor, or moves the cursor with **Start here**.
+- Engraves MusicXML as one long horizontal system with a persistent horizontal scrollbar. During
+  playback, the view follows the slice by whole-measure context rather than continually chasing it.
+- Shows permanent ear and down-arrow controls at every slice: the ear plays that single chord
+  without moving the live cursor, while the arrow moves the live cursor there. Selecting an
+  individual notehead plays only that note, even while other sounds are active.
 - Selects score parts, audio output, MIDI input, and MIDI output at runtime. **Panic** immediately
   clears sounding groups and MIDI output notes.
 - Uses a bounded, allocation-free audio callback path, sample-clock scheduling, a fixed voice pool,
   and an SPSC command queue. Windows queries shared-mode periods through `IAudioClient3` and renders
   through CPAL's WASAPI backend.
 
-The built-in instrument is a small procedural piano-like synthesizer, so the app starts without an
-external sample library. No SoundFont or recorded piano samples are bundled.
+The built-in instrument is a small, bright procedural piano-like synthesizer with six independently
+decaying partials, so the app starts without an external sample library. No SoundFont or recorded
+piano samples are bundled.
 
 ## Piano gate behavior
 

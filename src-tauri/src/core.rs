@@ -156,6 +156,38 @@ impl AppCore {
         self.apply_transition(result?)
     }
 
+    pub fn audition_note(
+        &mut self,
+        generation: u64,
+        index: usize,
+        midi_pitch: u8,
+        token: String,
+        midi_velocity: u8,
+    ) -> Result<Option<CoreEventDto>, String> {
+        self.ensure_audio_ready()?;
+        let engine_generation = self.require_ui_generation(generation)?;
+        let event = self.event_id(index)?;
+        let pitch = MidiPitch::new(midi_pitch)
+            .ok_or_else(|| format!("Invalid MIDI pitch {midi_pitch}."))?;
+        let (input, inserted) = self.input_for_down(token.clone())?;
+        let velocity = velocity_from_midi1(midi_velocity)?;
+        let result = self
+            .performance
+            .handle(PerformanceCommand::AuditionNote {
+                generation: engine_generation,
+                event,
+                pitch,
+                input,
+                at: self.now(),
+                velocity,
+            })
+            .map_err(|error| error.to_string());
+        if result.is_err() && inserted {
+            self.input_ids.remove(&token);
+        }
+        self.apply_transition(result?)
+    }
+
     pub fn release_input(&mut self, token: &str) -> Result<Option<CoreEventDto>, String> {
         let Some(input) = self.input_ids.get(token).copied() else {
             return Ok(None);

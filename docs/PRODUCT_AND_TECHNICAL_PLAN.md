@@ -19,7 +19,8 @@ The primary workflow is:
 5. Hear every active note beginning at that exact musical position as one sample-aligned piano
    attack.
 6. See that vertical slice highlighted while the live cursor advances to the next sounding position.
-7. Audition any slice without moving the live cursor, or explicitly move the live cursor to it.
+7. Play any single chord or individual note without moving the live cursor, or explicitly move the
+   live cursor to any slice.
 
 Rests never consume a tap. A chord on one staff and notes at the same rational score position on
 other voices, staves, or parts form one tap event.
@@ -31,11 +32,14 @@ other voices, staves, or parts form one tap event.
 - A compact top bar contains Open, active parts, output device, volume, panic, and settings.
 - A persistent performance strip shows Ready/Loading/Audio fault, the next measure and beat, and a
   large pointer tap target. Space and Enter are the default keyboard triggers.
-- The current slice uses a strong translucent vertical highlight across all staves in its system.
+- The score is engraved as one long horizontal system with a permanently available horizontal
+  scrollbar. The current slice uses a strong translucent vertical highlight across all staves.
   The next slice has a lighter preview marker.
-- Hovering or focusing a slice reveals two small controls above the system: **Audition** plays it
-  without changing position; **Start here** changes the live cursor. On touch, one tap selects the
-  slice and exposes these controls, avoiding tiny permanent buttons on dense scores.
+- Every slice permanently shows two compact controls: an ear icon (**Play single chord**) plays it
+  without changing position, and a downward arrow (**Start here**) changes the live cursor. Selecting
+  an individual notehead plays only that note without affecting the cursor or other sounding groups.
+- When playback reaches within one measure of the viewport's right edge, the score scrolls so the
+  slice has one measure of context to its left. Manual horizontal scrolling remains available.
 - Performance input is handled on key/pointer down, not release. Key auto-repeat is ignored.
 - Input release is also captured because it participates in the default piano note-off rule, but it
   never delays a new attack.
@@ -72,7 +76,7 @@ Core types should be independent Rust types, with serialization used only at the
 ScorePosition = { occurrence, measure_id, offset: Rational }
 NoteAttack    = { source_id, staff, voice, midi_pitch, end, tie, velocity_hint }
 TapEvent      = { id, position, attacks[], release_boundaries[], display_anchors[] }
-Performance  = { cursor_index, active_parts, mode, generation }
+Performance  = { cursor_index, active_parts, generation }
 ```
 
 Rules for the MVP:
@@ -345,7 +349,8 @@ anchors match independently prepared expected data.
 
 - Implement the file picker, score viewport, zoom/reflow, current/next highlights, active-part UI,
   audition controls, start-here controls, keyboard mapping, and performance tap surface.
-- Connect source IDs to OSMD graphical notes and compute per-system vertical slice overlays.
+- Connect source IDs to OSMD graphical notes and compute vertical slice and notehead overlays on a
+  single horizontal system.
 - Add the production WASAPI backend, device selection, warm-up/Ready state, recovery, volume, and
   diagnostics.
 - Bundle a legally approved piano asset and add installer/third-party notices.
@@ -398,7 +403,8 @@ below pass.
   released. A subsequent tap inside the minimum starts immediately while the earlier group continues.
 - Holding an input never causes a note-off, and the synth's normal piano decay is never looped,
   amplified, frozen, or time-stretched to fill the hold or minimum period.
-- Audition plays the selected slice without moving the cursor; Start here moves it predictably.
+- Play single chord and single-note selection sound without moving the cursor; Start here moves it
+  predictably.
 - Changing active parts rebuilds the sequence safely and never leaves a voice sounding.
 - Keyboard and pointer controls work without focus surprises; Panic always works.
 

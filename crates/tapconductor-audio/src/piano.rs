@@ -1,6 +1,11 @@
 use crate::{Sampler, VoiceGroupId, VoiceStart};
 use core::f32::consts::TAU;
 
+const PARTIAL_COUNT: usize = 6;
+const PARTIAL_RATIOS: [f32; PARTIAL_COUNT] = [1.0, 2.006, 3.018, 4.034, 5.056, 6.082];
+const PARTIAL_GAINS: [f32; PARTIAL_COUNT] = [1.0, 0.48, 0.30, 0.21, 0.15, 0.11];
+const PARTIAL_HALF_LIVES: [f32; PARTIAL_COUNT] = [10_000.0, 2.8, 1.9, 1.35, 1.0, 0.75];
+
 /// Controls the dependency-free fallback instrument.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PianoConfig {
@@ -18,7 +23,7 @@ impl PianoConfig {
             sample_rate,
             held_half_life_seconds: 0.85,
             release_half_life_seconds: 0.025,
-            output_gain: 0.16,
+            output_gain: 0.12,
         }
     }
 }
@@ -29,8 +34,9 @@ struct Voice {
     released: bool,
     group: VoiceGroupId,
     pitch: u8,
-    oscillator: [f32; 3],
-    previous: [f32; 3],
+    oscillator: [f32; PARTIAL_COUNT],
+    previous: [f32; PARTIAL_COUNT],
+    partial_amplitudes: [f32; PARTIAL_COUNT],
     amplitude: f32,
     age: u64,
 }
@@ -41,8 +47,9 @@ impl Voice {
         released: false,
         group: VoiceGroupId(0),
         pitch: 0,
-        oscillator: [0.0; 3],
-        previous: [0.0; 3],
+        oscillator: [0.0; PARTIAL_COUNT],
+        previous: [0.0; PARTIAL_COUNT],
+        partial_amplitudes: [0.0; PARTIAL_COUNT],
         amplitude: 0.0,
         age: 0,
     };
@@ -56,8 +63,9 @@ impl Voice {
 /// 400 ms gate policy never stretches or freezes its envelope.
 pub struct PianoSynth<const VOICES: usize = 128> {
     voices: [Voice; VOICES],
-    oscillator_coefficients: [[f32; 3]; 128],
-    oscillator_starts: [[[f32; 2]; 3]; 128],
+    oscillator_coefficients: [[f32; PARTIAL_COUNT]; 128],
+    oscillator_starts: [[[f32; 2]; PARTIAL_COUNT]; 128],
+    partial_decay: [f32; PARTIAL_COUNT],
     held_decay: f32,
     release_decay: f32,
     output_gain: f32,
@@ -87,22 +95,30 @@ impl<const VOICES: usize> PianoSynth<VOICES> {
             0.5_f32.powf(1.0 / (config.held_half_life_seconds * config.sample_rate as f32));
         let release_decay =
             0.5_f32.powf(1.0 / (config.release_half_life_seconds * config.sample_rate as f32));
-        let mut oscillator_coefficients = [[0.0; 3]; 128];
-        let mut oscillator_starts = [[[0.0; 2]; 3]; 128];
-        let partials = [1.0_f32, 2.006, 3.018];
+        let mut oscillator_coefficients = [[0.0; PARTIAL_COUNT]; 128];
+        let mut oscillator_starts = [[[0.0; 2]; PARTIAL_COUNT]; 128];
         for pitch in 0..128 {
             let frequency = 440.0 * 2.0_f32.powf((pitch as f32 - 69.0) / 12.0);
-            for (partial_index, partial) in partials.iter().copied().enumerate() {
+            for (partial_index, partial) in PARTIAL_RATIOS.iter().copied().enumerate() {
                 let step = TAU * frequency * partial / config.sample_rate as f32;
+                // Do not synthesize a partial at/above Nyquist. Leaving both
+                // recurrence states at zero prevents aliased brightness in
+                // the upper register.
+                if step >= core::f32::consts::PI * 0.98 {
+                    continue;
+                }
                 let phase = 0.17 * partial;
                 oscillator_coefficients[pitch][partial_index] = 2.0 * step.cos();
                 oscillator_starts[pitch][partial_index] = [phase.sin(), (phase - step).sin()];
             }
         }
+        let partial_decay = PARTIAL_HALF_LIVES
+            .map(|half_life| 0.5_f32.powf(1.0 / (half_life * config.sample_rate as f32)));
         Ok(Self {
             voices: [Voice::SILENT; VOICES],
             oscillator_coefficients,
             oscillator_starts,
+            partial_decay,
             held_decay,
             release_decay,
             output_gain: config.output_gain,
@@ -155,21 +171,27 @@ impl<const VOICES: usize> Sampler for PianoSynth<VOICES> {
         let velocity = velocity as f32 / u16::MAX as f32;
         // A square-root curve keeps quiet rehearsal velocities audible.
         let amplitude = velocity.sqrt();
+        // A firmer strike excites progressively more upper string modes. The
+        // base profile is intentionally bright enough to remain distinct
+        // against singers even at the default rehearsal velocity.
+        let brightness = 0.9 + velocity * 0.22;
+        let mut brightness_power = 1.0;
+        let mut partial_amplitudes = [0.0; PARTIAL_COUNT];
+        for partial in 0..PARTIAL_COUNT {
+            partial_amplitudes[partial] = PARTIAL_GAINS[partial] * brightness_power;
+            if self.oscillator_starts[pitch as usize][partial] == [0.0, 0.0] {
+                partial_amplitudes[partial] = 0.0;
+            }
+            brightness_power *= brightness;
+        }
         self.voices[index] = Voice {
             active: true,
             released: false,
             group,
             pitch,
-            oscillator: [
-                self.oscillator_starts[pitch as usize][0][0],
-                self.oscillator_starts[pitch as usize][1][0],
-                self.oscillator_starts[pitch as usize][2][0],
-            ],
-            previous: [
-                self.oscillator_starts[pitch as usize][0][1],
-                self.oscillator_starts[pitch as usize][1][1],
-                self.oscillator_starts[pitch as usize][2][1],
-            ],
+            oscillator: self.oscillator_starts[pitch as usize].map(|state| state[0]),
+            previous: self.oscillator_starts[pitch as usize].map(|state| state[1]),
+            partial_amplitudes,
             amplitude,
             age: self.next_age,
         };
@@ -203,20 +225,20 @@ impl<const VOICES: usize> Sampler for PianoSynth<VOICES> {
                 if !voice.active {
                     continue;
                 }
-                // Slight inharmonicity gives a more piano-like color than a
-                // lone sine while retaining a very small state per voice.
-                let fundamental = voice.oscillator[0];
-                let second = voice.oscillator[1] * 0.31;
-                let third = voice.oscillator[2] * 0.13;
-                mixed += (fundamental + second + third) * voice.amplitude;
-
-                for partial in 0..3 {
+                // Stiff-string inharmonic partials create the bright hammer
+                // attack. Their individual envelopes decay progressively
+                // faster, as measured piano partials do.
+                let mut voice_sample = 0.0;
+                for partial in 0..PARTIAL_COUNT {
+                    voice_sample += voice.oscillator[partial] * voice.partial_amplitudes[partial];
                     let next = self.oscillator_coefficients[voice.pitch as usize][partial]
                         * voice.oscillator[partial]
                         - voice.previous[partial];
                     voice.previous[partial] = voice.oscillator[partial];
                     voice.oscillator[partial] = next;
+                    voice.partial_amplitudes[partial] *= self.partial_decay[partial];
                 }
+                mixed += voice_sample * voice.amplitude;
                 voice.amplitude *= if voice.released {
                     self.release_decay
                 } else {
@@ -276,6 +298,17 @@ mod tests {
             .map(f32::abs)
             .fold(0.0, f32::max);
         assert!(late_peak < early_peak * 0.6);
+    }
+
+    #[test]
+    fn middle_register_strike_excites_bright_upper_partials() {
+        let mut synth = PianoSynth::<1>::new(PianoConfig::new(48_000)).unwrap();
+        synth.note_on(VoiceGroupId(1), 60, u16::MAX);
+        let voice = &synth.voices[0];
+        assert!(voice.partial_amplitudes[3] > 0.20);
+        assert!(voice.partial_amplitudes[4] > 0.15);
+        assert!(voice.partial_amplitudes[5] > 0.12);
+        assert!(synth.partial_decay[5] < synth.partial_decay[1]);
     }
 
     #[test]

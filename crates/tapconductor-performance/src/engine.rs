@@ -1,9 +1,9 @@
 use core::fmt;
 
 use crate::{
-    AudioCommand, DefaultPianoGate, EventId, GateError, GatePolicy, Generation, IgnoreReason,
-    InputId, PerformanceEvent, SafetyReason, SampleRate, SampleTime, ScoreSequence, Slice,
-    Transition, TriggerKind, Velocity, VoiceGroupId,
+    AudioCommand, Chord, DefaultPianoGate, EventId, GateError, GatePolicy, Generation,
+    IgnoreReason, InputId, MidiPitch, PerformanceEvent, SafetyReason, SampleRate, SampleTime,
+    ScoreSequence, Slice, Transition, TriggerKind, Velocity, VoiceGroupId,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -111,6 +111,14 @@ pub enum PerformanceCommand {
     Audition {
         generation: Generation,
         event: EventId,
+        input: InputId,
+        at: SampleTime,
+        velocity: Velocity,
+    },
+    AuditionNote {
+        generation: Generation,
+        event: EventId,
+        pitch: MidiPitch,
         input: InputId,
         at: SampleTime,
         velocity: Velocity,
@@ -340,6 +348,14 @@ impl<G: GatePolicy> PerformanceEngine<G> {
                 at,
                 velocity,
             } => self.audition(generation, event, input, at, velocity),
+            PerformanceCommand::AuditionNote {
+                generation,
+                event,
+                pitch,
+                input,
+                at,
+                velocity,
+            } => self.audition_note(generation, event, pitch, input, at, velocity),
             PerformanceCommand::InputReleased { input, at } => self.release_input(input, at),
             PerformanceCommand::Reposition {
                 generation,
@@ -419,6 +435,41 @@ impl<G: GatePolicy> PerformanceEngine<G> {
         self.trigger_slice(
             generation,
             slice,
+            input,
+            at,
+            velocity,
+            TriggerKind::Audition,
+        )
+    }
+
+    fn audition_note(
+        &mut self,
+        generation: Generation,
+        event: EventId,
+        pitch: MidiPitch,
+        input: InputId,
+        at: SampleTime,
+        velocity: Velocity,
+    ) -> Result<Transition, EngineError> {
+        self.require_generation(generation)?;
+        // Validate the source event even though this audition uses a
+        // one-pitch chord. This keeps stale/out-of-range UI requests subject
+        // to the same generation and event checks as whole-slice auditions.
+        self.score
+            .as_ref()
+            .expect("generation validation proves a score is loaded")
+            .find(event)
+            .ok_or(EngineError::EventNotFound(event))?;
+        self.observe_time(at)?;
+        if self.input_is_held(input) {
+            return Ok(Transition::with_event(PerformanceEvent::Ignored {
+                reason: IgnoreReason::InputAlreadyHeld,
+            }));
+        }
+        let chord = Chord::from_pitches(&[pitch]).expect("one valid MIDI pitch forms a chord");
+        self.trigger_slice(
+            generation,
+            Slice::new(event, chord),
             input,
             at,
             velocity,
@@ -678,7 +729,7 @@ impl<G: GatePolicy> PerformanceEngine<G> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Chord, GatePolicy, MidiPitch};
+    use crate::GatePolicy;
 
     const RATE: SampleRate = match SampleRate::new(48_000) {
         Some(rate) => rate,
@@ -1073,6 +1124,37 @@ mod tests {
                 kind: TriggerKind::Audition,
                 ..
             }) if *id == event(30) && *next == event(20)
+        ));
+    }
+
+    #[test]
+    fn single_note_audition_plays_only_requested_pitch_without_advancing() {
+        let mut engine = engine();
+        let generation = load(&mut engine, 0);
+        let audition = engine
+            .handle(PerformanceCommand::AuditionNote {
+                generation,
+                event: event(10),
+                pitch: MidiPitch::new(64).unwrap(),
+                input: input(4),
+                at: time(50),
+                velocity: Velocity::DEFAULT,
+            })
+            .unwrap();
+
+        assert_eq!(engine.cursor_index(), 0);
+        assert!(matches!(
+            commands(&audition).as_slice(),
+            [AudioCommand::PlaySlice { chord, .. }]
+                if chord.pitches() == [MidiPitch::new(64).unwrap()]
+        ));
+        assert!(matches!(
+            audition.event(),
+            Some(PerformanceEvent::Triggered {
+                event: id,
+                kind: TriggerKind::Audition,
+                ..
+            }) if *id == event(10)
         ));
     }
 

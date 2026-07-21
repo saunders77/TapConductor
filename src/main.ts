@@ -61,11 +61,7 @@ app.innerHTML = `
     <main class="workspace">
       <section class="score-panel" aria-label="Musical score">
         <div class="score-toolbar">
-          <div class="mode-switch" role="group" aria-label="Score action">
-            <button class="active" data-score-mode="perform" type="button">Perform</button>
-            <button data-score-mode="audition" type="button">Audition</button>
-            <button data-score-mode="position" type="button">Start here</button>
-          </div>
+          <div class="score-help">Tap to advance · <span aria-hidden="true">◖)</span> play single chord · <span aria-hidden="true">▼</span> start here · select a note to play it</div>
           <div class="zoom-controls">
             <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
             <output id="zoom-value">90%</output>
@@ -155,16 +151,15 @@ const elements = {
   toasts: byId("toast-region"),
 };
 
-type ScoreMode = "perform" | "audition" | "position";
-
 let score: LoadedScore | null = null;
 let cursorIndex = 0;
 let highlightIndex = 0;
 let zoom = 0.9;
-let scoreMode: ScoreMode = "perform";
 let osmd: OpenSheetMusicDisplay | null = null;
 let osmdEventSteps: number[] = [];
 let osmdCurrentStep = 0;
+let eventHorizontalPositions: number[] = [];
+let measureHorizontalPositions = new Map<number, number>();
 let lastDiagnostics: DiagnosticsDto | null = null;
 let unlisteners: UnlistenFn[] = [];
 const heldTokens = new Set<string>();
@@ -206,12 +201,39 @@ function updatePosition(): void {
   elements.back.disabled = cursorIndex <= 0;
   elements.forward.disabled = cursorIndex >= score.events.length - 1;
   moveOsmdCursor(highlightIndex);
-  document.querySelectorAll<HTMLElement>(".score-target").forEach((node) => {
+  document.querySelectorAll<HTMLElement>("[data-event-indices], [data-event-index]").forEach((node) => {
     const indices = (node.dataset.eventIndices ?? node.dataset.eventIndex ?? "")
       .split(",")
       .map(Number);
     node.classList.toggle("current", indices.includes(highlightIndex));
   });
+}
+
+function autoFollowSlice(index: number): void {
+  if (!score) return;
+  const sliceLeft = eventHorizontalPositions[index];
+  if (sliceLeft === undefined) return;
+  const orderedBars = [...new Set(measureHorizontalPositions.values())].sort((left, right) => left - right);
+  let barWidth = 180 * zoom;
+  let barIndex = -1;
+  for (let index = 0; index < orderedBars.length; index += 1) {
+    if (orderedBars[index]! <= sliceLeft + 1) barIndex = index;
+  }
+  if (barIndex >= 0 && barIndex + 1 < orderedBars.length) {
+    barWidth = orderedBars[barIndex + 1]! - orderedBars[barIndex]!;
+  } else if (barIndex > 0) {
+    barWidth = orderedBars[barIndex]! - orderedBars[barIndex - 1]!;
+  }
+  barWidth = Math.max(48, barWidth);
+
+  const sliceInScrollContent = elements.scoreStage.offsetLeft + sliceLeft;
+  const sliceInViewport = sliceInScrollContent - elements.scoreScroll.scrollLeft;
+  if (sliceInViewport >= elements.scoreScroll.clientWidth - barWidth) {
+    elements.scoreScroll.scrollTo({
+      left: Math.max(0, sliceInScrollContent - barWidth),
+      behavior: "auto",
+    });
+  }
 }
 
 function moveOsmdCursor(index: number): void {
@@ -273,6 +295,8 @@ async function displayScore(loaded: LoadedScore): Promise<void> {
   score = loaded;
   osmdEventSteps = [];
   osmdCurrentStep = 0;
+  eventHorizontalPositions = [];
+  measureHorizontalPositions = new Map();
   cursorIndex = 0;
   highlightIndex = 0;
   elements.scoreName.textContent = loaded.displayName;
@@ -285,13 +309,20 @@ async function displayScore(loaded: LoadedScore): Promise<void> {
 
   elements.osmd.replaceChildren();
   elements.scoreTargets.replaceChildren();
+  elements.scoreStage.style.removeProperty("width");
+  elements.scoreScroll.scrollLeft = 0;
   if (loaded.format === "music_xml" && loaded.musicXml) {
     osmd = new OpenSheetMusicDisplay(elements.osmd, {
       autoResize: false,
       backend: "svg",
       drawTitle: true,
       drawingParameters: "compacttight",
-      followCursor: true,
+      followCursor: false,
+      pageFormat: "Endless",
+      renderSingleHorizontalStaffline: true,
+      newSystemFromXML: false,
+      newSystemFromNewPageInXML: false,
+      newPageFromXML: false,
     });
     await osmd.load(loaded.musicXml);
     renderOsmd();
@@ -310,31 +341,54 @@ function renderOsmd(): void {
   osmd.Zoom = zoom;
   osmd.render();
   osmd.cursor.show();
-  window.setTimeout(buildScoreTargets, 0);
+  window.setTimeout(() => {
+    const contentWidth = Math.max(elements.osmd.scrollWidth, elements.osmd.getBoundingClientRect().width);
+    if (contentWidth > 0) {
+      elements.scoreStage.style.width = `${Math.ceil(contentWidth + 68)}px`;
+    }
+    buildScoreTargets();
+  }, 0);
 }
 
 function renderMidiRoll(events: TapEventDto[]): void {
   const wrapper = document.createElement("div");
   wrapper.className = "midi-roll";
   for (const event of events) {
-    const group = document.createElement("button");
-    group.type = "button";
-    group.className = "midi-event score-target";
-    group.dataset.eventIndex = String(event.index);
-    group.style.setProperty("--event-height", String(Math.max(1, event.notes.length)));
+    const eventCard = document.createElement("div");
+    eventCard.className = "midi-event";
+    eventCard.dataset.eventIndex = String(event.index);
+    eventCard.dataset.eventIndices = String(event.index);
+    eventCard.style.setProperty("--event-height", String(Math.max(1, event.notes.length)));
     const measure = document.createElement("b");
     measure.textContent = event.measureNumber;
-    const notes = document.createElement("span");
-    notes.textContent = event.notes.map((note) => noteName(note.midiPitch)).join(" · ");
-    group.append(measure, notes);
-    installTargetHandlers(group, event.index);
-    wrapper.append(group);
+    const notes = document.createElement("div");
+    notes.className = "midi-notes";
+    for (const note of event.notes) {
+      const noteButton = document.createElement("button");
+      noteButton.type = "button";
+      noteButton.className = "midi-note";
+      noteButton.textContent = noteName(note.midiPitch);
+      installAuditionHandlers(noteButton, () => event.index, note.midiPitch);
+      notes.append(noteButton);
+    }
+    eventCard.append(createSliceControls(() => event.index, event.measureNumber), measure, notes);
+    wrapper.append(eventCard);
   }
   elements.osmd.append(wrapper);
+  window.requestAnimationFrame(() => {
+    wrapper.querySelectorAll<HTMLElement>(".midi-event").forEach((eventCard, index) => {
+      eventHorizontalPositions[index] = eventCard.offsetLeft;
+      const measureIndex = events[index]?.measureIndex;
+      if (measureIndex !== undefined && !measureHorizontalPositions.has(measureIndex)) {
+        measureHorizontalPositions.set(measureIndex, eventCard.offsetLeft);
+      }
+    });
+  });
 }
 
 function buildScoreTargets(): void {
   if (!osmd || !score) return;
+  const activeScore = score;
   elements.scoreTargets.replaceChildren();
   const hostRect = elements.scoreStage.getBoundingClientRect();
   const cursor = osmd.cursor;
@@ -342,6 +396,13 @@ function buildScoreTargets(): void {
   osmdCurrentStep = 0;
   cursor.show();
 
+  type NoteVisual = {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    candidates: number[];
+  };
   type VisualStep = {
     step: number;
     measureIndex: number;
@@ -349,20 +410,55 @@ function buildScoreTargets(): void {
     denominator: number;
     left: number;
     top: number;
+    notes: NoteVisual[];
   };
   const visualSteps: VisualStep[] = [];
-  const maximumSteps = Math.max(10_000, score.events.length * 8 + 100);
+  const maximumSteps = Math.max(10_000, activeScore.events.length * 8 + 100);
   for (let step = 0; step < maximumSteps && !cursor.Iterator.EndReached; step += 1) {
     const timestamp = cursor.Iterator.CurrentRelativeInMeasureTimestamp;
     const rect = cursor.cursorElement?.getBoundingClientRect();
     if (timestamp && rect) {
+      const noteVisuals: NoteVisual[] = [];
+      for (const graphicalNote of cursor.GNotesUnderCursor()) {
+        try {
+          const rendered = graphicalNote as unknown as {
+            sourceNote?: OsmdSourceNote;
+            getNoteheadSVGs?: () => HTMLElement[];
+          };
+          if (rendered.sourceNote?.isRest?.()) continue;
+          const rectangles = (rendered.getNoteheadSVGs?.() ?? [])
+            .map((head) => head.getBoundingClientRect())
+            .filter((headRect) => headRect.width > 0 && headRect.height > 0);
+          if (rectangles.length === 0) continue;
+          const left = Math.min(...rectangles.map((headRect) => headRect.left));
+          const right = Math.max(...rectangles.map((headRect) => headRect.right));
+          const top = Math.min(...rectangles.map((headRect) => headRect.top));
+          const bottom = Math.max(...rectangles.map((headRect) => headRect.bottom));
+          noteVisuals.push({
+            left: left - hostRect.left,
+            top: top - hostRect.top,
+            width: right - left,
+            height: bottom - top,
+            candidates: osmdMidiCandidates(rendered.sourceNote),
+          });
+        } catch {
+          // A note without SVG geometry remains visible and playable as part
+          // of its slice; only its optional direct-click overlay is omitted.
+        }
+      }
+      const stepLeft = rect.left - hostRect.left - 5;
+      const measureLeft = measureHorizontalPositions.get(cursor.Iterator.CurrentMeasureIndex);
+      if (measureLeft === undefined || stepLeft < measureLeft) {
+        measureHorizontalPositions.set(cursor.Iterator.CurrentMeasureIndex, stepLeft);
+      }
       visualSteps.push({
         step,
         measureIndex: cursor.Iterator.CurrentMeasureIndex,
         numerator: timestamp.GetExpandedNumerator(),
         denominator: timestamp.Denominator,
-        left: rect.left - hostRect.left - 5,
+        left: stepLeft,
         top: rect.top - hostRect.top - 25,
+        notes: noteVisuals,
       });
     }
     cursor.next();
@@ -384,12 +480,21 @@ function buildScoreTargets(): void {
   };
 
   const groupedTargets = new Map<string, { eventIndices: number[]; visual: VisualStep; measureNumber: string }>();
+  const eventIndicesByStep = new Map<number, number[]>();
   osmdEventSteps = [];
-  for (const event of score.events) {
+  for (const event of activeScore.events) {
     const candidates = visualSteps.filter((step) => rationalMatches(event, step));
     const visual = candidates[Math.max(0, event.occurrence - 1)] ?? candidates[0] ?? visualSteps[event.index];
     if (!visual) continue;
     osmdEventSteps[event.index] = visual.step;
+    const indicesAtStep = eventIndicesByStep.get(visual.step) ?? [];
+    indicesAtStep.push(event.index);
+    eventIndicesByStep.set(visual.step, indicesAtStep);
+    eventHorizontalPositions[event.index] = visual.left;
+    const measureLeft = measureHorizontalPositions.get(event.measureIndex);
+    if (measureLeft === undefined || visual.left < measureLeft) {
+      measureHorizontalPositions.set(event.measureIndex, visual.left);
+    }
     const targetKey = `${event.measureIndex}:${event.offset.numerator}/${event.offset.denominator}`;
     const existing = groupedTargets.get(targetKey);
     if (existing) {
@@ -404,78 +509,172 @@ function buildScoreTargets(): void {
   }
 
   for (const target of groupedTargets.values()) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "score-target";
-    button.dataset.eventIndices = target.eventIndices.join(",");
-    button.style.left = `${target.visual.left}px`;
-    button.style.top = `${target.visual.top}px`;
-    button.title = `Measure ${target.measureNumber}: audition or start here`;
-    const symbol = document.createElement("span");
-    symbol.textContent = "♪";
-    button.append(symbol);
-    installTargetHandlers(button, () =>
-      target.eventIndices.find((index) => index >= cursorIndex) ?? target.eventIndices[0]!,
+    const resolveIndex = (): number =>
+      target.eventIndices.find((index) => index >= cursorIndex) ?? target.eventIndices[0]!;
+    const controls = createSliceControls(resolveIndex, target.measureNumber);
+    controls.dataset.eventIndices = target.eventIndices.join(",");
+    controls.style.left = `${target.visual.left}px`;
+    controls.style.top = `${Math.max(4, target.visual.top - 46)}px`;
+    elements.scoreTargets.append(controls);
+  }
+
+  const seenNoteheads = new Set<string>();
+  for (const visual of visualSteps) {
+    const exactIndices = eventIndicesByStep.get(visual.step) ?? [];
+    const nearestIndex = activeScore.events.reduce(
+      (best, event) => {
+        const distance = Math.abs((eventHorizontalPositions[event.index] ?? visual.left) - visual.left);
+        return distance < best.distance ? { index: event.index, distance } : best;
+      },
+      { index: 0, distance: Number.POSITIVE_INFINITY },
+    ).index;
+    const resolveIndex = (): number =>
+      exactIndices.find((index) => index >= cursorIndex) ?? exactIndices[0] ?? nearestIndex;
+    const expectedPitches = new Set(
+      exactIndices.flatMap((index) => activeScore.events[index]?.notes.map((note) => note.midiPitch) ?? []),
     );
-    elements.scoreTargets.append(button);
+    for (const note of visual.notes) {
+      const midiPitch = note.candidates.find((candidate) => expectedPitches.has(candidate)) ?? note.candidates[0];
+      if (midiPitch === undefined) continue;
+      const key = `${Math.round(note.left)}:${Math.round(note.top)}:${midiPitch}`;
+      if (seenNoteheads.has(key)) continue;
+      seenNoteheads.add(key);
+      const noteButton = document.createElement("button");
+      noteButton.type = "button";
+      noteButton.className = "note-target";
+      noteButton.style.left = `${note.left - 4}px`;
+      noteButton.style.top = `${note.top - 4}px`;
+      noteButton.style.width = `${Math.max(16, note.width + 8)}px`;
+      noteButton.style.height = `${Math.max(16, note.height + 8)}px`;
+      noteButton.title = `Play single note ${noteName(midiPitch)}`;
+      noteButton.setAttribute("aria-label", noteButton.title);
+      installAuditionHandlers(noteButton, resolveIndex, midiPitch);
+      elements.scoreTargets.append(noteButton);
+    }
   }
   moveOsmdCursor(highlightIndex);
 }
 
-async function actOnScoreTarget(index: number): Promise<void> {
-  if (!score) return;
-  if (scoreMode === "position") {
-    await invokeSafe("set_cursor", { generation: score.generation, index });
-    cursorIndex = index;
-    highlightIndex = index;
-    updatePosition();
-    return;
+type OsmdPitch = {
+  Octave?: number;
+  FundamentalNote?: number;
+  AccidentalHalfTones?: number;
+};
+
+type OsmdSourceNote = {
+  halfTone?: number;
+  Pitch?: OsmdPitch;
+  TransposedPitch?: OsmdPitch;
+  isRest?: () => boolean;
+};
+
+function osmdMidiCandidates(sourceNote: OsmdSourceNote | undefined): number[] {
+  const candidates: number[] = [];
+  const addPitch = (pitch: OsmdPitch | undefined): void => {
+    if (pitch?.Octave === undefined || pitch.FundamentalNote === undefined) return;
+    candidates.push(Math.round((pitch.Octave + 1) * 12 + pitch.FundamentalNote + (pitch.AccidentalHalfTones ?? 0)));
+  };
+  addPitch(sourceNote?.TransposedPitch);
+  addPitch(sourceNote?.Pitch);
+  if (sourceNote?.halfTone !== undefined) {
+    candidates.push(Math.round(sourceNote.halfTone), Math.round(sourceNote.halfTone + 12));
   }
-  if (scoreMode === "audition") {
-    const token = `audition:${crypto.randomUUID()}`;
-    await invokeSafe("audition_event", {
-      generation: score.generation,
-      index,
-      token,
-      velocity: Number(elements.velocity.value),
-    });
-    window.setTimeout(() => void invoke("release_input", { token }).catch(() => undefined), 10);
-    return;
-  }
+  return [...new Set(candidates.filter((candidate) => candidate >= 0 && candidate <= 127))];
 }
 
-function installTargetHandlers(button: HTMLButtonElement, index: number | (() => number)): void {
-  const resolveIndex = (): number => (typeof index === "number" ? index : index());
-  let performanceToken: string | null = null;
-  button.addEventListener("pointerdown", (pointerEvent) => {
-    pointerEvent.preventDefault();
-    pointerEvent.stopPropagation();
-    if (scoreMode === "perform") {
-      performanceToken = `score-pointer:${pointerEvent.pointerId}:${crypto.randomUUID()}`;
-      button.setPointerCapture(pointerEvent.pointerId);
-      void performDown(performanceToken);
-    } else {
-      void actOnScoreTarget(resolveIndex());
-    }
+function createEarIcon(): SVGSVGElement {
+  const namespace = "http://www.w3.org/2000/svg";
+  const icon = document.createElementNS(namespace, "svg");
+  icon.setAttribute("viewBox", "0 0 24 24");
+  icon.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(namespace, "path");
+  path.setAttribute("d", "M6.5 10.5a5.5 5.5 0 1 1 10.8 1.5c-.8 2.8-3.2 3-3.7 5.3-.3 1.3-1.2 2.2-2.6 2.2-1.7 0-2.8-1.1-2.8-2.8m2.5-5.9a2.2 2.2 0 1 1 3.8 1.5c-.8.8-1.8 1.1-2 2.4");
+  icon.append(path);
+  return icon;
+}
+
+function createSliceControls(resolveIndex: () => number, measureNumber: string): HTMLDivElement {
+  const controls = document.createElement("div");
+  controls.className = "slice-controls";
+  const play = document.createElement("button");
+  play.type = "button";
+  play.className = "slice-action play-chord";
+  play.title = `Measure ${measureNumber}: Play single chord`;
+  play.setAttribute("aria-label", play.title);
+  play.append(createEarIcon());
+  installAuditionHandlers(play, resolveIndex);
+
+  const start = document.createElement("button");
+  start.type = "button";
+  start.className = "slice-action start-here";
+  start.title = `Measure ${measureNumber}: Start here`;
+  start.setAttribute("aria-label", start.title);
+  start.textContent = "▼";
+  const reposition = (event: Event): void => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!score) return;
+    const index = resolveIndex();
+    void invokeSafe("set_cursor", { generation: score.generation, index }).then(() => {
+      cursorIndex = index;
+      highlightIndex = index;
+      updatePosition();
+    });
+  };
+  start.addEventListener("pointerdown", reposition);
+  start.addEventListener("click", (event) => {
+    if (event.detail === 0) reposition(event);
+  });
+  controls.append(play, start);
+  return controls;
+}
+
+function installAuditionHandlers(
+  button: HTMLButtonElement,
+  resolveIndex: () => number,
+  midiPitch?: number,
+): void {
+  let token: string | null = null;
+  button.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    token = `audition:${event.pointerId}:${crypto.randomUUID()}`;
+    button.setPointerCapture(event.pointerId);
+    void auditionDown(token, resolveIndex(), midiPitch);
   });
   const release = (): void => {
-    if (performanceToken) void performUp(performanceToken);
-    performanceToken = null;
+    if (token) void performUp(token);
+    token = null;
   };
   button.addEventListener("pointerup", release);
   button.addEventListener("pointercancel", release);
   button.addEventListener("lostpointercapture", release);
   button.addEventListener("click", (event) => {
-    // Pointer input is handled on pointerdown for minimum latency. A click with
-    // detail 0 is keyboard activation and needs an equivalent accessible path.
     if (event.detail !== 0) return;
-    if (scoreMode === "perform") {
-      const token = `score-keyboard:${crypto.randomUUID()}`;
-      void performDown(token).then(() => performUp(token));
-    } else {
-      void actOnScoreTarget(resolveIndex());
-    }
+    const keyboardToken = `audition-keyboard:${crypto.randomUUID()}`;
+    void auditionDown(keyboardToken, resolveIndex(), midiPitch).then(() => performUp(keyboardToken));
   });
+}
+
+async function auditionDown(token: string, index: number, midiPitch?: number): Promise<void> {
+  if (!score || heldTokens.has(token)) return;
+  heldTokens.add(token);
+  const command = midiPitch === undefined ? "audition_event" : "audition_note";
+  const pending = invokeSafe<void>(command, {
+    generation: score.generation,
+    index,
+    ...(midiPitch === undefined ? {} : { midiPitch }),
+    token,
+    velocity: Number(elements.velocity.value),
+  });
+  pendingDowns.set(token, pending);
+  try {
+    await pending;
+  } catch {
+    heldTokens.delete(token);
+  } finally {
+    if (pendingDowns.get(token) === pending) pendingDowns.delete(token);
+  }
 }
 
 async function performDown(token: string, velocity = Number(elements.velocity.value)): Promise<void> {
@@ -645,6 +844,9 @@ async function installListeners(): Promise<void> {
       }
       if (payload.type === "ended") toast("End of score", "info");
       updatePosition();
+      if (payload.type === "cursor" && payload.playedIndex !== undefined) {
+        autoFollowSlice(payload.playedIndex);
+      }
     }),
     await listen<DiagnosticsDto>("audio-diagnostics", ({ payload }) => showDiagnostics(payload)),
   );
@@ -732,14 +934,6 @@ elements.zoomIn.addEventListener("click", () => {
   zoom = Math.min(1.8, zoom + 0.1);
   elements.zoomValue.value = `${Math.round(zoom * 100)}%`;
   renderOsmd();
-});
-document.querySelectorAll<HTMLButtonElement>("[data-score-mode]").forEach((button) => {
-  button.addEventListener("click", () => {
-    document.querySelectorAll("[data-score-mode]").forEach((node) => node.classList.remove("active"));
-    button.classList.add("active");
-    scoreMode = button.dataset.scoreMode as ScoreMode;
-    elements.scoreStage.dataset.mode = scoreMode;
-  });
 });
 window.addEventListener("resize", () => {
   if (osmd) window.requestAnimationFrame(renderOsmd);

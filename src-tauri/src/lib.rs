@@ -39,6 +39,7 @@ pub fn run() {
             commands::performance_input_down,
             commands::release_input,
             commands::audition_event,
+            commands::audition_note,
             commands::set_cursor,
             commands::panic,
             commands::audio_devices,

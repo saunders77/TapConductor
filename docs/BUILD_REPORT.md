@@ -8,8 +8,8 @@ Version: 0.1.0
 
 - `npm run build`: passed (TypeScript check and Vite production bundle).
 - `cargo fmt --all -- --check`: passed.
-- `cargo test --offline --locked --workspace`: 71 tests passed.
-- `cargo clippy --offline --locked --workspace --all-targets --all-features -- -D warnings`:
+- `cargo test --locked --workspace`: 75 tests passed.
+- `cargo clippy --locked --workspace --all-targets -- -D warnings`:
   passed.
 - `cargo run --offline --locked --release -p tapconductor-latency-probe`: frame-0 onset,
   0.0739 ms p99, zero queue overflows, zero late commands.
@@ -20,9 +20,9 @@ Version: 0.1.0
 
 | Artifact | Size | SHA-256 |
 | --- | ---: | --- |
-| `target/release/tapconductor-app.exe` | 5,411,840 bytes | `240FD9FBFD3640184DB3AA59AE63CF754C1C66CE3FFBC1A5E1DE1E3E49CBA4C3` |
-| `target/release/bundle/nsis/TapConductor_0.1.0_x64-setup.exe` | 1,902,079 bytes | `4E7A2A877EF5265F7E8F72F505BDD531D96C15F1CDDDB8F4F2A34679424DFB7C` |
-| `target/release/bundle/msi/TapConductor_0.1.0_x64_en-US.msi` | 2,682,880 bytes | `431001BB75BE2724BEB470EDEB653B6BE986C011AAE50B3EF09CD075C99D4001` |
+| `target/release/tapconductor-app.exe` | 5,419,520 bytes | `EB5FD16DFE17AA77F157EC6D4489233915DEA3964FF102AD69CFDB4AAC01F444` |
+| `target/release/bundle/nsis/TapConductor_0.1.0_x64-setup.exe` | 1,905,957 bytes | `DE965713465B3C017A9043D154513B2689FAEE0AF1E7EF2DC7AF70D7EAC56556` |
+| `target/release/bundle/msi/TapConductor_0.1.0_x64_en-US.msi` | 2,686,976 bytes | `AD490087F2DA35DD4611F8CA61345F6751106C30A7B7F57A5CAC7FFDA6FD95B0` |
 
 The installers are local development builds and are not code-signed.
 

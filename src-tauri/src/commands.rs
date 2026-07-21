@@ -81,6 +81,20 @@ pub fn audition_event(
 }
 
 #[tauri::command]
+pub fn audition_note(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    generation: u64,
+    index: usize,
+    midi_pitch: u8,
+    token: String,
+    velocity: u8,
+) -> Result<(), String> {
+    let event = lock_core(&state)?.audition_note(generation, index, midi_pitch, token, velocity)?;
+    emit_event(&app, event)
+}
+
+#[tauri::command]
 pub fn set_cursor(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,

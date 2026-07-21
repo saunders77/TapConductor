@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part-list><score-part id="Bb"><part-name>B-flat Instrument</part-name></score-part></part-list>
+  <part id="Bb">
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions><time><beats>4</beats><beat-type>4</beat-type></time>
+        <transpose><diatonic>-1</diatonic><chromatic>-2</chromatic></transpose>
+      </attributes>
+      <note id="normal"><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration></note>
+      <note id="cue"><cue/><pitch><step>D</step><octave>4</octave></pitch><duration>4</duration></note>
+      <note id="hidden" print-object="no"><pitch><step>E</step><octave>4</octave></pitch><duration>4</duration></note>
+      <note id="grace"><grace/><pitch><step>F</step><octave>4</octave></pitch></note>
+      <note id="percussion"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>4</duration></note>
+    </measure>
+  </part>
+</score-partwise>
+

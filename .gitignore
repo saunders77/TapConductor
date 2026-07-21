@@ -1,0 +1,9 @@
+/target/
+/node_modules/
+/dist/
+/.vite/
+/rustup-init.exe
+*.pdb
+*.log
+.DS_Store
+

@@ -1,0 +1,47 @@
+name: Windows CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install stable Rust MSVC
+        shell: pwsh
+        run: |
+          rustup toolchain install stable-x86_64-pc-windows-msvc --profile minimal --component rustfmt --component clippy --no-self-update
+          rustup default stable-x86_64-pc-windows-msvc
+          rustc --version --verbose
+          cargo --version
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Test Rust workspace
+        run: cargo test --locked --workspace
+
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
+
+      - name: Lint every Rust target and feature
+        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <work><work-title>Cross-part exact timing</work-title></work>
+  <identification><creator type="composer">TapConductor Test</creator></identification>
+  <part-list>
+    <score-part id="P1"><part-name>Piano</part-name><part-abbreviation>Pno.</part-abbreviation></score-part>
+    <score-part id="P2"><part-name>Choir</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note id="p1-c"><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice><staff>1</staff></note>
+      <note id="p1-e"><chord/><pitch><step>E</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice><staff>1</staff></note>
+      <note><rest/><duration>4</duration><voice>1</voice><staff>1</staff></note>
+    </measure>
+    <measure number="2">
+      <attributes><divisions>3</divisions></attributes>
+      <note id="p1-f"><pitch><step>F</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice></note>
+      <attributes><divisions>6</divisions></attributes>
+      <note id="p1-g"><pitch><step>G</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice></note>
+    </measure>
+  </part>
+  <part id="P2">
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note id="p2-long"><pitch><step>C</step><octave>3</octave></pitch><duration>8</duration><voice>1</voice><staff>1</staff></note>
+      <backup><duration>8</duration></backup>
+      <note id="p2-g"><pitch><step>G</step><octave>3</octave></pitch><duration>4</duration><voice>2</voice><staff>2</staff></note>
+      <note id="p2-a"><pitch><step>A</step><octave>3</octave></pitch><duration>4</duration><voice>2</voice><staff>2</staff></note>
+    </measure>
+    <measure number="2">
+      <attributes><divisions>6</divisions></attributes>
+      <note id="p2-e"><pitch><step>E</step><octave>3</octave></pitch><duration>2</duration><voice>1</voice></note>
+      <note id="p2-a2"><pitch><step>A</step><octave>3</octave></pitch><duration>2</duration><voice>1</voice></note>
+    </measure>
+  </part>
+</score-partwise>
+

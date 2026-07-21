@@ -1,0 +1,25 @@
+{
+  "name": "tapconductor",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.8.0",
+    "@tauri-apps/plugin-dialog": "^2.4.0",
+    "opensheetmusicdisplay": "^1.9.9"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.8.4",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.3"
+  }
+}
+

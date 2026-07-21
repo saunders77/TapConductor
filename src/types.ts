@@ -1,0 +1,88 @@
+export interface RationalDto {
+  numerator: number;
+  denominator: number;
+}
+
+export interface NoteDto {
+  sourceId: string;
+  partId: string;
+  staff: number;
+  voice: string;
+  midiPitch: number;
+  end: RationalDto;
+}
+
+export interface TapEventDto {
+  id: string;
+  index: number;
+  measureIndex: number;
+  measureNumber: string;
+  occurrence: number;
+  offset: RationalDto;
+  notes: NoteDto[];
+}
+
+export interface PartDto {
+  id: string;
+  name: string;
+  enabled: boolean;
+}
+
+export interface LoadedScore {
+  generation: number;
+  path: string;
+  displayName: string;
+  format: "music_xml" | "midi";
+  musicXml?: string;
+  events: TapEventDto[];
+  parts: PartDto[];
+  warnings: string[];
+}
+
+export interface DeviceDto {
+  id: string;
+  name: string;
+  isDefault?: boolean;
+}
+
+export interface MidiPortsDto {
+  inputs: DeviceDto[];
+  outputs: DeviceDto[];
+  selectedInput?: string;
+  selectedOutput?: string;
+}
+
+export interface DiagnosticsDto {
+  audioBackend: string;
+  outputDevice: string;
+  sampleRate: number;
+  bufferFrames: number;
+  estimatedLatencyMs: number;
+  callbackUnderruns: number;
+  backendErrors: number;
+  lateCommands: number;
+  invalidAudioBuffers: number;
+  voiceSteals: number;
+  queueOverflows: number;
+  activeVoices: number;
+  directWasapiStream: boolean;
+  wasapiPeriods?: {
+    sampleRate: number;
+    channels: number;
+    defaultFrames: number;
+    fundamentalFrames: number;
+    minimumFrames: number;
+    maximumFrames: number;
+  };
+  midiInput?: string;
+  midiOutput?: string;
+  midiOutputError?: string;
+  ready: boolean;
+  message?: string;
+}
+
+export type CoreEvent =
+  | { type: "cursor"; generation: number; index: number; playedIndex?: number }
+  | { type: "ready"; generation: number }
+  | { type: "ended"; generation: number }
+  | { type: "fault"; message: string };

@@ -1,0 +1,34 @@
+[package]
+name = "tapconductor-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Low-latency score performance application"
+
+[lib]
+name = "tapconductor_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5", features = [] }
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tauri = { version = "2.10", features = [] }
+tauri-plugin-dialog = "2.6"
+tapconductor-score = { path = "../crates/tapconductor-score" }
+tapconductor-performance = { path = "../crates/tapconductor-performance" }
+tapconductor-audio = { path = "../crates/tapconductor-audio", features = ["wasapi-cpal-fallback"] }
+tapconductor-midi = { path = "../crates/tapconductor-midi", features = ["midir-backend"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+  "Win32_Foundation",
+  "Win32_Media_Audio",
+  "Win32_System_Com",
+  "Win32_System_Threading",
+] }

@@ -1,0 +1,21 @@
+[package]
+name = "tapconductor-score"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Deterministic MusicXML and MIDI score normalization for TapConductor"
+publish = false
+
+[dependencies]
+midly = "0.5.3"
+quick-xml = "0.37.5"
+serde = { version = "1.0.217", features = ["derive"] }
+thiserror = "2.0.11"
+zip = { version = "2.2.2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+serde_json = "1.0.138"
+
+[lints.rust]
+unsafe_code = "forbid"
+

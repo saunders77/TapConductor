@@ -1,0 +1,14 @@
+[package]
+name = "tapconductor-midi"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Platform-neutral MIDI input and output for TapConductor"
+
+[features]
+default = []
+midir-backend = ["dep:midir"]
+
+[dependencies]
+midir = { version = "0.10.1", optional = true }
+

@@ -212,7 +212,7 @@ function ensureBottomControls(): void {
 let score: LoadedScore | null = null;
 let activeOmrProject: OmrProject | null = null;
 let omrExportPollInProgress = false;
-let omrAvailable: boolean | null = null;
+const omrAvailable = /Windows/i.test(navigator.userAgent);
 let cursorIndex = 0;
 let highlightIndex = 0;
 let zoom = 0.9;
@@ -505,9 +505,6 @@ async function invokeSafe<T>(command: string, args?: Record<string, unknown>): P
 }
 
 async function chooseScore(): Promise<void> {
-  if (omrAvailable === null) {
-    omrAvailable = await invoke<boolean>("omr_available").catch(() => false);
-  }
   const extensions = ["musicxml", "xml", "mxl", "mid", "midi"];
   if (omrAvailable) extensions.push("pdf");
   const path = await open({
@@ -547,7 +544,6 @@ async function chooseScore(): Promise<void> {
 }
 
 async function initializeOmrAvailability(): Promise<void> {
-  omrAvailable = await invoke<boolean>("omr_available").catch(() => false);
   if (omrAvailable) {
     elements.emptyDescription.textContent = "Open MusicXML, compressed MXL, MIDI, or a scanned PDF. Every tap plays the next written note or chord.";
   }

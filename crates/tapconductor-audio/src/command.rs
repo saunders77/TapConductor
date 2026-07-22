@@ -154,6 +154,8 @@ pub enum AudioCommand {
         at: SampleTime,
         chord: Chord,
     },
+    /// Engage the piano key-up envelope without ending the logical group.
+    DampenGroup { group: VoiceGroupId, at: SampleTime },
     /// Deliver note-off to every voice owned by `group` before frame `at`.
     ReleaseGroup { group: VoiceGroupId, at: SampleTime },
     /// Immediately silence all groups. This overrides normal gate minima.
@@ -166,6 +168,7 @@ impl AudioCommand {
     pub const fn at(&self) -> SampleTime {
         match *self {
             Self::PlaySlice { at, .. }
+            | Self::DampenGroup { at, .. }
             | Self::ReleaseGroup { at, .. }
             | Self::Panic { at }
             | Self::SetMasterGain { at, .. } => at,

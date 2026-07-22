@@ -20,6 +20,9 @@ pub enum VoiceStart {
 /// the engine has already cleared.
 pub trait Sampler: Send + 'static {
     fn note_on(&mut self, group: VoiceGroupId, pitch: u8, velocity: u16) -> VoiceStart;
+    fn dampen_group(&mut self, group: VoiceGroupId) {
+        self.release_group(group);
+    }
     fn release_group(&mut self, group: VoiceGroupId);
     fn panic(&mut self);
     fn render(&mut self, interleaved: &mut [f32], channels: usize);
@@ -323,6 +326,10 @@ where
             }
             AudioCommand::ReleaseGroup { group, .. } => {
                 self.sampler.release_group(group);
+                false
+            }
+            AudioCommand::DampenGroup { group, .. } => {
+                self.sampler.dampen_group(group);
                 false
             }
             AudioCommand::Panic { .. } => {

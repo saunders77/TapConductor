@@ -51,8 +51,9 @@ max(first later tap, matching input release + 100 ms)
 
 Thus a quick next tap starts on time while the earlier sound may continue until its 100 ms
 post-release minimum. Several groups can overlap during fast passages. If no later tap has happened,
-the group remains eligible until one does. The synthesizer's piano envelope always decays naturally
-while a key is held; the gate never freezes or lengthens that decay.
+the group remains eligible until one does. While the physical tap is held, the built-in piano uses
+the sample's natural decay. Lifting the tap immediately engages its faster SFZ key-up release
+envelope; this timbre/envelope change is independent of the score and MIDI note-off gate above.
 
 ## Windows prerequisites
 

@@ -701,44 +701,51 @@ impl<G: GatePolicy> PerformanceEngine<G> {
                 reason: IgnoreReason::InputWasNotHeld,
             }));
         };
-        let binding = self.held_inputs[binding_index];
-        let Some(group_id) = binding.group else {
-            self.held_inputs.remove(binding_index);
-            return Ok(Transition::with_event(PerformanceEvent::InputReleased {
-                input,
-                scheduled_release: None,
-            }));
-        };
-        let Some(group_index) = self
+        // Validate every gate calculation before changing the input latch or
+        // any group. A timestamp overflow must leave the press/release pair
+        // retryable just as it did when one input owned only one group.
+        for group in self
             .active_groups
             .iter()
-            .position(|group| group.id == group_id)
-        else {
-            self.held_inputs.remove(binding_index);
-            return Ok(Transition::with_event(PerformanceEvent::InputReleased {
-                input,
-                scheduled_release: None,
-            }));
-        };
-
-        let group = self.active_groups[group_index];
-        let release_at =
+            .filter(|group| group.input == input && group.input_released_at.is_none())
+        {
             self.gate
                 .note_off_at(self.sample_rate, Some(at), group.first_later_trigger_at)?;
-        self.held_inputs.remove(binding_index);
-        self.active_groups[group_index].input_released_at = Some(at);
-        self.active_groups[group_index].release_scheduled_at = release_at;
-
-        let mut transition = Transition::with_event(PerformanceEvent::InputReleased {
-            input,
-            scheduled_release: release_at,
-        });
-        if let Some(release_at) = release_at {
-            transition.push_audio(AudioCommand::ReleaseGroup {
-                at: release_at,
-                group: group_id,
-            });
         }
+
+        self.held_inputs.remove(binding_index);
+        let mut transition = Transition::none();
+        let mut scheduled_release = None;
+        for group in self
+            .active_groups
+            .iter_mut()
+            .filter(|group| group.input == input && group.input_released_at.is_none())
+        {
+            let release_at =
+                self.gate
+                    .note_off_at(self.sample_rate, Some(at), group.first_later_trigger_at)?;
+            group.input_released_at = Some(at);
+            group.release_scheduled_at = release_at;
+            scheduled_release = scheduled_release.or(release_at);
+
+            // A physical key-up changes the built-in piano's envelope now.
+            // The existing ReleaseGroup remains separately scheduled by the
+            // score gate, preserving note timing and MIDI output semantics.
+            transition.push_audio(AudioCommand::DampenGroup {
+                at,
+                group: group.id,
+            });
+            if let Some(release_at) = release_at {
+                transition.push_audio(AudioCommand::ReleaseGroup {
+                    at: release_at,
+                    group: group.id,
+                });
+            }
+        }
+        transition.set_event(PerformanceEvent::InputReleased {
+            input,
+            scheduled_release,
+        });
         Ok(transition)
     }
 
@@ -953,7 +960,7 @@ mod tests {
             .unwrap();
         engine.set_sample_rate(rate_44_1).unwrap();
         assert_eq!(engine.sample_rate(), rate_44_1);
-        assert_eq!(DefaultPianoGate::minimum_frames(rate_44_1), 17_640);
+        assert_eq!(DefaultPianoGate::minimum_frames(rate_44_1), 4_410);
     }
 
     #[test]
@@ -1050,7 +1057,13 @@ mod tests {
         let generation = load(&mut engine, 0);
         tap(&mut engine, generation, 1, 10);
         let released = release(&mut engine, 1, 20);
-        assert!(commands(&released).is_empty());
+        assert_eq!(
+            commands(&released),
+            vec![AudioCommand::DampenGroup {
+                at: time(20),
+                group: VoiceGroupId::new(1),
+            }]
+        );
         engine
             .handle(PerformanceCommand::AdvanceClock {
                 to: time(20 + MINIMUM + 10_000),
@@ -1279,10 +1292,16 @@ mod tests {
         let released = release(&mut engine, 1, 1_000);
         assert_eq!(
             commands(&released),
-            vec![AudioCommand::ReleaseGroup {
-                at: time(1_000 + MINIMUM),
-                group: first_group,
-            }]
+            vec![
+                AudioCommand::DampenGroup {
+                    at: time(1_000),
+                    group: first_group,
+                },
+                AudioCommand::ReleaseGroup {
+                    at: time(1_000 + MINIMUM),
+                    group: first_group,
+                },
+            ]
         );
         let first_state = engine
             .active_groups()

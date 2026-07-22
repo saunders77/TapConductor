@@ -217,6 +217,11 @@ impl MidiManager {
         if self.output_worker.is_none() {
             return;
         }
+        // Damping is an internal piano-timbre change. It must not alter the
+        // existing MIDI note-off schedule.
+        if matches!(command, performance::AudioCommand::DampenGroup { .. }) {
+            return;
+        }
         let output_command = match command {
             performance::AudioCommand::PlaySlice {
                 at,
@@ -252,6 +257,7 @@ impl MidiManager {
                 group: MidiOutGroupId(group.get()),
             },
             performance::AudioCommand::Panic { .. } => OutputWorkerCommand::Panic,
+            performance::AudioCommand::DampenGroup { .. } => unreachable!("handled above"),
         };
         let send_failed = self
             .output_worker

@@ -300,6 +300,12 @@ impl AudioManager {
                     group: VoiceGroupId(group.get()),
                 }]
             }
+            performance::AudioCommand::DampenGroup { at, group } => {
+                vec![AudioCommand::DampenGroup {
+                    at: local_time(at.frame()),
+                    group: VoiceGroupId(group.get()),
+                }]
+            }
             performance::AudioCommand::Panic { .. } => unreachable!("panic handled above"),
         };
         let runtime = self.runtime.as_mut().ok_or_else(|| {

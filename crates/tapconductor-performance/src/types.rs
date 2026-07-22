@@ -500,6 +500,12 @@ pub enum AudioCommand {
         velocity: Velocity,
         roll_interval_frames: u32,
     },
+    /// Engage the built-in piano's key-up envelope without changing the
+    /// score/MIDI note-off schedule for the group.
+    DampenGroup {
+        at: SampleTime,
+        group: VoiceGroupId,
+    },
     ReleaseGroup {
         at: SampleTime,
         group: VoiceGroupId,

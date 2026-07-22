@@ -131,6 +131,18 @@ pub struct TapEvent {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PlaybackMeasureInfo {
+    pub source_measure_index: usize,
+    pub measure_id: String,
+    pub occurrence: u32,
+    pub start: Rational,
+    pub duration: Rational,
+    pub beats: u32,
+    pub beat_type: u32,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NormalizedScore {
     pub format: ScoreFormat,
     pub metadata: ScoreMetadata,
@@ -140,6 +152,7 @@ pub struct NormalizedScore {
     /// Tap events with every part active.
     pub tap_events: Vec<TapEvent>,
     pub playback_measure_count: usize,
+    pub playback_measures: Vec<PlaybackMeasureInfo>,
     pub warnings: Vec<ImportWarning>,
 }
 
@@ -154,6 +167,17 @@ impl NormalizedScore {
     ) -> Self {
         sort_attacks(&mut attacks);
         let tap_events = group_attacks(attacks.iter());
+        let playback_measures = (0..playback_measure_count)
+            .map(|index| PlaybackMeasureInfo {
+                source_measure_index: index,
+                measure_id: (index + 1).to_string(),
+                occurrence: 1,
+                start: Rational::from_integer((index as i64).saturating_mul(4)),
+                duration: Rational::from_integer(4),
+                beats: 4,
+                beat_type: 4,
+            })
+            .collect();
         Self {
             format,
             metadata,
@@ -161,6 +185,7 @@ impl NormalizedScore {
             attacks,
             tap_events,
             playback_measure_count,
+            playback_measures,
             warnings,
         }
     }

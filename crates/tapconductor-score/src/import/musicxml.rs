@@ -434,6 +434,7 @@ struct ParsedPart {
 struct ParsedMeasure {
     id: String,
     duration: Rational,
+    time: (u32, u32),
     notes: Vec<RawNote>,
     repeat_forward: bool,
     repeat_backward: Option<u32>,
@@ -1176,6 +1177,7 @@ impl<'a> XmlState<'a> {
         part.measures.push(ParsedMeasure {
             id: measure.id,
             duration,
+            time: part.time.unwrap_or((4, 4)),
             notes: measure.notes,
             repeat_forward: measure.repeat_forward,
             repeat_backward: measure.repeat_backward,
@@ -1237,14 +1239,30 @@ impl<'a> XmlState<'a> {
         let expanded = expand_notes(&self.parts, &templates, &playback)?;
         let attacks = resolve_ties(expanded, &mut self.warnings);
 
-        Ok(NormalizedScore::new(
+        let mut normalized = NormalizedScore::new(
             ScoreFormat::MusicXml,
             self.metadata,
             parts,
             attacks,
             playback.len(),
             self.warnings,
-        ))
+        );
+        normalized.playback_measures = playback
+            .iter()
+            .map(|measure| {
+                let template = &templates[measure.source_index];
+                crate::PlaybackMeasureInfo {
+                    source_measure_index: measure.source_index,
+                    measure_id: template.id.clone(),
+                    occurrence: measure.occurrence,
+                    start: measure.start,
+                    duration: template.duration,
+                    beats: template.time.0,
+                    beat_type: template.time.1,
+                }
+            })
+            .collect();
+        Ok(normalized)
     }
 }
 
@@ -1295,6 +1313,7 @@ fn unique_id(used: &mut BTreeSet<String>, base: String) -> String {
 struct MeasureTemplate {
     id: String,
     duration: Rational,
+    time: (u32, u32),
     repeat_forward: bool,
     repeat_backward: Option<u32>,
     endings: BTreeSet<u32>,
@@ -1344,6 +1363,7 @@ fn build_measure_templates(
         templates.push(MeasureTemplate {
             id,
             duration,
+            time: measures.first().map(|(_, measure)| measure.time).unwrap_or((4, 4)),
             repeat_forward: measures.iter().any(|(_, measure)| measure.repeat_forward),
             repeat_backward: measures
                 .iter()

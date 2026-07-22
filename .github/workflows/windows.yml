@@ -31,6 +31,12 @@ jobs:
           rustc --version --verbose
           cargo --version
 
+      - name: Install LLVM for ASIO bindings
+        shell: pwsh
+        run: |
+          choco install llvm --yes --no-progress
+          "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
+
       - name: Install frontend dependencies
         run: npm ci
 

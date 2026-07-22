@@ -4,11 +4,11 @@ use crate::{
     midi_runtime::{MidiInputAction, MidiManager},
     session::ScoreSession,
 };
-use std::{collections::HashMap, path::PathBuf, sync::mpsc::Sender, time::Instant};
+use std::{collections::{BTreeMap, HashMap}, path::PathBuf, sync::mpsc::Sender, time::Instant};
 use tapconductor_performance::{
     Chord, EngineConfig, EventId, Generation, IgnoreReason, InputId, MidiPitch, PerformanceCommand,
-    PerformanceEngine, PerformanceEvent, SampleRate, SampleTime, ScoreSequence, Slice, Transition,
-    TriggerKind, Velocity,
+    PerformanceEngine, PerformanceEvent, SampleRate, SampleTime, ScoreSequence, Slice, StaffSlice,
+    Transition, TriggerKind, Velocity,
 };
 
 pub struct AppCore {
@@ -18,6 +18,7 @@ pub struct AppCore {
     score: Option<ScoreSession>,
     input_ids: HashMap<String, InputId>,
     next_input_id: u64,
+    beat_tap_mode: bool,
 }
 
 impl AppCore {
@@ -34,7 +35,17 @@ impl AppCore {
             score: None,
             input_ids: HashMap::new(),
             next_input_id: 1,
+            beat_tap_mode: false,
         })
+    }
+
+    pub fn set_beat_tap_mode(&mut self, enabled: bool) -> Result<Option<CoreEventDto>, String> {
+        self.beat_tap_mode = enabled;
+        self.panic()
+    }
+
+    pub const fn beat_tap_mode(&self) -> bool {
+        self.beat_tap_mode
     }
 
     pub fn load_score(
@@ -74,6 +85,11 @@ impl AppCore {
             .map_err(|error| error.to_string())?;
         self.midi.set_sample_rate(sample_rate.get());
         Ok(event)
+    }
+
+    pub fn set_roll_delays(&mut self, regular_ms: u16, audition_ms: u16) -> Result<(), String> {
+        self.performance.set_roll_delays(regular_ms, audition_ms);
+        Ok(())
     }
 
     pub fn set_part_enabled(
@@ -182,6 +198,34 @@ impl AppCore {
                 velocity,
             })
             .map_err(|error| error.to_string());
+        if result.is_err() && inserted {
+            self.input_ids.remove(&token);
+        }
+        self.apply_transition(result?)
+    }
+
+    pub fn audition_chord(
+        &mut self,
+        generation: u64,
+        index: usize,
+        midi_pitches: Vec<u8>,
+        token: String,
+        midi_velocity: u8,
+    ) -> Result<Option<CoreEventDto>, String> {
+        self.ensure_audio_ready()?;
+        let engine_generation = self.require_ui_generation(generation)?;
+        let event = self.event_id(index)?;
+        let chord = Chord::from_midi_numbers(&midi_pitches).map_err(|error| error.to_string())?;
+        let (input, inserted) = self.input_for_down(token.clone())?;
+        let velocity = velocity_from_midi1(midi_velocity)?;
+        let result = self.performance.handle(PerformanceCommand::AuditionChord {
+            generation: engine_generation,
+            event,
+            chord,
+            input,
+            at: self.now(),
+            velocity,
+        }).map_err(|error| error.to_string());
         if result.is_err() && inserted {
             self.input_ids.remove(&token);
         }
@@ -410,16 +454,38 @@ fn velocity_from_midi1(value: u8) -> Result<Velocity, String> {
 fn sequence_from_events(events: &[tapconductor_score::TapEvent]) -> Result<ScoreSequence, String> {
     let mut slices = Vec::with_capacity(events.len());
     for (index, event) in events.iter().enumerate() {
-        let pitches: Vec<MidiPitch> = event
-            .attacks
-            .iter()
-            .map(|attack| {
-                MidiPitch::new(attack.midi_pitch)
-                    .ok_or_else(|| format!("Invalid MIDI pitch {} in score.", attack.midi_pitch))
-            })
-            .collect::<Result<_, _>>()?;
-        let chord = Chord::from_pitches(&pitches).map_err(|error| error.to_string())?;
-        slices.push(Slice::new(EventId::new(index as u64 + 1), chord));
+        let mut attacks_by_staff: BTreeMap<(u16, tapconductor_score::Rational), Vec<&tapconductor_score::NoteAttack>> = BTreeMap::new();
+        for attack in &event.attacks {
+            attacks_by_staff.entry((attack.staff, attack.end)).or_default().push(attack);
+        }
+        let mut staff_groups = Vec::with_capacity(attacks_by_staff.len());
+        for ((staff, end), attacks) in attacks_by_staff {
+            let pitches: Vec<MidiPitch> = attacks
+                .iter()
+                .map(|attack| {
+                    MidiPitch::new(attack.midi_pitch)
+                        .ok_or_else(|| format!("Invalid MIDI pitch {} in score.", attack.midi_pitch))
+                })
+                .collect::<Result<_, _>>()?;
+            let chord = Chord::from_pitches(&pitches).map_err(|error| error.to_string())?;
+            let release_on = {
+                    events
+                        .iter()
+                        .enumerate()
+                        .skip(index + 1)
+                        .find(|(_, candidate)| candidate.position.absolute >= end)
+                        .map(|(release_index, _)| EventId::new(release_index as u64 + 1))
+            };
+            staff_groups.push(StaffSlice::new(
+                staff,
+                chord,
+                tapconductor_performance::SliceReleaseBoundary::from_event(release_on),
+            ));
+        }
+        slices.push(
+            Slice::from_staff_groups(EventId::new(index as u64 + 1), &staff_groups)
+                .map_err(|error| error.to_string())?,
+        );
     }
     ScoreSequence::new(slices).map_err(|error| error.to_string())
 }

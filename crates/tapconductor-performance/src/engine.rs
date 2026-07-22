@@ -3,7 +3,8 @@ use core::fmt;
 use crate::{
     AudioCommand, Chord, DefaultPianoGate, EventId, GateError, GatePolicy, Generation,
     IgnoreReason, InputId, MidiPitch, PerformanceEvent, SafetyReason, SampleRate, SampleTime,
-    ScoreSequence, Slice, Transition, TriggerKind, Velocity, VoiceGroupId,
+    ScoreSequence, Slice, SliceReleaseBoundary, StaffSlice, Transition, TriggerKind, Velocity,
+    VoiceGroupId, MAX_CHORD_NOTES,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -123,6 +124,14 @@ pub enum PerformanceCommand {
         at: SampleTime,
         velocity: Velocity,
     },
+    AuditionChord {
+        generation: Generation,
+        event: EventId,
+        chord: Chord,
+        input: InputId,
+        at: SampleTime,
+        velocity: Velocity,
+    },
     InputReleased {
         input: InputId,
         at: SampleTime,
@@ -154,6 +163,8 @@ struct VoiceGroup {
     input_released_at: Option<SampleTime>,
     first_later_trigger_at: Option<SampleTime>,
     release_scheduled_at: Option<SampleTime>,
+    release_boundary: SliceReleaseBoundary,
+    staff: u16,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -203,6 +214,8 @@ pub struct PerformanceEngine<G = DefaultPianoGate> {
     next_group_id: u64,
     active_groups: Vec<VoiceGroup>,
     held_inputs: Vec<HeldInput>,
+    regular_roll_ms: u16,
+    audition_roll_ms: u16,
 }
 
 impl PerformanceEngine<DefaultPianoGate> {
@@ -236,12 +249,19 @@ impl<G: GatePolicy> PerformanceEngine<G> {
             next_group_id: 1,
             active_groups: Vec::with_capacity(config.max_active_groups),
             held_inputs: Vec::with_capacity(config.max_held_inputs),
+            regular_roll_ms: 0,
+            audition_roll_ms: 120,
         })
     }
 
     #[must_use]
     pub const fn sample_rate(&self) -> SampleRate {
         self.sample_rate
+    }
+
+    pub fn set_roll_delays(&mut self, regular_ms: u16, audition_ms: u16) {
+        self.regular_roll_ms = regular_ms;
+        self.audition_roll_ms = audition_ms;
     }
 
     /// Updates the device clock rate after a safety stop. The score and cursor
@@ -356,6 +376,14 @@ impl<G: GatePolicy> PerformanceEngine<G> {
                 at,
                 velocity,
             } => self.audition_note(generation, event, pitch, input, at, velocity),
+            PerformanceCommand::AuditionChord {
+                generation,
+                event,
+                chord,
+                input,
+                at,
+                velocity,
+            } => self.audition_chord(generation, event, chord, input, at, velocity),
             PerformanceCommand::InputReleased { input, at } => self.release_input(input, at),
             PerformanceCommand::Reposition {
                 generation,
@@ -477,6 +505,30 @@ impl<G: GatePolicy> PerformanceEngine<G> {
         )
     }
 
+    fn audition_chord(
+        &mut self,
+        generation: Generation,
+        event: EventId,
+        chord: Chord,
+        input: InputId,
+        at: SampleTime,
+        velocity: Velocity,
+    ) -> Result<Transition, EngineError> {
+        self.require_generation(generation)?;
+        self.score
+            .as_ref()
+            .expect("generation validation proves a score is loaded")
+            .find(event)
+            .ok_or(EngineError::EventNotFound(event))?;
+        self.observe_time(at)?;
+        if self.input_is_held(input) {
+            return Ok(Transition::with_event(PerformanceEvent::Ignored {
+                reason: IgnoreReason::InputAlreadyHeld,
+            }));
+        }
+        self.trigger_slice(generation, Slice::new(event, chord), input, at, velocity, TriggerKind::Audition)
+    }
+
     fn trigger_slice(
         &mut self,
         generation: Generation,
@@ -486,7 +538,26 @@ impl<G: GatePolicy> PerformanceEngine<G> {
         velocity: Velocity,
         kind: TriggerKind,
     ) -> Result<Transition, EngineError> {
-        if self.active_groups.len() == self.config.max_active_groups {
+        let staff_scoped_tap = kind == TriggerKind::Tap && slice.is_staff_scoped();
+        let mut staff_groups: [Option<StaffSlice>; MAX_CHORD_NOTES] = [None; MAX_CHORD_NOTES];
+        let group_count = if staff_scoped_tap {
+                for (index, group) in slice.staff_groups().enumerate() {
+                    staff_groups[index] = Some(group);
+                }
+                slice.staff_groups().len()
+        } else {
+            staff_groups[0] = Some(StaffSlice::new(
+                0,
+                slice.chord(),
+                if kind == TriggerKind::Tap {
+                    slice.staff_groups().next().expect("a slice has one legacy group").release_boundary()
+                } else {
+                    SliceReleaseBoundary::NextTrigger
+                },
+            ));
+            1
+        };
+        if self.active_groups.len().saturating_add(group_count) > self.config.max_active_groups {
             return Err(EngineError::ActiveGroupCapacityExceeded {
                 maximum: self.config.max_active_groups,
             });
@@ -498,28 +569,46 @@ impl<G: GatePolicy> PerformanceEngine<G> {
         }
         let next_group_id = self
             .next_group_id
-            .checked_add(1)
+            .checked_add(group_count as u64)
             .ok_or(EngineError::VoiceGroupIdExhausted)?;
-        let group_id = VoiceGroupId::new(self.next_group_id);
 
-        // By construction only the most recently triggered group can lack a
-        // later trigger. Find it without assuming that invariant, then compute
-        // the gate result before mutating state.
-        let waiting_index = self
+        let mut transition = Transition::none();
+        if staff_scoped_tap {
+            let minimum_age = DefaultPianoGate::minimum_frames(self.sample_rate);
+            for index in 0..self.active_groups.len() {
+                let waiting = &mut self.active_groups[index];
+                let boundary_reached = match waiting.release_boundary {
+                    SliceReleaseBoundary::NextTrigger => true,
+                    SliceReleaseBoundary::OnEvent(event) => slice.id().get() >= event.get(),
+                    SliceReleaseBoundary::EndOfScore => false,
+                };
+                let old_enough = at.frame().saturating_sub(waiting.attack_at.frame()) >= minimum_age;
+                if waiting.first_later_trigger_at.is_none() && boundary_reached && old_enough {
+                    waiting.first_later_trigger_at = Some(at);
+                    waiting.release_scheduled_at = Some(at);
+                    transition.push_audio(AudioCommand::ReleaseGroup {
+                        at,
+                        group: waiting.id,
+                    });
+                }
+            }
+        } else if let Some(index) = self
             .active_groups
             .iter()
-            .position(|group| group.first_later_trigger_at.is_none());
-        let waiting_release = match waiting_index {
-            Some(index) => self.gate.note_off_at(
+            .position(|group| {
+                group.first_later_trigger_at.is_none()
+                    && (kind == TriggerKind::Audition || match group.release_boundary {
+                        SliceReleaseBoundary::NextTrigger => true,
+                        SliceReleaseBoundary::OnEvent(event) => slice.id().get() >= event.get(),
+                        SliceReleaseBoundary::EndOfScore => false,
+                    })
+            })
+        {
+            let waiting_release = self.gate.note_off_at(
                 self.sample_rate,
                 self.active_groups[index].input_released_at,
                 Some(at),
-            )?,
-            None => None,
-        };
-
-        let mut transition = Transition::none();
-        if let Some(index) = waiting_index {
+            )?;
             let waiting = &mut self.active_groups[index];
             waiting.first_later_trigger_at = Some(at);
             if let Some(release_at) = waiting_release {
@@ -532,25 +621,36 @@ impl<G: GatePolicy> PerformanceEngine<G> {
         }
 
         self.next_group_id = next_group_id;
-        self.active_groups.push(VoiceGroup {
-            id: group_id,
-            generation,
-            event: slice.id(),
-            input,
-            attack_at: at,
-            input_released_at: None,
-            first_later_trigger_at: None,
-            release_scheduled_at: None,
-        });
+        let first_group_id = VoiceGroupId::new(self.next_group_id - group_count as u64);
+        for index in 0..group_count {
+            let staff_group = staff_groups[index].expect("the staff group prefix is populated");
+            let group_id = VoiceGroupId::new(first_group_id.get() + index as u64);
+            self.active_groups.push(VoiceGroup {
+                id: group_id,
+                generation,
+                event: slice.id(),
+                input,
+                attack_at: at,
+                input_released_at: None,
+                first_later_trigger_at: None,
+                release_scheduled_at: None,
+                release_boundary: staff_group.release_boundary(),
+                staff: staff_group.staff(),
+            });
+            transition.push_audio(AudioCommand::PlaySlice {
+                at,
+                group: group_id,
+                chord: staff_group.chord(),
+                velocity,
+                roll_interval_frames: match kind {
+                    TriggerKind::Tap => self.sample_rate.get().saturating_mul(u32::from(self.regular_roll_ms)) / 1_000,
+                    TriggerKind::Audition => self.sample_rate.get().saturating_mul(u32::from(self.audition_roll_ms)) / 1_000,
+                },
+            });
+        }
         self.held_inputs.push(HeldInput {
             id: input,
-            group: Some(group_id),
-        });
-        transition.push_audio(AudioCommand::PlaySlice {
-            at,
-            group: group_id,
-            chord: slice.chord(),
-            velocity,
+            group: if staff_scoped_tap { None } else { Some(first_group_id) },
         });
         transition.set_event(PerformanceEvent::Triggered {
             generation,
@@ -564,7 +664,7 @@ impl<G: GatePolicy> PerformanceEngine<G> {
             } else {
                 self.next_event()
             },
-            group: group_id,
+            group: first_group_id,
             kind,
             at,
         });
@@ -735,7 +835,7 @@ mod tests {
         Some(rate) => rate,
         None => panic!("test sample rate is non-zero"),
     };
-    const MINIMUM: u64 = 19_200;
+    const MINIMUM: u64 = 4_800;
 
     fn time(frame: u64) -> SampleTime {
         SampleTime::new(frame)
@@ -805,9 +905,9 @@ mod tests {
         for rate in [1, 2, 3, 44_100, 48_000, 96_000, 192_001] {
             let rate = SampleRate::new(rate).unwrap();
             let frames = DefaultPianoGate::minimum_frames(rate);
-            assert!(frames * 1_000 >= u64::from(rate.get()) * 400);
+            assert!(frames * 1_000 >= u64::from(rate.get()) * 100);
             if frames > 0 {
-                assert!((frames - 1) * 1_000 < u64::from(rate.get()) * 400);
+                assert!((frames - 1) * 1_000 < u64::from(rate.get()) * 100);
             }
         }
         assert_eq!(DefaultPianoGate::minimum_frames(RATE), MINIMUM);
@@ -898,6 +998,7 @@ mod tests {
             group,
             chord: played,
             velocity,
+            ..
         } = command[0]
         else {
             panic!("expected a play command");
@@ -983,6 +1084,145 @@ mod tests {
                 group: old_group,
             }
         );
+    }
+
+    #[test]
+    fn written_duration_keeps_group_sounding_across_an_intermediate_slice() {
+        let mut engine = engine();
+        let score = ScoreSequence::new(vec![
+            Slice::with_release_boundary(event(10), chord(&[60]), Some(event(30))),
+            Slice::new(event(20), chord(&[64])),
+            Slice::new(event(30), chord(&[67])),
+        ])
+        .unwrap();
+        engine.load_score(score, time(0)).unwrap();
+        let generation = engine.generation().unwrap();
+
+        let first = tap(&mut engine, generation, 1, 100);
+        let first_group = match commands(&first)[0] {
+            AudioCommand::PlaySlice { group, .. } => group,
+            _ => unreachable!(),
+        };
+        release(&mut engine, 1, 110);
+
+        let intermediate = tap(&mut engine, generation, 2, 200);
+        assert!(matches!(
+            commands(&intermediate).as_slice(),
+            [AudioCommand::PlaySlice { .. }]
+        ));
+        assert_eq!(
+            engine
+                .active_groups()
+                .find(|group| group.id == first_group)
+                .unwrap()
+                .first_later_trigger_at,
+            None
+        );
+
+        let boundary = tap(&mut engine, generation, 3, 300);
+        assert_eq!(
+            commands(&boundary)[0],
+            AudioCommand::ReleaseGroup {
+                at: time(110 + MINIMUM),
+                group: first_group,
+            }
+        );
+    }
+
+    #[test]
+    fn tap_release_is_scoped_to_staffs_whose_written_duration_has_ended() {
+        let mut engine = engine();
+        let score = ScoreSequence::new(vec![
+            Slice::from_staff_groups(
+                event(10),
+                &[
+                    StaffSlice::new(1, chord(&[60]), SliceReleaseBoundary::OnEvent(event(20))),
+                    StaffSlice::new(2, chord(&[48]), SliceReleaseBoundary::OnEvent(event(30))),
+                ],
+            )
+            .unwrap(),
+            Slice::from_staff_groups(
+                event(20),
+                &[StaffSlice::new(1, chord(&[62]), SliceReleaseBoundary::OnEvent(event(30)))],
+            )
+            .unwrap(),
+            Slice::new(event(30), chord(&[64])),
+        ])
+        .unwrap();
+        engine.load_score(score, time(0)).unwrap();
+        let generation = engine.generation().unwrap();
+
+        let first = tap(&mut engine, generation, 1, 100);
+        let first_groups: Vec<_> = commands(&first)
+            .iter()
+            .filter_map(|command| match command {
+                AudioCommand::PlaySlice { group, .. } => Some(*group),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(first_groups.len(), 2);
+        release(&mut engine, 1, 110);
+
+        let second = tap(&mut engine, generation, 2, 100 + MINIMUM);
+        let released: Vec<_> = commands(&second)
+            .iter()
+            .filter_map(|command| match command {
+                AudioCommand::ReleaseGroup { group, .. } => Some(*group),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(released, vec![first_groups[0]]);
+        assert!(engine.active_groups().any(|group| group.id == first_groups[1]
+            && group.release_scheduled_at.is_none()));
+    }
+
+    #[test]
+    fn notes_on_one_staff_release_independently_by_written_duration() {
+        let mut engine = engine();
+        let score = ScoreSequence::new(vec![
+            Slice::from_staff_groups(
+                event(10),
+                &[
+                    StaffSlice::new(1, chord(&[60]), SliceReleaseBoundary::OnEvent(event(20))),
+                    StaffSlice::new(1, chord(&[67]), SliceReleaseBoundary::OnEvent(event(30))),
+                ],
+            )
+            .unwrap(),
+            Slice::from_staff_groups(
+                event(20),
+                &[StaffSlice::new(1, chord(&[62]), SliceReleaseBoundary::OnEvent(event(30)))],
+            )
+            .unwrap(),
+            Slice::from_staff_groups(
+                event(30),
+                &[StaffSlice::new(1, chord(&[69]), SliceReleaseBoundary::EndOfScore)],
+            )
+            .unwrap(),
+        ])
+        .unwrap();
+        engine.load_score(score, time(0)).unwrap();
+        let generation = engine.generation().unwrap();
+        let first = tap(&mut engine, generation, 1, 100);
+        let groups: Vec<_> = commands(&first)
+            .iter()
+            .filter_map(|command| match command {
+                AudioCommand::PlaySlice { group, .. } => Some(*group),
+                _ => None,
+            })
+            .collect();
+        release(&mut engine, 1, 110);
+
+        let second = tap(&mut engine, generation, 2, 100 + MINIMUM);
+        let released: Vec<_> = commands(&second)
+            .iter()
+            .filter_map(|command| match command {
+                AudioCommand::ReleaseGroup { group, .. } => Some(*group),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(released, vec![groups[0]]);
+        assert!(engine.active_groups().any(|group| group.id == groups[1]
+            && group.release_scheduled_at.is_none()));
     }
 
     #[test]

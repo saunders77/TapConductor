@@ -36,10 +36,13 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::load_score,
             commands::set_part_enabled,
+            commands::set_roll_delays,
+            commands::set_tap_mode,
             commands::performance_input_down,
             commands::release_input,
             commands::audition_event,
             commands::audition_note,
+            commands::audition_chord,
             commands::set_cursor,
             commands::panic,
             commands::audio_devices,
@@ -65,17 +68,41 @@ pub fn run() {
                                 .to_owned()
                         });
                         let event = match result {
-                            Ok(mut core) => match action {
-                                MidiInputAction::Down { token, velocity } => {
-                                    core.input_down(token, velocity)
+                            Ok(mut core) => {
+                                if core.beat_tap_mode() {
+                                    match action {
+                                        MidiInputAction::Down { token, velocity } => {
+                                            let _ = handle.emit(
+                                                "beat-midi-input",
+                                                dto::BeatMidiInputDto::Down { token, velocity },
+                                            );
+                                            Ok(None)
+                                        }
+                                        MidiInputAction::Up { token } => {
+                                            let _ = handle.emit(
+                                                "beat-midi-input",
+                                                dto::BeatMidiInputDto::Up { token },
+                                            );
+                                            Ok(None)
+                                        }
+                                        MidiInputAction::Panic => core.panic_midi_inputs(),
+                                        MidiInputAction::Shutdown => {
+                                            let _ = core.panic();
+                                            break;
+                                        }
+                                    }
+                                } else {
+                                    match action {
+                                        MidiInputAction::Down { token, velocity } => core.input_down(token, velocity),
+                                        MidiInputAction::Up { token } => core.release_input(&token),
+                                        MidiInputAction::Panic => core.panic_midi_inputs(),
+                                        MidiInputAction::Shutdown => {
+                                            let _ = core.panic();
+                                            break;
+                                        }
+                                    }
                                 }
-                                MidiInputAction::Up { token } => core.release_input(&token),
-                                MidiInputAction::Panic => core.panic_midi_inputs(),
-                                MidiInputAction::Shutdown => {
-                                    let _ = core.panic();
-                                    break;
-                                }
-                            },
+                            }
                             Err(error) => Err(error),
                         };
                         match event {

@@ -8,3 +8,5 @@ publish = false
 [dependencies]
 tapconductor-audio = { path = "../../crates/tapconductor-audio" }
 
+[target.'cfg(windows)'.dependencies]
+tapconductor-audio = { path = "../../crates/tapconductor-audio", features = ["wasapi-cpal-fallback", "asio-backend"] }

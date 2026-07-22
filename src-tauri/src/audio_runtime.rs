@@ -10,11 +10,10 @@ use tapconductor_performance as performance;
 #[cfg(not(windows))]
 use tapconductor_audio::backend::CpalBackend as PlatformAudioBackend;
 #[cfg(windows)]
-use tapconductor_audio::backend::WasapiLowLatencyBackend as PlatformAudioBackend;
+use tapconductor_audio::backend::WindowsLowLatencyBackend as PlatformAudioBackend;
 
 const DEFAULT_SAMPLE_RATE: u32 = 48_000;
 const REQUESTED_BUFFER_FRAMES: u32 = 128;
-const MAX_ACCEPTED_BUFFER_FRAMES: u32 = 256;
 const COMMAND_QUEUE: usize = 2_048;
 const SCHEDULE_CAPACITY: usize = 2_048;
 const VOICES: usize = 256;
@@ -133,15 +132,10 @@ impl AudioManager {
         if output_config.buffer_frames.is_none() {
             output_config.buffer_frames = Some(REQUESTED_BUFFER_FRAMES);
         }
-        if output_config
-            .buffer_frames
-            .is_some_and(|frames| frames > MAX_ACCEPTED_BUFFER_FRAMES)
-        {
-            return Err(format!(
-                "The selected output's smallest advertised buffer is {} frames; TapConductor requires at most {MAX_ACCEPTED_BUFFER_FRAMES} frames for live use.",
-                output_config.buffer_frames.expect("checked as Some")
-            ));
-        }
+        // The endpoint's minimum period is a hardware/driver constraint, not
+        // a reason to disable audio. In particular, 480 frames at 48 kHz and
+        // 441 frames at 44.1 kHz are both ordinary 10 ms WASAPI periods. Keep
+        // the actual value visible in diagnostics and let the stream run.
 
         let wasapi_periods = self.probe_periods(selected_device.as_deref());
         let sampler = PianoSynth::<VOICES>::new(PianoConfig::new(sample_rate))
@@ -157,16 +151,20 @@ impl AudioManager {
                 at: 0,
             })
             .map_err(|_| "Unable to initialize the audio gain command.".to_owned())?;
+
+        // Stop and release the old endpoint before opening the replacement.
+        // Starting both in parallel can make drivers that permit only one
+        // client report AUDCLNT_E_DEVICE_IN_USE during an in-app switch.
+        let handoff_sample = self.now_sample();
+        self.runtime.take();
         let stream = self
             .backend
             .start_output(&output_config, Box::new(engine))
             .map_err(|error| error.to_string())?;
 
-        // The old and newly warmed streams may overlap during setup. Anchor
-        // the new stream at the exact handoff so the performance clock neither
-        // jumps backward nor double-counts those parallel render frames.
+        // Anchor the replacement at the captured handoff so changing endpoints
+        // does not move the performance clock backward.
         let new_rendered_frames = diagnostics.snapshot().rendered_frames;
-        let handoff_sample = self.now_sample();
         self.runtime = Some(AudioRuntime {
             sender,
             diagnostics,
@@ -224,23 +222,47 @@ impl AudioManager {
                 group,
                 chord,
                 velocity,
+                roll_interval_frames,
             } => {
-                let mut audio_chord = Chord::empty();
-                for pitch in chord.pitches() {
+                let mut pitches = chord.pitches().to_vec();
+                pitches.sort_by_key(|pitch| pitch.get());
+                if roll_interval_frames == 0 {
+                    let mut audio_chord = Chord::empty();
+                    for pitch in pitches {
+                        audio_chord
+                            .push(Note::new(pitch.get(), velocity.get()))
+                            .map_err(|error| error.to_string())?;
+                    }
+                    return self.runtime.as_mut()
+                        .ok_or_else(|| self.last_error.clone().unwrap_or_else(|| "Audio is not ready.".to_owned()))?
+                        .sender
+                        .try_send(AudioCommand::PlaySlice {
+                            at: local_time(at.frame()),
+                            group: VoiceGroupId(group.get()),
+                            chord: audio_chord,
+                        })
+                        .map_err(|_| "The real-time audio command queue is full.".to_owned());
+                }
+                let mut commands = Vec::with_capacity(pitches.len());
+                for (index, pitch) in pitches.into_iter().enumerate() {
+                    let mut audio_chord = Chord::empty();
                     audio_chord
                         .push(Note::new(pitch.get(), velocity.get()))
                         .map_err(|error| error.to_string())?;
+                    commands.push(AudioCommand::PlaySlice {
+                        at: local_time(at.frame().saturating_add(
+                            u64::from(roll_interval_frames).saturating_mul(index as u64),
+                        )),
+                        group: VoiceGroupId(group.get()),
+                        chord: audio_chord,
+                    });
                 }
-                AudioCommand::PlaySlice {
-                    at: local_time(at.frame()),
-                    group: VoiceGroupId(group.get()),
-                    chord: audio_chord,
-                }
+                commands
             }
-            performance::AudioCommand::ReleaseGroup { at, group } => AudioCommand::ReleaseGroup {
+            performance::AudioCommand::ReleaseGroup { at, group } => vec![AudioCommand::ReleaseGroup {
                 at: local_time(at.frame()),
                 group: VoiceGroupId(group.get()),
-            },
+            }],
             performance::AudioCommand::Panic { .. } => unreachable!("panic handled above"),
         };
         let runtime = self.runtime.as_mut().ok_or_else(|| {
@@ -248,10 +270,13 @@ impl AudioManager {
                 .clone()
                 .unwrap_or_else(|| "Audio is not ready.".to_owned())
         })?;
-        runtime
-            .sender
-            .try_send(translated)
-            .map_err(|_| "The real-time audio command queue is full.".to_owned())
+        for command in translated {
+            runtime
+                .sender
+                .try_send(command)
+                .map_err(|_| "The real-time audio command queue is full.".to_owned())?;
+        }
+        Ok(())
     }
 
     pub fn set_volume(&mut self, gain: f32) -> Result<(), String> {
@@ -304,6 +329,7 @@ impl AudioManager {
             queue_overflows: snapshot.queue_overflows + snapshot.schedule_overflows,
             active_voices: snapshot.active_voices,
             direct_wasapi_stream: self.uses_direct_wasapi_stream(),
+            asio_stream: self.uses_asio_stream(),
             wasapi_periods: self.wasapi_periods,
             midi_input,
             midi_output,
@@ -335,6 +361,16 @@ impl AudioManager {
 
     #[cfg(not(windows))]
     fn uses_direct_wasapi_stream(&self) -> bool {
+        false
+    }
+
+    #[cfg(windows)]
+    fn uses_asio_stream(&self) -> bool {
+        self.backend.uses_asio_stream()
+    }
+
+    #[cfg(not(windows))]
+    fn uses_asio_stream(&self) -> bool {
         false
     }
 }

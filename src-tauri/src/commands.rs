@@ -47,6 +47,25 @@ pub fn set_part_enabled(
 }
 
 #[tauri::command]
+pub fn set_roll_delays(
+    state: State<'_, Arc<AppState>>,
+    regular_ms: u16,
+    audition_ms: u16,
+) -> Result<(), String> {
+    lock_core(&state)?.set_roll_delays(regular_ms, audition_ms)
+}
+
+#[tauri::command]
+pub fn set_tap_mode(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    beat: bool,
+) -> Result<(), String> {
+    let event = lock_core(&state)?.set_beat_tap_mode(beat)?;
+    emit_event(&app, event)
+}
+
+#[tauri::command]
 pub fn performance_input_down(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,
@@ -91,6 +110,20 @@ pub fn audition_note(
     velocity: u8,
 ) -> Result<(), String> {
     let event = lock_core(&state)?.audition_note(generation, index, midi_pitch, token, velocity)?;
+    emit_event(&app, event)
+}
+
+#[tauri::command]
+pub fn audition_chord(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    generation: u64,
+    index: usize,
+    midi_pitches: Vec<u8>,
+    token: String,
+    velocity: u8,
+) -> Result<(), String> {
+    let event = lock_core(&state)?.audition_chord(generation, index, midi_pitches, token, velocity)?;
     emit_event(&app, event)
 }
 

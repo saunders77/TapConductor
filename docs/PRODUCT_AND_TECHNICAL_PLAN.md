@@ -172,10 +172,14 @@ audio or own the authoritative performance cursor.
 ### Audio backends
 
 - Windows production backend: direct event-driven WASAPI using `IAudioClient3`, initialized at the
-  endpoint's native sample rate and smallest stable shared-mode engine period. Offer an advanced
-  exclusive-mode option only after shared mode is reliable.
-- Prototype/fallback backend: `cpal`, which supports WASAPI, optional ASIO, macOS CoreAudio, and iOS
-  CoreAudio. Use it to validate the engine quickly, not as an excuse to accept a larger buffer.
+  endpoint's native sample rate and smallest stable shared-mode engine period for devices without
+  an installed ASIO driver.
+- Windows performance backend: native vendor ASIO, prioritized for interfaces such as the Roland
+  QUAD-CAPTURE where acoustic tests show that the ASIO path materially outperforms WASAPI. The
+  Steinberg SDK has GPLv3 and proprietary licensing routes; TapConductor uses the GPLv3 route and
+  the entire application is now distributed under GPLv3-only terms.
+- Prototype/enumeration backend: `cpal`, which supports WASAPI, optional ASIO, macOS CoreAudio, and
+  iOS CoreAudio. Use it to validate the engine quickly, not as an excuse to accept a larger buffer.
 - Apple port: CoreAudio through `cpal` initially, with `AVAudioSession` configured for playback and
   a preferred approximately 5 ms I/O buffer on iPadOS/iOS. Replace only the backend if measurement
   shows a need; the engine and sampler remain shared Rust.

@@ -8,8 +8,8 @@ parts. Rests do not consume taps.
 This repository contains an MVP foundation spanning phases 0–4: score import and display,
 deterministic conducting, low-latency built-in audio, score navigation/audition, and MIDI
 input/output. It is not yet a release-qualified completion of every phase gate; hardware loopback,
-long-duration stress/rehearsal, direct-WASAPI streaming, signing, and physical-controller coverage
-remain explicit validation work.
+long-duration stress/rehearsal, signing, ASIO hardware qualification, and physical-controller coverage remain explicit
+validation work.
 
 ## MVP capabilities
 
@@ -29,8 +29,8 @@ remain explicit validation work.
 - Selects score parts, audio output, MIDI input, and MIDI output at runtime. **Panic** immediately
   clears sounding groups and MIDI output notes.
 - Uses a bounded, allocation-free audio callback path, sample-clock scheduling, a fixed voice pool,
-  and an SPSC command queue. Windows queries shared-mode periods through `IAudioClient3` and renders
-  through CPAL's WASAPI backend.
+  and an SPSC command queue. Installed native ASIO drivers are exposed as low-latency outputs;
+  ordinary Windows endpoints use the direct event-driven `IAudioClient3` path.
 
 The built-in instrument is a small, bright procedural piano-like synthesizer with six independently
 decaying partials, so the app starts without an external sample library. No SoundFont or recorded
@@ -42,10 +42,10 @@ Every physical press creates an independent voice group and sounds immediately. 
 note-off occurs at:
 
 ```text
-max(first later tap, matching input release + 400 ms)
+max(first later tap, matching input release + 100 ms)
 ```
 
-Thus a quick next tap starts on time while the earlier sound may continue until its 400 ms
+Thus a quick next tap starts on time while the earlier sound may continue until its 100 ms
 post-release minimum. Several groups can overlap during fast passages. If no later tap has happened,
 the group remains eligible until one does. The synthesizer's piano envelope always decays naturally
 while a key is held; the gate never freezes or lengthens that decay.
@@ -55,6 +55,9 @@ while a key is held; the gate never freezes or lengthens that decay.
 - 64-bit Windows 10 or Windows 11.
 - [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with
   **Desktop development with C++**, an MSVC x64 toolset, and a Windows 10 or 11 SDK.
+- [LLVM](https://releases.llvm.org/) with `libclang` available to the build. The ASIO binding
+  generator normally finds a standard LLVM installation; otherwise set `LIBCLANG_PATH` to its
+  `bin` directory.
 - [Rust](https://rustup.rs/) stable with the `x86_64-pc-windows-msvc` target.
 - Node.js 22.12 or newer and npm (the current Node LTS is recommended).
 - Microsoft Edge WebView2 Runtime. It is normally already present on supported Windows systems.
@@ -81,6 +84,14 @@ Use **Open score** and try [`examples/scores/cross-staff-demo.musicxml`](example
 Select a low-latency wired output in the top bar, then use Space or Enter to conduct. Key repeat is
 ignored; release events are paired with their presses for correct gating.
 
+ASIO entries are suffixed **(ASIO)** in the output selector. Choose the vendor driver for an audio
+interface such as the Roland QUAD-CAPTURE; TapConductor opens its main output pair at the driver's
+native sample rate and minimum reported buffer. Increase the buffer in the vendor control panel if
+the minimum clicks or drops out. Built-in devices such as Realtek remain available through the
+low-latency WASAPI path unless an installed ASIO driver exposes them. ASIO is a host API, not a
+universal replacement driver, so TapConductor cannot create native ASIO support for hardware whose
+manufacturer supplies none.
+
 To exercise MIDI, connect the device before opening its selector, choose it under **MIDI in** or
 **MIDI out**, and use **Panic** before disconnecting or changing a live routing setup.
 
@@ -92,8 +103,10 @@ npm run tauri:build
 ```
 
 Release artifacts are written beneath `target\release\bundle\`, including NSIS and MSI packages.
-The build is reproducible at the dependency-selection level through the committed `Cargo.lock` and
-`package-lock.json`; use `npm ci` and Cargo's `--locked` flag in automated builds.
+Rust and JavaScript dependencies are pinned by `Cargo.lock` and `package-lock.json`; use `npm ci`
+and Cargo's `--locked` flag in automated builds. The `asio-sys` build currently downloads
+Steinberg's SDK from its official stable URL, so release engineering must archive the exact SDK and
+license materials used for each build.
 Local development bundles are unsigned; production distribution still requires code signing.
 
 ## Test and measure
@@ -103,6 +116,9 @@ npm run build
 cargo test --locked --workspace
 cargo check --locked --workspace --all-targets
 cargo run --locked --release -p tapconductor-latency-probe
+cargo run --locked --release -p tapconductor-latency-probe -- --live
+cargo run --locked --release -p tapconductor-latency-probe -- --live --device "Realtek"
+cargo run --locked --release -p tapconductor-latency-probe -- --live --device "QUAD-CAPTURE (ASIO)"
 ```
 
 The latency probe reports median/p95/p99 software command-to-first-render timings over 2,000
@@ -137,9 +153,9 @@ keeps a future macOS/iPadOS host possible without moving correctness-sensitive l
 
 - The importer intentionally supports a practical, tested subset of MusicXML rather than every
   publisher extension. Inspect import warnings before relying on an unfamiliar score live.
-- Audio uses the endpoint's native float sample rate (including 44.1 and 48 kHz) and compatible channel layout,
-  targets a 128-frame shared-mode period, and rejects configurations above 256 frames. The direct
-  event-driven `IAudioClient3` renderer and exclusive mode are not implemented.
+- Native ASIO uses the driver's current sample rate, main one or two output channels, native sample
+  representation, and minimum reported buffer. Other Windows devices use the direct event-driven
+  shared `IAudioClient3` renderer. End-to-end latency remains dependent on the hardware and driver.
 - The procedural synth is a dependable bootstrap instrument, not a multisampled concert piano.
 - MIDI output currently uses the MVP routing/channel behavior rather than per-part routing.
 - PDF/optical recognition, rolled-chord modes, beat-tap mode, and Apple hosts are future work.
@@ -147,4 +163,4 @@ keeps a future macOS/iPadOS host possible without moving correctness-sensitive l
   loopback and sustained-load testing on representative Windows audio hardware.
 
 See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for direct dependency licenses. TapConductor
-source is available under the [MIT License](LICENSE).
+source and distributed binaries are licensed under the [GNU GPL version 3 only](LICENSE).

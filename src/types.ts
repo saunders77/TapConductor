@@ -6,6 +6,7 @@ export interface RationalDto {
 export interface NoteDto {
   sourceId: string;
   partId: string;
+  partIndex: number;
   staff: number;
   voice: string;
   midiPitch: number;
@@ -18,8 +19,17 @@ export interface TapEventDto {
   measureIndex: number;
   measureNumber: string;
   occurrence: number;
+  absolute: RationalDto;
   offset: RationalDto;
   notes: NoteDto[];
+}
+
+export interface BeatDto {
+  absolute: RationalDto;
+  measureIndex: number;
+  beatIndex: number;
+  beatsInMeasure: number;
+  beatType: number;
 }
 
 export interface PartDto {
@@ -35,6 +45,7 @@ export interface LoadedScore {
   format: "music_xml" | "midi";
   musicXml?: string;
   events: TapEventDto[];
+  beats: BeatDto[];
   parts: PartDto[];
   warnings: string[];
 }
@@ -66,6 +77,7 @@ export interface DiagnosticsDto {
   queueOverflows: number;
   activeVoices: number;
   directWasapiStream: boolean;
+  asioStream: boolean;
   wasapiPeriods?: {
     sampleRate: number;
     channels: number;
@@ -86,3 +98,7 @@ export type CoreEvent =
   | { type: "ready"; generation: number }
   | { type: "ended"; generation: number }
   | { type: "fault"; message: string };
+
+export type BeatMidiInput =
+  | { type: "down"; token: string; velocity: number }
+  | { type: "up"; token: string };

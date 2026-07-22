@@ -5,7 +5,7 @@ use std::collections::HashSet;
 pub const MAX_CHORD_NOTES: usize = 64;
 
 /// A transition can release the preceding group and play the new group.
-pub const TRANSITION_AUDIO_CAPACITY: usize = 2;
+pub const TRANSITION_AUDIO_CAPACITY: usize = MAX_CHORD_NOTES * 2;
 
 macro_rules! id_type {
     ($name:ident) => {
@@ -273,13 +273,50 @@ impl fmt::Debug for Chord {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Slice {
     id: EventId,
-    chord: Chord,
+    staff_groups: [Option<StaffSlice>; MAX_CHORD_NOTES],
+    len: u8,
+    staff_scoped: bool,
 }
 
 impl Slice {
     #[must_use]
     pub const fn new(id: EventId, chord: Chord) -> Self {
-        Self { id, chord }
+        Self {
+            id,
+            staff_groups: [Some(StaffSlice::new(0, chord, SliceReleaseBoundary::NextTrigger)); MAX_CHORD_NOTES],
+            len: 1,
+            staff_scoped: false,
+        }
+    }
+
+    /// Creates a score-backed slice whose voices remain gated until playback
+    /// reaches the first onset at or after their resolved written/tied end.
+    #[must_use]
+    pub const fn with_release_boundary(
+        id: EventId,
+        chord: Chord,
+        release_on: Option<EventId>,
+    ) -> Self {
+        Self {
+            id,
+            staff_groups: [Some(StaffSlice::new(0, chord, SliceReleaseBoundary::from_event(release_on))); MAX_CHORD_NOTES],
+            len: 1,
+            staff_scoped: false,
+        }
+    }
+
+    pub fn from_staff_groups(id: EventId, groups: &[StaffSlice]) -> Result<Self, ChordError> {
+        if groups.is_empty() {
+            return Err(ChordError::Empty);
+        }
+        if groups.len() > MAX_CHORD_NOTES {
+            return Err(ChordError::TooManyNotes { maximum: MAX_CHORD_NOTES });
+        }
+        let mut staff_groups = [None; MAX_CHORD_NOTES];
+        for (index, group) in groups.iter().copied().enumerate() {
+            staff_groups[index] = Some(group);
+        }
+        Ok(Self { id, staff_groups, len: groups.len() as u8, staff_scoped: true })
     }
 
     #[must_use]
@@ -288,8 +325,69 @@ impl Slice {
     }
 
     #[must_use]
-    pub const fn chord(self) -> Chord {
-        self.chord
+    pub fn chord(self) -> Chord {
+        let mut pitches = [MidiPitch::MIN; MAX_CHORD_NOTES];
+        let mut len = 0;
+        for group in self.staff_groups() {
+            for pitch in group.chord().pitches() {
+                pitches[len] = *pitch;
+                len += 1;
+            }
+        }
+        Chord::from_pitches(&pitches[..len]).expect("a slice always contains a bounded non-empty chord")
+    }
+
+    #[must_use]
+    pub fn staff_groups(self) -> impl ExactSizeIterator<Item = StaffSlice> {
+        self.staff_groups
+            .into_iter()
+            .take(usize::from(self.len))
+            .map(|group| group.expect("the slice group prefix is populated"))
+    }
+
+    #[must_use]
+    pub const fn is_staff_scoped(self) -> bool {
+        self.staff_scoped
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct StaffSlice {
+    staff: u16,
+    chord: Chord,
+    release_boundary: SliceReleaseBoundary,
+}
+
+impl StaffSlice {
+    #[must_use]
+    pub const fn new(staff: u16, chord: Chord, release_boundary: SliceReleaseBoundary) -> Self {
+        Self { staff, chord, release_boundary }
+    }
+
+    #[must_use]
+    pub const fn staff(self) -> u16 { self.staff }
+
+    #[must_use]
+    pub const fn chord(self) -> Chord { self.chord }
+
+    #[must_use]
+    pub const fn release_boundary(self) -> SliceReleaseBoundary { self.release_boundary }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SliceReleaseBoundary {
+    NextTrigger,
+    OnEvent(EventId),
+    EndOfScore,
+}
+
+impl SliceReleaseBoundary {
+    #[must_use]
+    pub const fn from_event(event: Option<EventId>) -> Self {
+        match event {
+            Some(event) => Self::OnEvent(event),
+            None => Self::EndOfScore,
+        }
     }
 }
 
@@ -368,7 +466,8 @@ pub enum SafetyReason {
     Shutdown,
 }
 
-/// Commands for the bounded audio queue. All chord attacks share exactly `at`.
+/// Commands for the bounded audio queue. `roll_interval_frames` spaces chord
+/// attacks from lowest to highest pitch; zero retains simultaneous playback.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AudioCommand {
     PlaySlice {
@@ -376,6 +475,7 @@ pub enum AudioCommand {
         group: VoiceGroupId,
         chord: Chord,
         velocity: Velocity,
+        roll_interval_frames: u32,
     },
     ReleaseGroup {
         at: SampleTime,

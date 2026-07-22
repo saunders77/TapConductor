@@ -213,6 +213,7 @@ impl MidiManager {
                 group,
                 chord,
                 velocity,
+                roll_interval_frames: _,
             } => {
                 let mut notes = Vec::with_capacity(chord.pitches().len());
                 for pitch in chord.pitches() {

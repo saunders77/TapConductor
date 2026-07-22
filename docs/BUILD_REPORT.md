@@ -1,28 +1,45 @@
 # Windows MVP build report
 
-Build date: 2026-07-20  
-Target: Windows x64 (`x86_64-pc-windows-msvc`)  
+Build date: 2026-07-21
+Target: Windows x64 (`x86_64-pc-windows-msvc`)
 Version: 0.1.0
 
 ## Verification
 
 - `npm run build`: passed (TypeScript check and Vite production bundle).
 - `cargo fmt --all -- --check`: passed.
-- `cargo test --locked --workspace`: 75 tests passed.
-- `cargo clippy --locked --workspace --all-targets -- -D warnings`:
-  passed.
+- Native `cargo test --locked --workspace`: 75 tests passed with the Steinberg ASIO SDK compiled.
+- Native `cargo check --locked --workspace` and
+  `cargo clippy --locked --workspace --all-targets --all-features -D warnings`: passed. Windows CI
+  now installs the required LLVM/libclang binding generator explicitly.
+- Native read-only `QUAD-CAPTURE (ASIO)` query: 44.1 kHz, stereo, signed 32-bit output, 256-frame
+  driver buffer.
 - `cargo run --offline --locked --release -p tapconductor-latency-probe`: frame-0 onset,
   0.0739 ms p99, zero queue overflows, zero late commands.
-- Final post-bundle executable launch: remained healthy for the five-second smoke window and was
-  then intentionally stopped.
+- Live direct-WASAPI probe on `1-2 (QUAD-CAPTURE)`: 2.977 ms native command-to-render,
+  11.995 ms Windows-reported stream latency, 14.972 ms native-to-endpoint estimate, zero queue
+  overflows, and zero late commands.
+- Endpoint-native 10 ms periods are accepted at both 44.1 kHz (441 frames) and 48 kHz
+  (480 frames); buffer size remains visible in diagnostics rather than blocking playback.
+- The exclusive WASAPI control and IPC path have been removed. Native ASIO device enumeration,
+  format negotiation, minimum-buffer selection, real-time-safe float/integer conversion, and stream
+  ownership are compiled into the Windows application.
+- ASIO hardware playback and acoustic latency have not yet been re-measured. The historical WASAPI
+  figures below remain useful as a comparison baseline only.
+- Post-bundle GUI launch was not repeated because the user's installed TapConductor and Ableton
+  audio sessions remained open; the same release code passed the direct hardware probe before
+  packaging.
 
-## Artifacts
+## Previous artifacts (superseded)
+
+These hashes identify the pre-ASIO MIT build and must not be distributed as the current GPLv3 ASIO
+version. Produce fresh signed artifacts after native ASIO CI and hardware qualification pass.
 
 | Artifact | Size | SHA-256 |
 | --- | ---: | --- |
-| `target/release/tapconductor-app.exe` | 5,419,520 bytes | `EB5FD16DFE17AA77F157EC6D4489233915DEA3964FF102AD69CFDB4AAC01F444` |
-| `target/release/bundle/nsis/TapConductor_0.1.0_x64-setup.exe` | 1,905,957 bytes | `DE965713465B3C017A9043D154513B2689FAEE0AF1E7EF2DC7AF70D7EAC56556` |
-| `target/release/bundle/msi/TapConductor_0.1.0_x64_en-US.msi` | 2,686,976 bytes | `AD490087F2DA35DD4611F8CA61345F6751106C30A7B7F57A5CAC7FFDA6FD95B0` |
+| `target/release/tapconductor-app.exe` | 5,404,160 bytes | `2A59538873CF2584F82E7F01651A146DB83FAE6C111E3853312C351ADC51C56F` |
+| `target/release/bundle/nsis/TapConductor_0.1.0_x64-setup.exe` | 1,904,231 bytes | `9FA8D1189BAF9441F4E91E3B5AD310DC69D19E88857645E750592929E1EFDA8D` |
+| `target/release/bundle/msi/TapConductor_0.1.0_x64_en-US.msi` | 2,678,784 bytes | `DBA870A2C441AE694261C2F36238903AA46738C67F36E32C788606B3C9294732` |
 
 The installers are local development builds and are not code-signed.
 

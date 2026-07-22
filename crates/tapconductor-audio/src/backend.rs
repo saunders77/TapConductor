@@ -1,4 +1,4 @@
-//! Platform output abstraction and an optional CPAL prototype backend.
+//! Platform output abstraction with native Windows ASIO and WASAPI hosts.
 
 use crate::AudioRenderCallback;
 use core::fmt;
@@ -16,6 +16,17 @@ pub struct OutputStreamConfig {
     pub sample_rate: u32,
     pub channels: u16,
     pub buffer_frames: Option<u32>,
+    /// Sample representation expected by the physical endpoint. The engine
+    /// always renders f32 and the platform backend performs any conversion.
+    pub sample_format: OutputSampleFormat,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OutputSampleFormat {
+    F32,
+    I16,
+    I24,
+    I32,
 }
 
 pub trait RunningAudioStream: Send {
@@ -27,8 +38,9 @@ pub trait RunningAudioStream: Send {
 pub trait AudioBackend {
     fn output_devices(&self) -> Result<Vec<OutputDeviceInfo>, BackendError>;
 
-    /// Returns a supported low-latency float configuration for the selected
-    /// device. Callers should construct the sampler with this actual sample
+    /// Returns a supported low-latency configuration for the selected device.
+    /// The engine renders float samples; a backend may convert them to the
+    /// driver's native representation. Callers must use the returned sample
     /// rate rather than assuming 48 kHz.
     fn preferred_output_config(
         &self,
@@ -68,8 +80,8 @@ impl std::error::Error for BackendError {}
 #[cfg(feature = "cpal-backend")]
 mod cpal_impl {
     use super::{
-        AudioBackend, AudioRenderCallback, BackendError, OutputDeviceInfo, OutputStreamConfig,
-        RunningAudioStream,
+        AudioBackend, AudioRenderCallback, BackendError, OutputDeviceInfo, OutputSampleFormat,
+        OutputStreamConfig, RunningAudioStream,
     };
     use crate::RenderCallbackInfo;
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -207,6 +219,7 @@ mod cpal_impl {
                 sample_rate,
                 channels,
                 buffer_frames,
+                sample_format: OutputSampleFormat::F32,
             })
         }
 
@@ -394,15 +407,452 @@ mod cpal_impl {
 #[cfg(feature = "cpal-backend")]
 pub use cpal_impl::PublicCpalBackend as CpalBackend;
 
-/// Windows `IAudioClient3` engine-period measurement. Stream output remains
-/// the CPAL/WASAPI fallback until the direct event-driven renderer is promoted
-/// after hardware latency validation.
+/// Native ASIO host backed by Steinberg's SDK through CPAL. ASIO drivers are
+/// identified separately from Windows endpoints so both kinds can appear in
+/// one device picker without ambiguous names.
+#[cfg(all(windows, feature = "asio-backend"))]
+mod asio_impl {
+    use super::{
+        AudioBackend, AudioRenderCallback, BackendError, OutputDeviceInfo, OutputSampleFormat,
+        OutputStreamConfig, RunningAudioStream,
+    };
+    use crate::RenderCallbackInfo;
+    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+    use std::sync::{
+        mpsc::{sync_channel, Receiver, SyncSender},
+        Mutex,
+    };
+    use std::thread::{self, JoinHandle};
+
+    const ID_PREFIX: &str = "asio:";
+
+    pub struct AsioBackend {
+        control: SyncSender<OwnerRequest>,
+        owner: Mutex<Option<JoinHandle<()>>>,
+    }
+
+    impl Default for AsioBackend {
+        fn default() -> Self {
+            let (control, receiver) = sync_channel(8);
+            let owner = thread::Builder::new()
+                .name("tapconductor-asio-owner".into())
+                .spawn(move || run_owner_thread(receiver))
+                .expect("failed to create the ASIO owner thread");
+            Self {
+                control,
+                owner: Mutex::new(Some(owner)),
+            }
+        }
+    }
+
+    impl AsioBackend {
+        fn host() -> Result<cpal::Host, BackendError> {
+            cpal::host_from_id(cpal::HostId::Asio)
+                .map_err(|error| BackendError::new("ASIO host initialization", error.to_string()))
+        }
+
+        fn select_device(
+            host: &cpal::Host,
+            id: Option<&str>,
+        ) -> Result<cpal::Device, BackendError> {
+            let requested = id.and_then(|value| value.strip_prefix(ID_PREFIX));
+            let mut devices = host
+                .output_devices()
+                .map_err(|error| BackendError::new("ASIO driver enumeration", error.to_string()))?;
+            if let Some(requested) = requested {
+                return devices
+                    .find(|device| device.name().ok().as_deref() == Some(requested))
+                    .ok_or_else(|| {
+                        BackendError::new(
+                            "ASIO driver selection",
+                            "the selected ASIO driver is no longer available",
+                        )
+                    });
+            }
+            devices.next().ok_or_else(|| {
+                BackendError::new(
+                    "ASIO driver selection",
+                    "no ASIO output driver is installed",
+                )
+            })
+        }
+    }
+
+    impl AudioBackend for AsioBackend {
+        fn output_devices(&self) -> Result<Vec<OutputDeviceInfo>, BackendError> {
+            request_owner(
+                &self.control,
+                OwnerRequest::Devices,
+                "ASIO driver enumeration",
+            )
+        }
+
+        fn preferred_output_config(
+            &self,
+            device_id: Option<&str>,
+        ) -> Result<OutputStreamConfig, BackendError> {
+            let device_id = device_id.map(str::to_owned);
+            request_owner(
+                &self.control,
+                move |reply| OwnerRequest::Preferred(device_id, reply),
+                "ASIO output configuration",
+            )
+        }
+
+        fn start_output(
+            &self,
+            config: &OutputStreamConfig,
+            renderer: Box<dyn AudioRenderCallback>,
+        ) -> Result<Box<dyn RunningAudioStream>, BackendError> {
+            let config = config.clone();
+            request_owner(
+                &self.control,
+                move |reply| OwnerRequest::Start(config, renderer, reply),
+                "ASIO stream startup",
+            )?;
+            Ok(Box::new(AsioRunningStream {
+                control: self.control.clone(),
+            }))
+        }
+    }
+
+    fn stream_config(config: &OutputStreamConfig) -> cpal::StreamConfig {
+        cpal::StreamConfig {
+            channels: config.channels,
+            sample_rate: cpal::SampleRate(config.sample_rate),
+            buffer_size: config
+                .buffer_frames
+                .map(cpal::BufferSize::Fixed)
+                .unwrap_or(cpal::BufferSize::Default),
+        }
+    }
+
+    fn build_stream(
+        config: &OutputStreamConfig,
+        mut renderer: Box<dyn AudioRenderCallback>,
+        device: cpal::Device,
+    ) -> Result<cpal::Stream, BackendError> {
+        if config.channels == 0 || config.sample_rate == 0 {
+            return Err(BackendError::new(
+                "ASIO stream setup",
+                "sample rate and channel count must be non-zero",
+            ));
+        }
+        let native = device
+            .default_output_config()
+            .map_err(|error| BackendError::new("ASIO output configuration", error.to_string()))?;
+        if native.sample_rate().0 != config.sample_rate || native.channels() < config.channels {
+            return Err(BackendError::new(
+                "ASIO stream setup",
+                "the driver configuration changed while the stream was opening",
+            ));
+        }
+
+        let cpal_config = stream_config(config);
+        let channels = usize::from(config.channels);
+        let capacity = usize::try_from(config.buffer_frames.unwrap_or(2048))
+            .unwrap_or(2048)
+            .saturating_mul(channels);
+        let diagnostics = renderer.audio_diagnostics();
+        let error_diagnostics = diagnostics.clone();
+        let error_callback = move |_error| {
+            if let Some(diagnostics) = error_diagnostics.as_ref() {
+                diagnostics.note_backend_error();
+            }
+        };
+        let callback_info = move |samples: usize| RenderCallbackInfo {
+            estimated_output_latency_frames: Some(
+                (samples / channels).min(u32::MAX as usize) as u32
+            ),
+        };
+
+        let stream = match config.sample_format {
+            OutputSampleFormat::F32 => device.build_output_stream(
+                &cpal_config,
+                move |data: &mut [f32], _| {
+                    let _ = renderer.render_audio(data, callback_info(data.len()));
+                },
+                error_callback,
+                None,
+            ),
+            OutputSampleFormat::I16 => {
+                let mut scratch = vec![0.0_f32; capacity];
+                device.build_output_stream(
+                    &cpal_config,
+                    move |data: &mut [i16], _| {
+                        if let Some(render) = scratch.get_mut(..data.len()) {
+                            let _ = renderer.render_audio(render, callback_info(data.len()));
+                            for (output, sample) in data.iter_mut().zip(render.iter().copied()) {
+                                *output = (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+                            }
+                        } else {
+                            data.fill(0);
+                        }
+                    },
+                    error_callback,
+                    None,
+                )
+            }
+            OutputSampleFormat::I32 => {
+                let mut scratch = vec![0.0_f32; capacity];
+                device.build_output_stream(
+                    &cpal_config,
+                    move |data: &mut [i32], _| {
+                        if let Some(render) = scratch.get_mut(..data.len()) {
+                            let _ = renderer.render_audio(render, callback_info(data.len()));
+                            for (output, sample) in data.iter_mut().zip(render.iter().copied()) {
+                                *output = (sample.clamp(-1.0, 1.0) * i32::MAX as f32) as i32;
+                            }
+                        } else {
+                            data.fill(0);
+                        }
+                    },
+                    error_callback,
+                    None,
+                )
+            }
+            OutputSampleFormat::I24 => {
+                return Err(BackendError::new(
+                    "ASIO sample format",
+                    "packed 24-bit ASIO output is not supported by CPAL",
+                ));
+            }
+        }
+        .map_err(|error| BackendError::new("ASIO stream construction", error.to_string()))?;
+        stream
+            .play()
+            .map_err(|error| BackendError::new("ASIO stream start", error.to_string()))?;
+        Ok(stream)
+    }
+
+    enum OwnerRequest {
+        Devices(SyncSender<Result<Vec<OutputDeviceInfo>, BackendError>>),
+        Preferred(
+            Option<String>,
+            SyncSender<Result<OutputStreamConfig, BackendError>>,
+        ),
+        Start(
+            OutputStreamConfig,
+            Box<dyn AudioRenderCallback>,
+            SyncSender<Result<(), BackendError>>,
+        ),
+        Pause(SyncSender<Result<(), BackendError>>),
+        Resume(SyncSender<Result<(), BackendError>>),
+        Close(SyncSender<()>),
+        Terminate,
+    }
+
+    fn request_owner<T>(
+        control: &SyncSender<OwnerRequest>,
+        request: impl FnOnce(SyncSender<Result<T, BackendError>>) -> OwnerRequest,
+        operation: &'static str,
+    ) -> Result<T, BackendError> {
+        let (reply, result) = sync_channel(1);
+        control
+            .send(request(reply))
+            .map_err(|_| BackendError::new(operation, "the ASIO owner thread has stopped"))?;
+        result
+            .recv()
+            .map_err(|_| BackendError::new(operation, "the ASIO owner thread did not reply"))?
+    }
+
+    fn output_config(
+        device_id: Option<String>,
+        device: &cpal::Device,
+    ) -> Result<OutputStreamConfig, BackendError> {
+        let config = device
+            .default_output_config()
+            .map_err(|error| BackendError::new("ASIO output configuration", error.to_string()))?;
+        let sample_format = match config.sample_format() {
+            cpal::SampleFormat::F32 => OutputSampleFormat::F32,
+            cpal::SampleFormat::I16 => OutputSampleFormat::I16,
+            cpal::SampleFormat::I32 => OutputSampleFormat::I32,
+            format => {
+                return Err(BackendError::new(
+                    "ASIO sample format",
+                    format!("the driver exposes unsupported sample format {format:?}"),
+                ));
+            }
+        };
+        let buffer_frames = match config.buffer_size() {
+            cpal::SupportedBufferSize::Range { min, .. } => Some(*min),
+            cpal::SupportedBufferSize::Unknown => None,
+        };
+        Ok(OutputStreamConfig {
+            device_id,
+            sample_rate: config.sample_rate().0,
+            // ASIO exposes physical channels in order. TapConductor uses the
+            // main stereo pair (or the sole mono channel), not every output
+            // on a multi-channel studio interface.
+            channels: config.channels().min(2),
+            buffer_frames,
+            sample_format,
+        })
+    }
+
+    fn enumerate_devices(host: &cpal::Host) -> Result<Vec<OutputDeviceInfo>, BackendError> {
+        let devices = host
+            .output_devices()
+            .map_err(|error| BackendError::new("ASIO driver enumeration", error.to_string()))?;
+        let mut result = Vec::new();
+        for device in devices {
+            let Ok(name) = device.name() else { continue };
+            if device.default_output_config().is_err() {
+                continue;
+            }
+            result.push(OutputDeviceInfo {
+                id: format!("{ID_PREFIX}{name}"),
+                name: format!("{name} (ASIO)"),
+                is_default: false,
+            });
+        }
+        Ok(result)
+    }
+
+    fn run_owner_thread(receiver: Receiver<OwnerRequest>) {
+        let host = AsioBackend::host();
+        let mut cached_devices: Option<Vec<OutputDeviceInfo>> = None;
+        let mut prepared_device: Option<(Option<String>, cpal::Device)> = None;
+        let mut stream: Option<cpal::Stream> = None;
+
+        while let Ok(request) = receiver.recv() {
+            match request {
+                OwnerRequest::Devices(reply) => {
+                    let result = match (&host, &cached_devices) {
+                        (_, Some(devices)) => Ok(devices.clone()),
+                        (Ok(host), None) => enumerate_devices(host),
+                        (Err(error), None) => Err(error.clone()),
+                    };
+                    if let Ok(devices) = &result {
+                        cached_devices = Some(devices.clone());
+                    }
+                    let _ = reply.send(result);
+                }
+                OwnerRequest::Preferred(device_id, reply) => {
+                    stream.take();
+                    prepared_device = None;
+                    let result = match &host {
+                        Ok(host) => AsioBackend::select_device(host, device_id.as_deref())
+                            .and_then(|device| {
+                                let config = output_config(device_id.clone(), &device)?;
+                                prepared_device = Some((device_id, device));
+                                Ok(config)
+                            }),
+                        Err(error) => Err(error.clone()),
+                    };
+                    let _ = reply.send(result);
+                }
+                OwnerRequest::Start(config, renderer, reply) => {
+                    stream.take();
+                    let device = prepared_device
+                        .take()
+                        .filter(|(id, _)| id.as_deref() == config.device_id.as_deref())
+                        .map(|(_, device)| Ok(device))
+                        .unwrap_or_else(|| match &host {
+                            Ok(host) => {
+                                AsioBackend::select_device(host, config.device_id.as_deref())
+                            }
+                            Err(error) => Err(error.clone()),
+                        });
+                    match device.and_then(|device| build_stream(&config, renderer, device)) {
+                        Ok(new_stream) => {
+                            stream = Some(new_stream);
+                            let _ = reply.send(Ok(()));
+                        }
+                        Err(error) => {
+                            let _ = reply.send(Err(error));
+                        }
+                    }
+                }
+                OwnerRequest::Pause(reply) => {
+                    let result = stream
+                        .as_ref()
+                        .ok_or_else(|| {
+                            BackendError::new("ASIO stream pause", "no ASIO stream is active")
+                        })
+                        .and_then(|stream| {
+                            stream.pause().map_err(|error| {
+                                BackendError::new("ASIO stream pause", error.to_string())
+                            })
+                        });
+                    let _ = reply.send(result);
+                }
+                OwnerRequest::Resume(reply) => {
+                    let result = stream
+                        .as_ref()
+                        .ok_or_else(|| {
+                            BackendError::new("ASIO stream resume", "no ASIO stream is active")
+                        })
+                        .and_then(|stream| {
+                            stream.play().map_err(|error| {
+                                BackendError::new("ASIO stream resume", error.to_string())
+                            })
+                        });
+                    let _ = reply.send(result);
+                }
+                OwnerRequest::Close(reply) => {
+                    stream.take();
+                    prepared_device = None;
+                    let _ = reply.send(());
+                }
+                OwnerRequest::Terminate => break,
+            }
+        }
+    }
+
+    struct AsioRunningStream {
+        control: SyncSender<OwnerRequest>,
+    }
+
+    impl RunningAudioStream for AsioRunningStream {
+        fn pause(&self) -> Result<(), BackendError> {
+            request_owner(&self.control, OwnerRequest::Pause, "ASIO stream pause")
+        }
+
+        fn resume(&self) -> Result<(), BackendError> {
+            request_owner(&self.control, OwnerRequest::Resume, "ASIO stream resume")
+        }
+    }
+
+    impl Drop for AsioRunningStream {
+        fn drop(&mut self) {
+            let (reply, result) = sync_channel(1);
+            if self.control.send(OwnerRequest::Close(reply)).is_ok() {
+                let _ = result.recv();
+            }
+        }
+    }
+
+    impl Drop for AsioBackend {
+        fn drop(&mut self) {
+            let _ = self.control.send(OwnerRequest::Terminate);
+            if let Ok(mut owner) = self.owner.lock() {
+                if let Some(owner) = owner.take() {
+                    let _ = owner.join();
+                }
+            }
+        }
+    }
+
+    pub use self::AsioBackend as PublicAsioBackend;
+}
+
+#[cfg(all(windows, feature = "asio-backend"))]
+pub use asio_impl::PublicAsioBackend as AsioBackend;
+
+#[cfg(all(windows, feature = "wasapi-cpal-fallback"))]
+mod wasapi_direct;
+
+/// Windows direct event-driven `IAudioClient3` renderer and engine-period
+/// diagnostics, with CPAL retained for endpoint enumeration.
 #[cfg(all(windows, feature = "wasapi-cpal-fallback"))]
 mod wasapi_probe {
     use super::{
         AudioBackend, AudioRenderCallback, BackendError, OutputDeviceInfo, OutputStreamConfig,
         RunningAudioStream,
     };
+    use std::sync::atomic::{AtomicU8, Ordering};
+    use windows::Win32::Foundation::RPC_E_CHANGED_MODE;
     use windows::Win32::Media::Audio::{
         eConsole, eRender, IAudioClient3, IMMDeviceEnumerator, MMDeviceEnumerator,
     };
@@ -422,21 +872,50 @@ mod wasapi_probe {
         pub maximum_frames: u32,
     }
 
-    /// Phase-zero backend: probes the direct low-latency WASAPI contract and
-    /// uses CPAL's WASAPI stream for output. `uses_direct_stream()` deliberately
-    /// reports false so diagnostics never imply the direct renderer is active.
-    #[derive(Default)]
-    pub struct WasapiLowLatencyBackend {
+    /// Uses a direct event-driven IAudioClient3 stream for both the default
+    /// endpoint and explicitly selected Windows endpoints.
+    pub struct WindowsLowLatencyBackend {
         fallback: super::CpalBackend,
+        #[cfg(feature = "asio-backend")]
+        asio: super::AsioBackend,
+        active_backend: AtomicU8,
     }
 
-    impl WasapiLowLatencyBackend {
-        pub const fn uses_direct_stream(&self) -> bool {
-            false
+    const BACKEND_NONE: u8 = 0;
+    const BACKEND_WASAPI: u8 = 1;
+    const BACKEND_WASAPI_RAW: u8 = 2;
+    const BACKEND_ASIO: u8 = 3;
+
+    impl Default for WindowsLowLatencyBackend {
+        fn default() -> Self {
+            Self {
+                fallback: super::CpalBackend,
+                #[cfg(feature = "asio-backend")]
+                asio: super::AsioBackend::default(),
+                active_backend: AtomicU8::new(BACKEND_NONE),
+            }
+        }
+    }
+
+    impl WindowsLowLatencyBackend {
+        pub fn uses_direct_stream(&self) -> bool {
+            matches!(
+                self.active_backend.load(Ordering::Relaxed),
+                BACKEND_WASAPI | BACKEND_WASAPI_RAW
+            )
         }
 
-        pub const fn backend_label(&self) -> &'static str {
-            "CPAL/WASAPI fallback (IAudioClient3 period probe available)"
+        pub fn uses_asio_stream(&self) -> bool {
+            self.active_backend.load(Ordering::Relaxed) == BACKEND_ASIO
+        }
+
+        pub fn backend_label(&self) -> &'static str {
+            match self.active_backend.load(Ordering::Relaxed) {
+                BACKEND_ASIO => "Native ASIO",
+                BACKEND_WASAPI_RAW => "Direct event-driven WASAPI (raw IAudioClient3)",
+                BACKEND_WASAPI => "Direct event-driven WASAPI (IAudioClient3)",
+                _ => "Windows audio",
+            }
         }
 
         pub fn probe_default_periods(&self) -> Result<WasapiEnginePeriods, BackendError> {
@@ -445,9 +924,16 @@ mod wasapi_probe {
             // the format is released with its documented COM allocator.
             unsafe {
                 let initialized = CoInitializeEx(None, COINIT_MULTITHREADED);
-                initialized.ok().map_err(|error| {
-                    BackendError::new("WASAPI COM initialization", error.to_string())
-                })?;
+                let should_uninitialize = match initialized.ok() {
+                    Ok(()) => true,
+                    Err(error) if error.code() == RPC_E_CHANGED_MODE => false,
+                    Err(error) => {
+                        return Err(BackendError::new(
+                            "WASAPI COM initialization",
+                            error.to_string(),
+                        ));
+                    }
+                };
 
                 let result = (|| {
                     let enumerator: IMMDeviceEnumerator =
@@ -501,32 +987,34 @@ mod wasapi_probe {
                         maximum_frames,
                     })
                 })();
-                CoUninitialize();
+                if should_uninitialize {
+                    CoUninitialize();
+                }
                 result
             }
         }
     }
 
-    impl AudioBackend for WasapiLowLatencyBackend {
+    impl AudioBackend for WindowsLowLatencyBackend {
         fn output_devices(&self) -> Result<Vec<OutputDeviceInfo>, BackendError> {
-            self.fallback.output_devices()
+            let mut devices = Vec::new();
+            #[cfg(feature = "asio-backend")]
+            if let Ok(mut asio_devices) = self.asio.output_devices() {
+                devices.append(&mut asio_devices);
+            }
+            devices.extend(self.fallback.output_devices()?);
+            Ok(devices)
         }
 
         fn preferred_output_config(
             &self,
             device_id: Option<&str>,
         ) -> Result<OutputStreamConfig, BackendError> {
-            let mut config = self.fallback.preferred_output_config(device_id)?;
-            if device_id.is_none() {
-                if let Ok(periods) = self.probe_default_periods() {
-                    if periods.sample_rate == config.sample_rate
-                        && periods.channels == config.channels
-                    {
-                        config.buffer_frames = Some(periods.minimum_frames.max(1));
-                    }
-                }
+            #[cfg(feature = "asio-backend")]
+            if device_id.is_some_and(|id| id.starts_with("asio:")) {
+                return self.asio.preferred_output_config(device_id);
             }
-            Ok(config)
+            super::wasapi_direct::preferred_output_config(device_id)
         }
 
         fn start_output(
@@ -534,16 +1022,36 @@ mod wasapi_probe {
             config: &OutputStreamConfig,
             renderer: Box<dyn AudioRenderCallback>,
         ) -> Result<Box<dyn RunningAudioStream>, BackendError> {
-            self.fallback.start_output(config, renderer)
+            self.active_backend.store(BACKEND_NONE, Ordering::Relaxed);
+            #[cfg(feature = "asio-backend")]
+            if config
+                .device_id
+                .as_deref()
+                .is_some_and(|id| id.starts_with("asio:"))
+            {
+                let stream = self.asio.start_output(config, renderer)?;
+                self.active_backend.store(BACKEND_ASIO, Ordering::Relaxed);
+                return Ok(stream);
+            }
+            let (stream, raw_mode) = super::wasapi_direct::start_output(config, renderer)?;
+            self.active_backend.store(
+                if raw_mode {
+                    BACKEND_WASAPI_RAW
+                } else {
+                    BACKEND_WASAPI
+                },
+                Ordering::Relaxed,
+            );
+            Ok(stream)
         }
     }
 
     pub use self::WasapiEnginePeriods as PublicWasapiEnginePeriods;
-    pub use self::WasapiLowLatencyBackend as PublicWasapiLowLatencyBackend;
+    pub use self::WindowsLowLatencyBackend as PublicWindowsLowLatencyBackend;
 }
 
 #[cfg(all(windows, feature = "wasapi-cpal-fallback"))]
 pub use wasapi_probe::{
     PublicWasapiEnginePeriods as WasapiEnginePeriods,
-    PublicWasapiLowLatencyBackend as WasapiLowLatencyBackend,
+    PublicWindowsLowLatencyBackend as WindowsLowLatencyBackend,
 };

@@ -30,14 +30,14 @@ pub trait GatePolicy {
     ) -> Result<Option<SampleTime>, GateError>;
 }
 
-/// The MVP piano gate: `max(first later trigger, input release + 400 ms)`.
+/// The MVP piano gate: `max(first later trigger, input release + 100 ms)`.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct DefaultPianoGate;
 
 impl DefaultPianoGate {
-    pub const MINIMUM_AFTER_RELEASE_MILLISECONDS: u64 = 400;
+    pub const MINIMUM_AFTER_RELEASE_MILLISECONDS: u64 = 100;
 
-    /// Uses ceiling division, so the minimum is never rounded below 400 ms.
+    /// Uses ceiling division, so the minimum is never rounded below 100 ms.
     #[must_use]
     pub const fn minimum_frames(sample_rate: SampleRate) -> u64 {
         let numerator = sample_rate.get() as u64 * Self::MINIMUM_AFTER_RELEASE_MILLISECONDS;

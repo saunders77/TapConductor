@@ -23,6 +23,7 @@ impl From<Rational> for RationalDto {
 pub struct NoteDto {
     source_id: String,
     part_id: String,
+    part_index: usize,
     staff: u16,
     voice: String,
     midi_pitch: u8,
@@ -37,8 +38,19 @@ pub struct TapEventDto {
     measure_index: usize,
     measure_number: String,
     occurrence: u32,
+    absolute: RationalDto,
     offset: RationalDto,
     notes: Vec<NoteDto>,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BeatDto {
+    absolute: RationalDto,
+    measure_index: usize,
+    beat_index: u32,
+    beats_in_measure: u32,
+    beat_type: u32,
 }
 
 impl TapEventDto {
@@ -49,6 +61,7 @@ impl TapEventDto {
             measure_index: event.position.measure_index,
             measure_number: event.position.measure_id.clone(),
             occurrence: event.position.occurrence,
+            absolute: event.position.absolute.into(),
             offset: event.position.offset.into(),
             notes: event
                 .attacks
@@ -56,6 +69,7 @@ impl TapEventDto {
                 .map(|attack| NoteDto {
                     source_id: attack.source_id.clone(),
                     part_id: attack.source_anchor.part_id.clone(),
+                    part_index: attack.part_index,
                     staff: attack.staff,
                     voice: attack.voice.clone(),
                     midi_pitch: attack.midi_pitch,
@@ -91,6 +105,7 @@ pub struct LoadedScoreDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     music_xml: Option<String>,
     events: Vec<TapEventDto>,
+    beats: Vec<BeatDto>,
     parts: Vec<PartDto>,
     warnings: Vec<String>,
 }
@@ -115,6 +130,30 @@ impl LoadedScoreDto {
                     .map(|name| name.to_string_lossy().into_owned())
             })
             .unwrap_or_else(|| "Untitled score".to_owned());
+        let beats = score
+            .playback_measures
+            .iter()
+            .enumerate()
+            .flat_map(|(measure_index, measure)| {
+                let beat_length = Rational::new(4, i64::from(measure.beat_type))
+                    .expect("imported time-signature denominators are positive");
+                (0..measure.beats).map(move |beat_index| BeatDto {
+                    absolute: measure
+                        .start
+                        .checked_add(
+                            beat_length
+                                .checked_mul_i64(i64::from(beat_index))
+                                .expect("bounded beat index multiplication"),
+                        )
+                        .expect("validated score beat position")
+                        .into(),
+                    measure_index,
+                    beat_index,
+                    beats_in_measure: measure.beats,
+                    beat_type: measure.beat_type,
+                })
+            })
+            .collect();
         Self {
             generation,
             path: path.to_string_lossy().into_owned(),
@@ -129,6 +168,7 @@ impl LoadedScoreDto {
                 .enumerate()
                 .map(|(index, event)| TapEventDto::from_event(index, event))
                 .collect(),
+            beats,
             parts: score
                 .parts
                 .iter()
@@ -185,6 +225,7 @@ pub struct DiagnosticsDto {
     pub queue_overflows: u64,
     pub active_voices: u32,
     pub direct_wasapi_stream: bool,
+    pub asio_stream: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wasapi_periods: Option<WasapiPeriodsDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -231,6 +272,13 @@ pub enum CoreEventDto {
     Fault {
         message: String,
     },
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case", rename_all_fields = "camelCase")]
+pub enum BeatMidiInputDto {
+    Down { token: String, velocity: u8 },
+    Up { token: String },
 }
 
 #[cfg(test)]

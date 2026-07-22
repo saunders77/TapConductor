@@ -1363,7 +1363,10 @@ fn build_measure_templates(
         templates.push(MeasureTemplate {
             id,
             duration,
-            time: measures.first().map(|(_, measure)| measure.time).unwrap_or((4, 4)),
+            time: measures
+                .first()
+                .map(|(_, measure)| measure.time)
+                .unwrap_or((4, 4)),
             repeat_forward: measures.iter().any(|(_, measure)| measure.repeat_forward),
             repeat_backward: measures
                 .iter()

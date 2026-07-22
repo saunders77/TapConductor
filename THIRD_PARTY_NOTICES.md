@@ -6,9 +6,22 @@ transitive dependencies remain subject to their own licenses. The lockfiles are 
 inventory for a particular source build. Release engineering should generate and retain a complete
 SBOM/license report for every distributed binary.
 
-No SoundFont, sampled instrument, or third-party piano recording is included in this repository or
-bundled by the application. The built-in piano-like sound is synthesized procedurally by
-TapConductor code.
+## Salamander Grand Piano V3
+
+TapConductor bundles the 44.1 kHz, 16-bit edition of **Salamander Grand Piano V3**, a sampled
+Yamaha C5 recorded by Alexander Holm. Copyright Alexander Holm. The samples and SFZ mappings are
+licensed under the [Creative Commons Attribution 3.0 Unported license](https://creativecommons.org/licenses/by/3.0/).
+The unmodified upstream instrument archive is distributed by FreePats/SFZ Instruments. TapConductor
+loads the original note samples and mapping data with its own native real-time player; it does not
+claim authorship of the recordings.
+
+Source and instrument information:
+
+- <https://sfzinstruments.github.io/pianos/salamander/>
+- <https://freepats.zenvoid.org/Piano/SalamanderGrandPiano/>
+
+The small procedural piano remains part of TapConductor as a recovery instrument if the sampled
+asset is missing or cannot be loaded.
 
 ## JavaScript/TypeScript direct dependencies
 

@@ -123,7 +123,8 @@ pub fn audition_chord(
     token: String,
     velocity: u8,
 ) -> Result<(), String> {
-    let event = lock_core(&state)?.audition_chord(generation, index, midi_pitches, token, velocity)?;
+    let event =
+        lock_core(&state)?.audition_chord(generation, index, midi_pitches, token, velocity)?;
     emit_event(&app, event)
 }
 

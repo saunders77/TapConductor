@@ -526,7 +526,14 @@ impl<G: GatePolicy> PerformanceEngine<G> {
                 reason: IgnoreReason::InputAlreadyHeld,
             }));
         }
-        self.trigger_slice(generation, Slice::new(event, chord), input, at, velocity, TriggerKind::Audition)
+        self.trigger_slice(
+            generation,
+            Slice::new(event, chord),
+            input,
+            at,
+            velocity,
+            TriggerKind::Audition,
+        )
     }
 
     fn trigger_slice(
@@ -541,16 +548,20 @@ impl<G: GatePolicy> PerformanceEngine<G> {
         let staff_scoped_tap = kind == TriggerKind::Tap && slice.is_staff_scoped();
         let mut staff_groups: [Option<StaffSlice>; MAX_CHORD_NOTES] = [None; MAX_CHORD_NOTES];
         let group_count = if staff_scoped_tap {
-                for (index, group) in slice.staff_groups().enumerate() {
-                    staff_groups[index] = Some(group);
-                }
-                slice.staff_groups().len()
+            for (index, group) in slice.staff_groups().enumerate() {
+                staff_groups[index] = Some(group);
+            }
+            slice.staff_groups().len()
         } else {
             staff_groups[0] = Some(StaffSlice::new(
                 0,
                 slice.chord(),
                 if kind == TriggerKind::Tap {
-                    slice.staff_groups().next().expect("a slice has one legacy group").release_boundary()
+                    slice
+                        .staff_groups()
+                        .next()
+                        .expect("a slice has one legacy group")
+                        .release_boundary()
                 } else {
                     SliceReleaseBoundary::NextTrigger
                 },
@@ -582,7 +593,8 @@ impl<G: GatePolicy> PerformanceEngine<G> {
                     SliceReleaseBoundary::OnEvent(event) => slice.id().get() >= event.get(),
                     SliceReleaseBoundary::EndOfScore => false,
                 };
-                let old_enough = at.frame().saturating_sub(waiting.attack_at.frame()) >= minimum_age;
+                let old_enough =
+                    at.frame().saturating_sub(waiting.attack_at.frame()) >= minimum_age;
                 if waiting.first_later_trigger_at.is_none() && boundary_reached && old_enough {
                     waiting.first_later_trigger_at = Some(at);
                     waiting.release_scheduled_at = Some(at);
@@ -592,18 +604,15 @@ impl<G: GatePolicy> PerformanceEngine<G> {
                     });
                 }
             }
-        } else if let Some(index) = self
-            .active_groups
-            .iter()
-            .position(|group| {
-                group.first_later_trigger_at.is_none()
-                    && (kind == TriggerKind::Audition || match group.release_boundary {
+        } else if let Some(index) = self.active_groups.iter().position(|group| {
+            group.first_later_trigger_at.is_none()
+                && (kind == TriggerKind::Audition
+                    || match group.release_boundary {
                         SliceReleaseBoundary::NextTrigger => true,
                         SliceReleaseBoundary::OnEvent(event) => slice.id().get() >= event.get(),
                         SliceReleaseBoundary::EndOfScore => false,
                     })
-            })
-        {
+        }) {
             let waiting_release = self.gate.note_off_at(
                 self.sample_rate,
                 self.active_groups[index].input_released_at,
@@ -643,14 +652,28 @@ impl<G: GatePolicy> PerformanceEngine<G> {
                 chord: staff_group.chord(),
                 velocity,
                 roll_interval_frames: match kind {
-                    TriggerKind::Tap => self.sample_rate.get().saturating_mul(u32::from(self.regular_roll_ms)) / 1_000,
-                    TriggerKind::Audition => self.sample_rate.get().saturating_mul(u32::from(self.audition_roll_ms)) / 1_000,
+                    TriggerKind::Tap => {
+                        self.sample_rate
+                            .get()
+                            .saturating_mul(u32::from(self.regular_roll_ms))
+                            / 1_000
+                    }
+                    TriggerKind::Audition => {
+                        self.sample_rate
+                            .get()
+                            .saturating_mul(u32::from(self.audition_roll_ms))
+                            / 1_000
+                    }
                 },
             });
         }
         self.held_inputs.push(HeldInput {
             id: input,
-            group: if staff_scoped_tap { None } else { Some(first_group_id) },
+            group: if staff_scoped_tap {
+                None
+            } else {
+                Some(first_group_id)
+            },
         });
         transition.set_event(PerformanceEvent::Triggered {
             generation,
@@ -1143,7 +1166,11 @@ mod tests {
             .unwrap(),
             Slice::from_staff_groups(
                 event(20),
-                &[StaffSlice::new(1, chord(&[62]), SliceReleaseBoundary::OnEvent(event(30)))],
+                &[StaffSlice::new(
+                    1,
+                    chord(&[62]),
+                    SliceReleaseBoundary::OnEvent(event(30)),
+                )],
             )
             .unwrap(),
             Slice::new(event(30), chord(&[64])),
@@ -1172,8 +1199,9 @@ mod tests {
             })
             .collect();
         assert_eq!(released, vec![first_groups[0]]);
-        assert!(engine.active_groups().any(|group| group.id == first_groups[1]
-            && group.release_scheduled_at.is_none()));
+        assert!(engine
+            .active_groups()
+            .any(|group| group.id == first_groups[1] && group.release_scheduled_at.is_none()));
     }
 
     #[test]
@@ -1190,12 +1218,20 @@ mod tests {
             .unwrap(),
             Slice::from_staff_groups(
                 event(20),
-                &[StaffSlice::new(1, chord(&[62]), SliceReleaseBoundary::OnEvent(event(30)))],
+                &[StaffSlice::new(
+                    1,
+                    chord(&[62]),
+                    SliceReleaseBoundary::OnEvent(event(30)),
+                )],
             )
             .unwrap(),
             Slice::from_staff_groups(
                 event(30),
-                &[StaffSlice::new(1, chord(&[69]), SliceReleaseBoundary::EndOfScore)],
+                &[StaffSlice::new(
+                    1,
+                    chord(&[69]),
+                    SliceReleaseBoundary::EndOfScore,
+                )],
             )
             .unwrap(),
         ])
@@ -1221,8 +1257,9 @@ mod tests {
             })
             .collect();
         assert_eq!(released, vec![groups[0]]);
-        assert!(engine.active_groups().any(|group| group.id == groups[1]
-            && group.release_scheduled_at.is_none()));
+        assert!(engine
+            .active_groups()
+            .any(|group| group.id == groups[1] && group.release_scheduled_at.is_none()));
     }
 
     #[test]

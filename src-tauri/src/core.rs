@@ -4,7 +4,12 @@ use crate::{
     midi_runtime::{MidiInputAction, MidiManager},
     session::ScoreSession,
 };
-use std::{collections::{BTreeMap, HashMap}, path::PathBuf, sync::mpsc::Sender, time::Instant};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::PathBuf,
+    sync::mpsc::Sender,
+    time::Instant,
+};
 use tapconductor_performance::{
     Chord, EngineConfig, EventId, Generation, IgnoreReason, InputId, MidiPitch, PerformanceCommand,
     PerformanceEngine, PerformanceEvent, SampleRate, SampleTime, ScoreSequence, Slice, StaffSlice,
@@ -22,8 +27,11 @@ pub struct AppCore {
 }
 
 impl AppCore {
-    pub fn new(midi_action_sender: Sender<MidiInputAction>) -> Result<Self, String> {
-        let audio = AudioManager::new();
+    pub fn new(
+        midi_action_sender: Sender<MidiInputAction>,
+        salamander_directory: Option<&std::path::Path>,
+    ) -> Result<Self, String> {
+        let audio = AudioManager::new(salamander_directory);
         let rate = SampleRate::new(audio.sample_rate())
             .ok_or_else(|| "Invalid audio sample rate.".to_owned())?;
         let performance = PerformanceEngine::with_default_gate(rate, EngineConfig::default())
@@ -218,14 +226,17 @@ impl AppCore {
         let chord = Chord::from_midi_numbers(&midi_pitches).map_err(|error| error.to_string())?;
         let (input, inserted) = self.input_for_down(token.clone())?;
         let velocity = velocity_from_midi1(midi_velocity)?;
-        let result = self.performance.handle(PerformanceCommand::AuditionChord {
-            generation: engine_generation,
-            event,
-            chord,
-            input,
-            at: self.now(),
-            velocity,
-        }).map_err(|error| error.to_string());
+        let result = self
+            .performance
+            .handle(PerformanceCommand::AuditionChord {
+                generation: engine_generation,
+                event,
+                chord,
+                input,
+                at: self.now(),
+                velocity,
+            })
+            .map_err(|error| error.to_string());
         if result.is_err() && inserted {
             self.input_ids.remove(&token);
         }
@@ -454,27 +465,34 @@ fn velocity_from_midi1(value: u8) -> Result<Velocity, String> {
 fn sequence_from_events(events: &[tapconductor_score::TapEvent]) -> Result<ScoreSequence, String> {
     let mut slices = Vec::with_capacity(events.len());
     for (index, event) in events.iter().enumerate() {
-        let mut attacks_by_staff: BTreeMap<(u16, tapconductor_score::Rational), Vec<&tapconductor_score::NoteAttack>> = BTreeMap::new();
+        let mut attacks_by_staff: BTreeMap<
+            (u16, tapconductor_score::Rational),
+            Vec<&tapconductor_score::NoteAttack>,
+        > = BTreeMap::new();
         for attack in &event.attacks {
-            attacks_by_staff.entry((attack.staff, attack.end)).or_default().push(attack);
+            attacks_by_staff
+                .entry((attack.staff, attack.end))
+                .or_default()
+                .push(attack);
         }
         let mut staff_groups = Vec::with_capacity(attacks_by_staff.len());
         for ((staff, end), attacks) in attacks_by_staff {
             let pitches: Vec<MidiPitch> = attacks
                 .iter()
                 .map(|attack| {
-                    MidiPitch::new(attack.midi_pitch)
-                        .ok_or_else(|| format!("Invalid MIDI pitch {} in score.", attack.midi_pitch))
+                    MidiPitch::new(attack.midi_pitch).ok_or_else(|| {
+                        format!("Invalid MIDI pitch {} in score.", attack.midi_pitch)
+                    })
                 })
                 .collect::<Result<_, _>>()?;
             let chord = Chord::from_pitches(&pitches).map_err(|error| error.to_string())?;
             let release_on = {
-                    events
-                        .iter()
-                        .enumerate()
-                        .skip(index + 1)
-                        .find(|(_, candidate)| candidate.position.absolute >= end)
-                        .map(|(release_index, _)| EventId::new(release_index as u64 + 1))
+                events
+                    .iter()
+                    .enumerate()
+                    .skip(index + 1)
+                    .find(|(_, candidate)| candidate.position.absolute >= end)
+                    .map(|(release_index, _)| EventId::new(release_index as u64 + 1))
             };
             staff_groups.push(StaffSlice::new(
                 staff,

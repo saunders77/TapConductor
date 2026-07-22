@@ -10,6 +10,7 @@ mod diagnostics;
 mod engine;
 mod piano;
 mod queue;
+mod sampled_piano;
 
 pub mod backend;
 
@@ -23,3 +24,4 @@ pub use engine::{
 };
 pub use piano::{PianoConfig, PianoSynth};
 pub use queue::{spsc_channel, Consumer, Producer, QueueFull};
+pub use sampled_piano::{PianoInstrument, SalamanderBank, SalamanderLoadError, SampledPiano};

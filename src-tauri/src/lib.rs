@@ -7,7 +7,7 @@ mod session;
 
 use crate::{core::AppCore, midi_runtime::MidiInputAction};
 use std::sync::{Arc, Mutex, mpsc};
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 pub struct AppState {
     core: Mutex<AppCore>,
@@ -16,18 +16,9 @@ pub struct AppState {
 pub fn run() {
     let (midi_sender, midi_receiver) = mpsc::channel();
     let midi_shutdown_sender = midi_sender.clone();
-    let core = AppCore::new(midi_sender).expect("failed to initialize TapConductor core");
-    let state = Arc::new(AppState {
-        core: Mutex::new(core),
-    });
-    // The dispatch thread must not own the last strong application-state
-    // reference: AppCore owns the channel sender, so a strong reference here
-    // would form a shutdown cycle and keep the audio/MIDI connections alive.
-    let setup_state = Arc::downgrade(&state);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(state)
         .on_window_event(move |_window, event| {
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 let _ = midi_shutdown_sender.send(MidiInputAction::Shutdown);
@@ -54,13 +45,24 @@ pub fn run() {
             commands::diagnostics,
         ])
         .setup(move |app| {
+            let resource_dir = app.path().resource_dir()?;
+            let salamander_directory = resource_dir.join("instruments").join("salamander");
+            let core = AppCore::new(midi_sender, Some(&salamander_directory))
+                .map_err(std::io::Error::other)?;
+            let state = Arc::new(AppState {
+                core: Mutex::new(core),
+            });
+            // The dispatch thread must not own the last strong application-state
+            // reference: AppCore owns the channel sender, so a strong reference
+            // here would form a shutdown cycle.
+            let setup_state = Arc::downgrade(&state);
+            app.manage(state);
             let handle = app.handle().clone();
-            let state = setup_state.clone();
             std::thread::Builder::new()
                 .name("tapconductor-midi-input".to_owned())
                 .spawn(move || {
                     while let Ok(action) = midi_receiver.recv() {
-                        let Some(state) = state.upgrade() else {
+                        let Some(state) = setup_state.upgrade() else {
                             break;
                         };
                         let result = state.core.lock().map_err(|_| {
@@ -93,7 +95,9 @@ pub fn run() {
                                     }
                                 } else {
                                     match action {
-                                        MidiInputAction::Down { token, velocity } => core.input_down(token, velocity),
+                                        MidiInputAction::Down { token, velocity } => {
+                                            core.input_down(token, velocity)
+                                        }
                                         MidiInputAction::Up { token } => core.release_input(&token),
                                         MidiInputAction::Panic => core.panic_midi_inputs(),
                                         MidiInputAction::Shutdown => {

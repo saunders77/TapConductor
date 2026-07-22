@@ -1,8 +1,8 @@
 use crate::dto::{DeviceDto, DiagnosticsDto, WasapiPeriodsDto};
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 use tapconductor_audio::{
-    AudioCommand, AudioCommandSender, AudioDiagnostics, Chord, Note, PianoConfig, PianoSynth,
-    VoiceGroupId, audio_engine,
+    AudioCommand, AudioCommandSender, AudioDiagnostics, Chord, Note, PianoInstrument,
+    SalamanderBank, VoiceGroupId, audio_engine,
     backend::{AudioBackend, RunningAudioStream},
 };
 use tapconductor_performance as performance;
@@ -30,6 +30,8 @@ pub struct AudioManager {
     selected_device: Option<String>,
     selected_device_name: String,
     last_error: Option<String>,
+    instrument_message: Option<String>,
+    salamander: Option<Arc<SalamanderBank>>,
     /// Total frames rendered by streams that were replaced. Performance time
     /// never moves backwards when an output device is rebuilt.
     clock_epoch: u64,
@@ -39,13 +41,37 @@ pub struct AudioManager {
 }
 
 impl AudioManager {
-    pub fn new() -> Self {
+    pub fn new(salamander_directory: Option<&Path>) -> Self {
+        let (salamander, instrument_message) = match salamander_directory {
+            Some(directory) => match SalamanderBank::load(directory) {
+                Ok(bank) => {
+                    let message = format!(
+                        "Salamander Grand Piano V3 loaded: {} samples, {:.1} MiB PCM.",
+                        bank.sample_count(),
+                        bank.pcm_bytes() as f64 / (1024.0 * 1024.0),
+                    );
+                    (Some(Arc::new(bank)), Some(message))
+                }
+                Err(error) => (
+                    None,
+                    Some(format!(
+                        "Salamander Grand Piano could not be loaded; using the procedural fallback: {error}"
+                    )),
+                ),
+            },
+            None => (
+                None,
+                Some("Salamander Grand Piano asset path is unavailable; using the procedural fallback.".to_owned()),
+            ),
+        };
         let mut manager = Self {
             backend: PlatformAudioBackend::default(),
             runtime: None,
             selected_device: None,
             selected_device_name: "System default".to_owned(),
             last_error: None,
+            instrument_message,
+            salamander,
             clock_epoch: 0,
             master_gain: 1.0,
             wasapi_periods: None,
@@ -138,7 +164,7 @@ impl AudioManager {
         // the actual value visible in diagnostics and let the stream run.
 
         let wasapi_periods = self.probe_periods(selected_device.as_deref());
-        let sampler = PianoSynth::<VOICES>::new(PianoConfig::new(sample_rate))
+        let sampler = PianoInstrument::<VOICES>::new(self.salamander.clone(), sample_rate)
             .map_err(|error| error.to_string())?;
         let (mut sender, engine, diagnostics) = audio_engine::<_, COMMAND_QUEUE, SCHEDULE_CAPACITY>(
             sampler,
@@ -233,8 +259,14 @@ impl AudioManager {
                             .push(Note::new(pitch.get(), velocity.get()))
                             .map_err(|error| error.to_string())?;
                     }
-                    return self.runtime.as_mut()
-                        .ok_or_else(|| self.last_error.clone().unwrap_or_else(|| "Audio is not ready.".to_owned()))?
+                    return self
+                        .runtime
+                        .as_mut()
+                        .ok_or_else(|| {
+                            self.last_error
+                                .clone()
+                                .unwrap_or_else(|| "Audio is not ready.".to_owned())
+                        })?
                         .sender
                         .try_send(AudioCommand::PlaySlice {
                             at: local_time(at.frame()),
@@ -259,10 +291,12 @@ impl AudioManager {
                 }
                 commands
             }
-            performance::AudioCommand::ReleaseGroup { at, group } => vec![AudioCommand::ReleaseGroup {
-                at: local_time(at.frame()),
-                group: VoiceGroupId(group.get()),
-            }],
+            performance::AudioCommand::ReleaseGroup { at, group } => {
+                vec![AudioCommand::ReleaseGroup {
+                    at: local_time(at.frame()),
+                    group: VoiceGroupId(group.get()),
+                }]
+            }
             performance::AudioCommand::Panic { .. } => unreachable!("panic handled above"),
         };
         let runtime = self.runtime.as_mut().ok_or_else(|| {
@@ -340,7 +374,7 @@ impl AudioManager {
                     "The audio backend reported an output-stream error; reselect the device before performing."
                         .to_owned()
                 })
-            }),
+            }).or_else(|| self.instrument_message.clone()),
         }
     }
 
@@ -377,6 +411,6 @@ impl AudioManager {
 
 impl Default for AudioManager {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }

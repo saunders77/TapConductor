@@ -275,7 +275,11 @@ pub enum CoreEventDto {
 }
 
 #[derive(Clone, Debug, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum BeatMidiInputDto {
     Down { token: String, velocity: u8 },
     Up { token: String },

@@ -32,6 +32,10 @@
   "bundle": {
     "active": true,
     "targets": ["nsis", "msi"],
+    "resources": {
+      "../assets/SalamanderGrandPianoV3_44.1khz16bit": "instruments/salamander",
+      "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
+    },
     "category": "Music",
     "shortDescription": "Perform written scores one tap at a time.",
     "longDescription": "TapConductor plays each rhythmically aligned note or chord in a score exactly when the performer taps.",

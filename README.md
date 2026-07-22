@@ -32,9 +32,12 @@ validation work.
   and an SPSC command queue. Installed native ASIO drivers are exposed as low-latency outputs;
   ordinary Windows endpoints use the direct event-driven `IAudioClient3` path.
 
-The built-in instrument is a small, bright procedural piano-like synthesizer with six independently
-decaying partials, so the app starts without an external sample library. No SoundFont or recorded
-piano samples are bundled.
+The default instrument is the 44.1 kHz, 16-bit edition of Alexander Holm's multisampled Salamander
+Grand Piano V3. Its 480 note samples and 16 velocity layers are loaded once as compact 16-bit PCM
+and reused across audio-device changes; playback performs no allocation, decoding, locking, or file
+I/O in the audio callback. The installed sample set occupies about 1.2 GB and its note material
+uses about 1.17 GB of memory while the app is running. A small procedural piano remains available
+automatically if the sampled asset is missing or invalid.
 
 ## Piano gate behavior
 
@@ -156,7 +159,8 @@ keeps a future macOS/iPadOS host possible without moving correctness-sensitive l
 - Native ASIO uses the driver's current sample rate, main one or two output channels, native sample
   representation, and minimum reported buffer. Other Windows devices use the direct event-driven
   shared `IAudioClient3` renderer. End-to-end latency remains dependent on the hardware and driver.
-- The procedural synth is a dependable bootstrap instrument, not a multisampled concert piano.
+- Salamander's 44.1 kHz source samples are linearly resampled when an output device operates at a
+  different native rate. The procedural synth is a recovery instrument rather than the default.
 - MIDI output currently uses the MVP routing/channel behavior rather than per-part routing.
 - PDF/optical recognition, rolled-chord modes, beat-tap mode, and Apple hosts are future work.
 - The software latency harness is included, but release qualification still requires end-to-end

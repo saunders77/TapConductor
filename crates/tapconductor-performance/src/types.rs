@@ -283,7 +283,8 @@ impl Slice {
     pub const fn new(id: EventId, chord: Chord) -> Self {
         Self {
             id,
-            staff_groups: [Some(StaffSlice::new(0, chord, SliceReleaseBoundary::NextTrigger)); MAX_CHORD_NOTES],
+            staff_groups: [Some(StaffSlice::new(0, chord, SliceReleaseBoundary::NextTrigger));
+                MAX_CHORD_NOTES],
             len: 1,
             staff_scoped: false,
         }
@@ -299,7 +300,11 @@ impl Slice {
     ) -> Self {
         Self {
             id,
-            staff_groups: [Some(StaffSlice::new(0, chord, SliceReleaseBoundary::from_event(release_on))); MAX_CHORD_NOTES],
+            staff_groups: [Some(StaffSlice::new(
+                0,
+                chord,
+                SliceReleaseBoundary::from_event(release_on),
+            )); MAX_CHORD_NOTES],
             len: 1,
             staff_scoped: false,
         }
@@ -310,13 +315,20 @@ impl Slice {
             return Err(ChordError::Empty);
         }
         if groups.len() > MAX_CHORD_NOTES {
-            return Err(ChordError::TooManyNotes { maximum: MAX_CHORD_NOTES });
+            return Err(ChordError::TooManyNotes {
+                maximum: MAX_CHORD_NOTES,
+            });
         }
         let mut staff_groups = [None; MAX_CHORD_NOTES];
         for (index, group) in groups.iter().copied().enumerate() {
             staff_groups[index] = Some(group);
         }
-        Ok(Self { id, staff_groups, len: groups.len() as u8, staff_scoped: true })
+        Ok(Self {
+            id,
+            staff_groups,
+            len: groups.len() as u8,
+            staff_scoped: true,
+        })
     }
 
     #[must_use]
@@ -334,7 +346,8 @@ impl Slice {
                 len += 1;
             }
         }
-        Chord::from_pitches(&pitches[..len]).expect("a slice always contains a bounded non-empty chord")
+        Chord::from_pitches(&pitches[..len])
+            .expect("a slice always contains a bounded non-empty chord")
     }
 
     #[must_use]
@@ -361,17 +374,27 @@ pub struct StaffSlice {
 impl StaffSlice {
     #[must_use]
     pub const fn new(staff: u16, chord: Chord, release_boundary: SliceReleaseBoundary) -> Self {
-        Self { staff, chord, release_boundary }
+        Self {
+            staff,
+            chord,
+            release_boundary,
+        }
     }
 
     #[must_use]
-    pub const fn staff(self) -> u16 { self.staff }
+    pub const fn staff(self) -> u16 {
+        self.staff
+    }
 
     #[must_use]
-    pub const fn chord(self) -> Chord { self.chord }
+    pub const fn chord(self) -> Chord {
+        self.chord
+    }
 
     #[must_use]
-    pub const fn release_boundary(self) -> SliceReleaseBoundary { self.release_boundary }
+    pub const fn release_boundary(self) -> SliceReleaseBoundary {
+        self.release_boundary
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

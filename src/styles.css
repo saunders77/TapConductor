@@ -1,6 +1,6 @@
 :root {
   color: #22231e;
-  background: #e9e8df;
+  background: #fff;
   font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -19,7 +19,7 @@ html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 button, select, input { font: inherit; }
 button { color: inherit; }
 
-.shell { position: relative; width: 100%; min-width: 0; height: 100%; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 76px minmax(0, 1fr); overflow: hidden; background: #ecebe3; }
+.shell { position: relative; width: 100%; min-width: 0; height: 100%; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 76px minmax(0, 1fr); overflow: hidden; background: #fff; }
 .topbar { position: relative; min-width: 0; display: flex; align-items: center; gap: 18px; padding: 0 24px; overflow: hidden; color: #f6f6ed; background: var(--dark); }
 .brand { display: flex; align-items: center; gap: 22px; min-width: 380px; font-size: 38px; letter-spacing: -.4px; }
 .brand strong { color: var(--accent); }
@@ -60,8 +60,8 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .score-toolbar { display: none; }
 .score-help { color: #66685f; font-size: 11px; font-weight: 650; letter-spacing: .01em; }
 .zoom-controls { display: flex; align-items: center; gap: 7px; }.zoom-controls button { width: 27px; height: 27px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); cursor: pointer; }.zoom-controls output { min-width: 42px; text-align: center; font-size: 11px; font-weight: 700; }
-.score-scroll { position: relative; width: 100%; max-width: 100%; min-width: 0; flex: 1 1 auto; min-height: 0; overflow-x: auto; overflow-y: auto; scrollbar-gutter: stable; contain: size layout; background-color: #dad9d0; background-image: radial-gradient(#aaa99e45 0.65px, transparent .65px); background-size: 8px 8px; }
-.score-stage { position: relative; width: max-content; min-width: calc(100% - 56px); min-height: 100%; margin: 24px 28px; padding: 58px 34px 70px; background: var(--paper); box-shadow: 0 8px 28px #504f4520, 0 1px 2px #504f4530; }
+.score-scroll { position: relative; width: 100%; max-width: 100%; min-width: 0; flex: 1 1 auto; min-height: 0; overflow-x: auto; overflow-y: auto; scrollbar-gutter: auto; contain: size layout; background: #fff; }
+.score-stage { position: relative; width: max-content; min-width: 100%; min-height: 100%; margin: 0; padding: 58px 34px 70px; background: #fff; }
 .staff-controls { position: absolute; top: 0; left: 6px; width: 22px; z-index: 8; pointer-events: none; }
 .staff-control { position: absolute; left: 0; display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid #b7b8ad; border-radius: 5px; background: #fffef9; box-shadow: 0 1px 3px #504f4525; pointer-events: auto; cursor: pointer; }
 .staff-control input { width: 14px; height: 14px; margin: 0; accent-color: #75ffb3; cursor: pointer; }
@@ -112,5 +112,5 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
   .control-deck .field:nth-child(3) { display: none; }
   .performance-strip { grid-template-columns: minmax(0, 1fr) 36px minmax(110px, 150px) 36px minmax(0, 1fr); padding-inline: 14px; gap: 8px; }
   .bottom-controls { right: 14px; width: 280px; gap: 10px 6px; }
-  .score-stage { min-width: calc(100% - 24px); margin-inline: 12px; padding-inline: 20px; }
+  .score-stage { min-width: 100%; margin-inline: 0; padding-inline: 20px; }
 }

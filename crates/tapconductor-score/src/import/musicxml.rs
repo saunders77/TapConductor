@@ -659,14 +659,11 @@ impl<'a> XmlState<'a> {
                 }
             }
             "octave-shift" => {
-                // Silently ignoring an ottava line would display the expected
-                // notation while sounding the wrong octave in a live setting.
-                // Fail closed until octave-shift spans are represented in the
-                // normalized pitch timeline.
-                return Err(ImportError::UnsupportedDocument(format!(
-                    "MusicXML octave-shift at {}; ottava playback is not yet supported",
-                    self.context_label()
-                )));
+                // MusicXML pitch data stores the performed (sounding) pitch.
+                // octave-shift only moves the printed notes away from that
+                // pitch, so the normalized playback pitch must remain exactly
+                // the value parsed from <pitch>. OSMD handles the engraving of
+                // the ottava line and its visual displacement.
             }
             "sound" => self.reject_navigation_attributes(element)?,
             _ => {}

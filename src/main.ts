@@ -66,7 +66,7 @@ app.innerHTML = `
       </label>
       <button id="parts-button" class="deck-button" type="button">Staves</button>
         <button id="diagnostics-button" class="deck-button diagnostics-button" type="button" title="Audio diagnostics" aria-label="Audio diagnostics">⚙</button>
-        <button id="panic-button" class="panic-button" type="button" title="Stop and release all notes (Escape)" aria-label="Stop and release all notes">■</button>
+        <button id="panic-button" class="panic-button" type="button" title="Play MIDI input directly" aria-label="Play MIDI input directly">■</button>
     </section>
 
     <aside id="parts-popover" class="popover hidden" aria-label="Staves">
@@ -218,6 +218,16 @@ let lastDiagnostics: DiagnosticsDto | null = null;
 let lastUiNativeRoundTripMs: number | null = null;
 let unlisteners: UnlistenFn[] = [];
 const heldTokens = new Set<string>();
+let midiFreePlay = false;
+
+function updateMidiFreePlayButton(): void {
+  elements.panic.classList.toggle("midi-free-play", midiFreePlay);
+  elements.panic.textContent = midiFreePlay ? "👇" : "■";
+  elements.panic.title = midiFreePlay
+    ? "Return to score-following MIDI input"
+    : "Play MIDI input directly";
+  elements.panic.setAttribute("aria-label", elements.panic.title);
+}
 const pendingDowns = new Map<string, Promise<void>>();
 const DEFAULT_VELOCITY = 96;
 type TapMode = "rhythm" | "beat";
@@ -566,6 +576,10 @@ async function displayScore(loaded: LoadedScore, preserved?: ScoreViewState): Pr
       newSystemFromNewPageInXML: false,
       newPageFromXML: false,
     });
+    // OSMD caps a single horizontal system at 32,767 px by default (a
+    // defensive limit for its canvas backend). We render SVG, where that cap
+    // is unnecessary and causes very long scores to wrap onto another line.
+    osmd.EngravingRules.SheetMaximumWidth = 1_000_000;
     await osmd.load(loaded.musicXml);
     renderOsmd();
   } else {
@@ -1222,7 +1236,12 @@ async function installListeners(): Promise<void> {
 
 elements.open.addEventListener("click", () => void chooseScore());
 elements.emptyOpen.addEventListener("click", () => void chooseScore());
-elements.panic.addEventListener("click", () => void invokeSafe("panic"));
+elements.panic.addEventListener("click", async () => {
+  const nextMode = !midiFreePlay;
+  await invokeSafe("set_midi_free_play", { enabled: nextMode });
+  midiFreePlay = nextMode;
+  updateMidiFreePlayButton();
+});
 elements.tap.addEventListener("pointerdown", (event) => {
   elements.tap.setPointerCapture(event.pointerId);
   void performDown(`pointer:${event.pointerId}`);

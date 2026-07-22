@@ -5,10 +5,10 @@ use crate::{
     session::ScoreSession,
 };
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     path::PathBuf,
     sync::mpsc::Sender,
-    time::Instant,
+    time::{Duration, Instant},
 };
 use tapconductor_performance::{
     Chord, EngineConfig, EventId, Generation, IgnoreReason, InputId, MidiPitch, PerformanceCommand,
@@ -16,14 +16,38 @@ use tapconductor_performance::{
     Transition, TriggerKind, Velocity,
 };
 
+const MIN_TAP_INTERVAL: Duration = Duration::from_millis(60);
+
+#[derive(Default)]
+struct TapInputGate {
+    last_accepted: Option<Instant>,
+}
+
+impl TapInputGate {
+    fn accept(&mut self, received_at: Instant) -> bool {
+        if self
+            .last_accepted
+            .is_some_and(|last| received_at.duration_since(last) < MIN_TAP_INTERVAL)
+        {
+            return false;
+        }
+        self.last_accepted = Some(received_at);
+        true
+    }
+}
+
 pub struct AppCore {
     pub audio: AudioManager,
     pub midi: MidiManager,
     performance: PerformanceEngine,
+    direct_midi_performance: PerformanceEngine,
     score: Option<ScoreSession>,
     input_ids: HashMap<String, InputId>,
     next_input_id: u64,
+    tap_input_gate: TapInputGate,
     beat_tap_mode: bool,
+    midi_free_play: bool,
+    direct_midi_tokens: HashSet<String>,
 }
 
 impl AppCore {
@@ -36,14 +60,24 @@ impl AppCore {
             .ok_or_else(|| "Invalid audio sample rate.".to_owned())?;
         let performance = PerformanceEngine::with_default_gate(rate, EngineConfig::default())
             .map_err(|error| error.to_string())?;
+        let mut direct_midi_performance =
+            PerformanceEngine::with_default_gate(rate, EngineConfig::default())
+                .map_err(|error| error.to_string())?;
+        direct_midi_performance
+            .load_score(direct_midi_sequence(), SampleTime::ZERO)
+            .map_err(|error| error.to_string())?;
         Ok(Self {
             midi: MidiManager::new(midi_action_sender, audio.sample_rate()),
             audio,
             performance,
+            direct_midi_performance,
             score: None,
             input_ids: HashMap::new(),
             next_input_id: 1,
+            tap_input_gate: TapInputGate::default(),
             beat_tap_mode: false,
+            midi_free_play: false,
+            direct_midi_tokens: HashSet::new(),
         })
     }
 
@@ -54,6 +88,19 @@ impl AppCore {
 
     pub const fn beat_tap_mode(&self) -> bool {
         self.beat_tap_mode
+    }
+
+    pub fn set_midi_free_play(&mut self, enabled: bool) -> Result<Option<CoreEventDto>, String> {
+        if self.midi_free_play == enabled {
+            return Ok(None);
+        }
+        self.midi_free_play = enabled;
+        self.direct_midi_tokens.clear();
+        self.panic()
+    }
+
+    pub const fn midi_free_play(&self) -> bool {
+        self.midi_free_play
     }
 
     pub fn load_score(
@@ -89,6 +136,9 @@ impl AppCore {
         let sample_rate = SampleRate::new(self.audio.sample_rate())
             .ok_or_else(|| "Invalid audio sample rate.".to_owned())?;
         self.performance
+            .set_sample_rate(sample_rate)
+            .map_err(|error| error.to_string())?;
+        self.direct_midi_performance
             .set_sample_rate(sample_rate)
             .map_err(|error| error.to_string())?;
         self.midi.set_sample_rate(sample_rate.get());
@@ -135,8 +185,14 @@ impl AppCore {
     ) -> Result<Option<CoreEventDto>, String> {
         self.ensure_audio_ready()?;
         let generation = self.current_generation()?;
-        let (input, inserted) = self.input_for_down(token.clone())?;
         let velocity = velocity_from_midi1(midi_velocity)?;
+        // A repeated down for an already-held physical input remains the
+        // performance engine's responsibility. It is ignored there and must
+        // not restart the receiver's suppression window.
+        if !self.input_ids.contains_key(&token) && !self.tap_input_gate.accept(Instant::now()) {
+            return Ok(None);
+        }
+        let (input, inserted) = self.input_for_down(token.clone())?;
         let result = self
             .performance
             .handle(PerformanceCommand::Tap {
@@ -150,6 +206,40 @@ impl AppCore {
             self.input_ids.remove(&token);
         }
         self.apply_transition(result?)
+    }
+
+    /// Play incoming MIDI keys directly, without reading or advancing the score.
+    pub fn direct_midi_down(
+        &mut self,
+        token: String,
+        midi_pitch: u8,
+        midi_velocity: u8,
+    ) -> Result<Option<CoreEventDto>, String> {
+        self.ensure_audio_ready()?;
+        let pitch = MidiPitch::new(midi_pitch)
+            .ok_or_else(|| format!("Invalid MIDI pitch {midi_pitch}."))?;
+        let velocity = velocity_from_midi1(midi_velocity)?;
+        let (input, inserted) = self.input_for_down(token.clone())?;
+        let generation = self
+            .direct_midi_performance
+            .generation()
+            .expect("direct MIDI engine has a permanent one-note sequence");
+        let result = self
+            .direct_midi_performance
+            .handle(PerformanceCommand::AuditionNote {
+                generation,
+                event: EventId::new(1),
+                pitch,
+                input,
+                at: self.now(),
+                velocity,
+            });
+        if result.is_err() && inserted {
+            self.input_ids.remove(&token);
+        } else {
+            self.direct_midi_tokens.insert(token);
+        }
+        self.apply_direct_transition(result.map_err(|error| error.to_string())?)
     }
 
     pub fn audition(
@@ -247,17 +337,27 @@ impl AppCore {
         let Some(input) = self.input_ids.get(token).copied() else {
             return Ok(None);
         };
-        let transition = self
-            .performance
+        let direct = self.direct_midi_tokens.remove(token);
+        let at = self.now();
+        let engine = if direct {
+            &mut self.direct_midi_performance
+        } else {
+            &mut self.performance
+        };
+        let transition = engine
             .handle(PerformanceCommand::InputReleased {
                 input,
-                at: self.now(),
+                at,
             })
             .map_err(|error| error.to_string())?;
         // The engine has now accepted the physical release and removed its
         // latch. Keep the token if handle() rejects so a later release can retry.
         self.input_ids.remove(token);
-        self.apply_transition(transition)
+        if direct {
+            self.apply_direct_transition(transition)
+        } else {
+            self.apply_transition(transition)
+        }
     }
 
     pub fn reposition(
@@ -284,7 +384,13 @@ impl AppCore {
             .performance
             .handle(PerformanceCommand::Panic { at: self.now() })
             .map_err(|error| error.to_string())?;
-        self.apply_transition(transition)
+        let event = self.apply_transition(transition)?;
+        let direct_transition = self
+            .direct_midi_performance
+            .handle(PerformanceCommand::Panic { at: self.now() })
+            .map_err(|error| error.to_string())?;
+        self.apply_direct_transition(direct_transition)?;
+        Ok(event)
     }
 
     /// A MIDI mapper panic means its token tracker has already been cleared,
@@ -429,6 +535,20 @@ impl AppCore {
         Ok(event)
     }
 
+    fn apply_direct_transition(
+        &mut self,
+        transition: Transition,
+    ) -> Result<Option<CoreEventDto>, String> {
+        let midi_clock_sample = self.audio.now_sample();
+        let midi_clock_instant = Instant::now();
+        for command in transition.audio_commands().copied() {
+            self.audio.send_performance_command(command)?;
+            self.midi
+                .send_performance_command(command, midi_clock_sample, midi_clock_instant);
+        }
+        Ok(None)
+    }
+
     fn recover_audio_delivery_failure(&mut self, retry_target: Option<(Generation, EventId)>) {
         let at = self.now();
         let recovery = match retry_target {
@@ -452,6 +572,12 @@ impl AppCore {
                 .send_performance_command(command, midi_clock_sample, midi_clock_instant);
         }
     }
+}
+
+fn direct_midi_sequence() -> ScoreSequence {
+    let chord = Chord::from_midi_numbers(&[60]).expect("middle C is a valid MIDI chord");
+    ScoreSequence::new(vec![Slice::new(EventId::new(1), chord)])
+        .expect("a one-note direct MIDI sequence is valid")
 }
 
 fn velocity_from_midi1(value: u8) -> Result<Velocity, String> {
@@ -506,4 +632,33 @@ fn sequence_from_events(events: &[tapconductor_score::TapEvent]) -> Result<Score
         );
     }
     ScoreSequence::new(slices).map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MIN_TAP_INTERVAL, TapInputGate};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn tap_input_gate_ignores_taps_inside_sixty_milliseconds_without_extending_window() {
+        let start = Instant::now();
+        let mut gate = TapInputGate::default();
+
+        assert!(gate.accept(start));
+        assert!(!gate.accept(start + Duration::from_millis(59)));
+        assert!(gate.accept(start + MIN_TAP_INTERVAL));
+    }
+
+    #[test]
+    fn tap_input_gate_measures_the_next_window_from_the_last_non_ignored_tap() {
+        let start = Instant::now();
+        let mut gate = TapInputGate::default();
+
+        assert!(gate.accept(start));
+        assert!(!gate.accept(start + Duration::from_millis(30)));
+        assert!(!gate.accept(start + Duration::from_millis(59)));
+        assert!(gate.accept(start + Duration::from_millis(60)));
+        assert!(!gate.accept(start + Duration::from_millis(119)));
+        assert!(gate.accept(start + Duration::from_millis(120)));
+    }
 }

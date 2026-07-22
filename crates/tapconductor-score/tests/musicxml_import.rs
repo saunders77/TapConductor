@@ -182,17 +182,22 @@ fn fails_closed_on_unimplemented_navigation() {
 }
 
 #[test]
-fn fails_closed_instead_of_sounding_ottava_at_the_wrong_pitch() {
+fn imports_ottava_and_keeps_the_musicxml_sounding_pitch() {
     let xml = br#"
         <score-partwise>
           <part-list><score-part id="P"><part-name>P</part-name></score-part></part-list>
           <part id="P"><measure number="1">
+            <attributes><divisions>1</divisions></attributes>
             <direction><direction-type><octave-shift type="down" size="8"/></direction-type></direction>
+            <note><pitch><step>C</step><octave>6</octave></pitch><duration>1</duration></note>
+            <direction><direction-type><octave-shift type="stop" size="8"/></direction-type></direction>
           </measure></part>
         </score-partwise>"#;
-    let error = import_musicxml(xml, &ImportOptions::default()).unwrap_err();
-    assert!(matches!(error, ImportError::UnsupportedDocument(_)));
-    assert!(error.to_string().contains("octave-shift"));
+    let score = import_musicxml(xml, &ImportOptions::default()).unwrap();
+    assert_eq!(
+        score.tap_events[0].attacks[0].midi_pitch, 84,
+        "MusicXML pitch is already the performed pitch; octave-shift is visual notation",
+    );
 }
 
 #[test]

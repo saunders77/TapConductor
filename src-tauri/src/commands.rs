@@ -146,6 +146,16 @@ pub fn panic(app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<(), Stri
 }
 
 #[tauri::command]
+pub fn set_midi_free_play(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    enabled: bool,
+) -> Result<(), String> {
+    let event = lock_core(&state)?.set_midi_free_play(enabled)?;
+    emit_event(&app, event)
+}
+
+#[tauri::command]
 pub fn audio_devices(state: State<'_, Arc<AppState>>) -> Result<Vec<DeviceDto>, String> {
     lock_core(&state)?.audio.devices()
 }

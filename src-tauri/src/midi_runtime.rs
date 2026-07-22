@@ -13,8 +13,14 @@ use tapconductor_performance as performance;
 
 #[derive(Clone, Debug)]
 pub enum MidiInputAction {
-    Down { token: String, velocity: u8 },
-    Up { token: String },
+    Down {
+        token: String,
+        midi_pitch: u8,
+        velocity: u8,
+    },
+    Up {
+        token: String,
+    },
     Panic,
     Shutdown,
 }
@@ -151,9 +157,13 @@ impl MidiManager {
                     mapper.process(message, |event| {
                         let action = match event {
                             MidiTapEvent::Down {
-                                token, velocity, ..
+                                token,
+                                source_note,
+                                velocity,
+                                ..
                             } => MidiInputAction::Down {
                                 token: format!("midi:{}", token.0),
+                                midi_pitch: source_note.get(),
                                 velocity: velocity.to_midi1().max(1),
                             },
                             MidiTapEvent::Up { token, .. } => MidiInputAction::Up {

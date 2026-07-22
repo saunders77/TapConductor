@@ -36,6 +36,7 @@ pub fn run() {
             commands::audition_chord,
             commands::set_cursor,
             commands::panic,
+            commands::set_midi_free_play,
             commands::audio_devices,
             commands::set_audio_device,
             commands::set_volume,
@@ -73,7 +74,9 @@ pub fn run() {
                             Ok(mut core) => {
                                 if core.beat_tap_mode() {
                                     match action {
-                                        MidiInputAction::Down { token, velocity } => {
+                                        MidiInputAction::Down {
+                                            token, velocity, ..
+                                        } => {
                                             let _ = handle.emit(
                                                 "beat-midi-input",
                                                 dto::BeatMidiInputDto::Down { token, velocity },
@@ -95,8 +98,16 @@ pub fn run() {
                                     }
                                 } else {
                                     match action {
-                                        MidiInputAction::Down { token, velocity } => {
-                                            core.input_down(token, velocity)
+                                        MidiInputAction::Down {
+                                            token,
+                                            midi_pitch,
+                                            velocity,
+                                        } => {
+                                            if core.midi_free_play() {
+                                                core.direct_midi_down(token, midi_pitch, velocity)
+                                            } else {
+                                                core.input_down(token, velocity)
+                                            }
                                         }
                                         MidiInputAction::Up { token } => core.release_input(&token),
                                         MidiInputAction::Panic => core.panic_midi_inputs(),

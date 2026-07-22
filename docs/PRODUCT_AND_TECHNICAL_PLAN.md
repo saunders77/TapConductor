@@ -1,6 +1,6 @@
 # TapConductor product and technical plan
 
-Status: proposed plan for a new codebase  
+Status: living product and architecture plan
 Initial platform: Windows 10/11  
 Planned platforms: macOS and iPadOS/iOS
 
@@ -12,7 +12,8 @@ velocity.
 
 The primary workflow is:
 
-1. Open a MusicXML (`.musicxml`, `.xml`) or compressed MusicXML (`.mxl`) score.
+1. Open a MusicXML (`.musicxml`, `.xml`), compressed MusicXML (`.mxl`), MIDI, or—on Windows—a
+   scanned PDF that is recognized and reviewed through Audiveris.
 2. Inspect the engraved notation and choose which parts are active.
 3. Set the live cursor, initially at the first sounding score position.
 4. Press a configured keyboard key, mouse/pointer target, or (later) a MIDI key.
@@ -49,8 +50,8 @@ other voices, staves, or parts form one tap event.
 
 ### Explicit non-goals for the first release
 
-- Score editing, recording, tempo-following accompaniment, networking, VST/AU plug-ins, PDF/OMR,
-  and automatic correction of malformed scores.
+- General score editing, recording, tempo-following accompaniment, networking, VST/AU plug-ins,
+  automatic correction of malformed scores, and image-level OMR correction inside TapConductor.
 - Perfect engraving of every MusicXML extension.
 - Bluetooth audio as a low-latency target. It may work, but the app must warn that wireless output
   normally adds unacceptable performance latency.
@@ -311,11 +312,23 @@ type 1 files, groups equal absolute ticks across tracks, ignores tempo for tap a
 note ends from Note Off, and generates a basic piano-roll-like staff score for display. It should be
 described as usable but less faithfully engraved than MusicXML.
 
-### PDF later
+### PDF optical music recognition (Windows)
 
-PDF needs optical music recognition and a correction workflow, not just a decoder. Treat it as a
-separate product project: PDF/image -> OMR -> editable validation -> MusicXML -> existing importer.
-Never send unverified OMR output straight into performance mode.
+PDF import uses the separately packaged Audiveris desktop application. TapConductor invokes the
+pinned Audiveris build in batch mode (`-batch -transcribe -save -export`) and requires one editable
+`.omr` project plus one preliminary `.mxl`. The user chooses the persistent `.mxl` location; the
+same-named `.omr` is retained beside it because MusicXML export is lossy.
+
+**Review recognition** launches that `.omr` in the native Audiveris editor. A private Audiveris
+profile installs a **Send to TapConductor** export plugin. The plugin asks Audiveris to create an
+up-to-date MusicXML export and invokes TapConductor's one-shot callback mode, which places the file
+in a project-specific inbox. The running application validates the callback export, replaces the
+user-selected `.mxl`, reparses it, and refreshes OSMD and the performance sequence.
+
+Audiveris owns image-level recognition and correction. OSMD remains only a MusicXML rendering
+layer. A future TapConductor editor may offer limited semantic corrections for performance-relevant
+MusicXML mistakes, but it must not be presented as an OMR image editor. This flow is not supported
+on iOS/iPadOS. See `docs/OMR_ARCHITECTURE.md` for the process and licensing boundaries.
 
 ## 7. Delivery plan and gates
 
@@ -393,7 +406,7 @@ below pass.
   a predictive scheduler. Keep it a separate strategy from note-rhythm mode.
 - macOS port, then iPadOS/iOS: CoreAudio session/route handling, touch-first controls, sandboxed file
   import, background/interruption policy, App Store signing, and hardware/MIDI validation.
-- PDF/OMR discovery only after the digital-score workflow is stable.
+- Keep Audiveris OMR desktop-only; Apple mobile imports remain MusicXML/MXL/MIDI only.
 
 ## 8. Acceptance criteria for the Windows beta
 

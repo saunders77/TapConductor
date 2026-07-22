@@ -13,9 +13,11 @@ validation work.
 
 ## MVP capabilities
 
-- Opens partwise MusicXML (`.musicxml`/`.xml`), compressed MusicXML (`.mxl`), and Standard MIDI
-  Files (`.mid`/`.midi`). MusicXML is engraved with OpenSheetMusicDisplay; MIDI uses a compact event
-  view because MIDI files do not contain complete engraving information.
+- Opens partwise MusicXML (`.musicxml`/`.xml`), compressed MusicXML (`.mxl`), Standard MIDI Files
+  (`.mid`/`.midi`), and scanned PDFs on Windows. PDF import runs the separately packaged Audiveris
+  sidecar, retains its editable `.omr` project, and imports its preliminary `.mxl`. MusicXML is
+  engraved with OpenSheetMusicDisplay; MIDI uses a compact event view because MIDI files do not
+  contain complete engraving information.
 - Groups simultaneous pitched note attacks by exact rational score time, even across enabled parts.
   Rests and tied continuations do not create extra conducting events.
 - Conducts from Space, Enter, the large pointer target, or MIDI Note On. MIDI input
@@ -100,7 +102,25 @@ manufacturer supplies none.
 To exercise MIDI, connect the device before opening its selector, choose it under **MIDI in** or
 **MIDI out**, and use **Panic** before disconnecting or changing a live routing setup.
 
+For a scanned PDF, **Open score** runs Audiveris in batch mode and then asks where to save the
+recognized `.mxl`; TapConductor also saves a same-named `.omr` beside it. Use **Review recognition**
+to open that lossless project in Audiveris. After correcting and saving the project, choose
+**Plugins → Send to TapConductor** in Audiveris. TapConductor validates the corrected export,
+replaces the selected `.mxl`, reparses it, and refreshes the score. Recognition is not expected to
+be perfect, so review the result before performance use.
+
 ## Build installers
+
+The Windows installer embeds a pinned Audiveris 5.11.0 application image, its private Java runtime,
+vetted Tesseract language data, and the exact corresponding-source archive. Stage those release
+inputs once before building:
+
+```powershell
+.\tools\stage-audiveris.ps1 `
+  -MsiPath C:\release-inputs\Audiveris-5.11.0-windows-x86_64.msi `
+  -TessdataDirectory C:\release-inputs\tessdata `
+  -SourceArchivePath C:\release-inputs\audiveris-5.11.0-source.zip
+```
 
 ```powershell
 npm ci
@@ -108,6 +128,10 @@ npm run tauri:build
 ```
 
 Release artifacts are written beneath `target\release\bundle\`, including NSIS and MSI packages.
+The build wrapper refuses to create an installer if the Audiveris executable, private Java runtime,
+English OCR data, bundle manifest, or corresponding source is absent. The generated staging files
+under `sidecars/audiveris/` are ignored because they are large, independently acquired release
+inputs.
 Rust and JavaScript dependencies are pinned by `Cargo.lock` and `package-lock.json`; use `npm ci`
 and Cargo's `--locked` flag in automated builds. The `asio-sys` build currently downloads
 Steinberg's SDK from its official stable URL, so release engineering must archive the exact SDK and
@@ -148,7 +172,9 @@ The verified Windows artifact paths, hashes, and test record are in
 | `crates/tapconductor-performance/` | Cursor, gesture, generation, and piano-gate state machine |
 | `crates/tapconductor-audio/` | Real-time command queue, scheduler, diagnostics, and synth |
 | `crates/tapconductor-midi/` | MIDI message mapping, ports, and overlapping-note tracking |
+| `sidecars/audiveris/` | Generated Windows Audiveris/JRE/OCR/source release payload |
 | `tools/latency-probe/` | Repeatable offline command-to-render benchmark |
+| `docs/OMR_ARCHITECTURE.md` | PDF recognition flow, process boundary, packaging, and licensing |
 | `docs/PRODUCT_AND_TECHNICAL_PLAN.md` | Product semantics, budgets, phases, and acceptance criteria |
 
 The score, performance, audio, and MIDI crates are UI-independent Rust libraries. That separation
@@ -164,7 +190,9 @@ keeps a future macOS/iPadOS host possible without moving correctness-sensitive l
 - Salamander's 44.1 kHz source samples are linearly resampled when an output device operates at a
   different native rate. The procedural synth is a recovery instrument rather than the default.
 - MIDI output currently uses the MVP routing/channel behavior rather than per-part routing.
-- PDF/optical recognition, rolled-chord modes, beat-tap mode, and Apple hosts are future work.
+- Optical recognition is Windows-only, accepts PDF input only, and relies on Audiveris for all
+  image-level correction. It is not available on iOS/iPadOS. Rolled-chord modes and Apple hosts
+  remain future work.
 - The software latency harness is included, but release qualification still requires end-to-end
   loopback and sustained-load testing on representative Windows audio hardware.
 

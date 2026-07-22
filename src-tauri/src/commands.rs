@@ -28,7 +28,13 @@ pub fn load_score(
     state: State<'_, Arc<AppState>>,
     path: String,
 ) -> Result<LoadedScoreDto, String> {
-    let (score, event) = lock_core(&state)?.load_score(path.into())?;
+    let path = std::path::PathBuf::from(path);
+    let (score, event) = lock_core(&state)?.load_score(path.clone())?;
+    state
+        .omr
+        .lock()
+        .map_err(|_| "TapConductor's OMR state is unavailable.".to_owned())?
+        .select_score(&path);
     emit_event(&app, event)?;
     Ok(score)
 }

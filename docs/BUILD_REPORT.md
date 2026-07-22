@@ -4,6 +4,11 @@ Build date: 2026-07-21
 Target: Windows x64 (`x86_64-pc-windows-msvc`)
 Version: 0.1.0
 
+> The artifacts recorded below predate the Audiveris OMR sidecar. A new installer must not be
+> published until `tools/stage-audiveris.ps1` has staged the pinned runtime/JRE/OCR/source payload,
+> `npm run tauri:build` has passed the bundle guard, and the PDF → `.omr`/`.mxl` → native review →
+> callback refresh flow has been exercised with the packaged Audiveris 5.11.0 image.
+
 ## Verification
 
 - `npm run build`: passed (TypeScript check and Vite production bundle).

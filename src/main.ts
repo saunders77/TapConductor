@@ -222,7 +222,7 @@ let midiFreePlay = false;
 
 function updateMidiFreePlayButton(): void {
   elements.panic.classList.toggle("midi-free-play", midiFreePlay);
-  elements.panic.textContent = midiFreePlay ? "👇" : "■";
+  elements.panic.textContent = midiFreePlay ? "☟" : "■";
   elements.panic.title = midiFreePlay
     ? "Return to score-following MIDI input"
     : "Play MIDI input directly";
@@ -833,7 +833,7 @@ function buildScoreTargets(): void {
     const controls = createSliceControls(resolveIndex, target.measureNumber);
     controls.dataset.eventIndices = target.eventIndices.join(",");
     controls.style.left = `${target.visual.anchorLeft}px`;
-    controls.style.top = `${Math.max(4, target.visual.top - 46)}px`;
+    controls.style.top = `${Math.max(4, target.visual.top - 70)}px`;
     elements.scoreTargets.append(controls);
   }
 

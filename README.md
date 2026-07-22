@@ -32,11 +32,12 @@ validation work.
   and an SPSC command queue. Installed native ASIO drivers are exposed as low-latency outputs;
   ordinary Windows endpoints use the direct event-driven `IAudioClient3` path.
 
-The default instrument is the 44.1 kHz, 16-bit edition of Alexander Holm's multisampled Salamander
-Grand Piano V3. Its 480 note samples and 16 velocity layers are loaded once as compact 16-bit PCM
-and reused across audio-device changes; playback performs no allocation, decoding, locking, or file
-I/O in the audio callback. The installed sample set occupies about 1.2 GB and its note material
-uses about 1.17 GB of memory while the app is running. A small procedural piano remains available
+The default instrument is the 44.1 kHz, 16-bit Slender Salamander Grand Piano: Signal Experiments'
+phase-aligned derivative of Alexander Holm's Salamander Grand Piano V3. Its three sampled velocity
+layers are crossfaded into a continuous response. The 90 note samples are loaded once as compact
+16-bit PCM and reused across audio-device changes; playback performs no allocation, decoding,
+locking, or file I/O in the audio callback. The installed library occupies about 250 MB and uses
+about 203 MiB for note PCM while the app is running. A small procedural piano remains available
 automatically if the sampled asset is missing or invalid.
 
 ## Piano gate behavior

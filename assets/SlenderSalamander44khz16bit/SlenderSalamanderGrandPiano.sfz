@@ -1,0 +1,366 @@
+//=====================================
+// Salamander Grand Piano V3
+//
+// Author: Alexander Holm
+// Contact: axeldenstore [at] gmail [dot] com
+// License: CC-by
+//
+//-------------------------------------
+// Slender Edition (2017)
+//-------------------------------------
+// Phase alignment by Signal Experiments
+// sig-ex.com
+//=====================================
+
+
+<control>
+default_path=samples\
+
+//Notes
+
+// LOW VELOCITY
+<group>
+amp_veltrack=73
+ampeg_release=1
+xf_velcurve=gain
+xfout_lovel=8
+xfout_hivel=59
+
+<region> sample=A0v1-PA.wav lokey=A0 hikey=A#0 pitch_keycenter=A0
+<region> sample=C1v1-PA.wav lokey=B0 hikey=C#1 pitch_keycenter=C1
+<region> sample=D#1v1-PA.wav lokey=D1 hikey=E1 pitch_keycenter=D#1
+<region> sample=F#1v1-PA.wav lokey=F1 hikey=G1 pitch_keycenter=F#1
+<region> sample=A1v1-PA.wav lokey=G#1 hikey=A#1 pitch_keycenter=A1
+<region> sample=C2v1-PA.wav lokey=B1 hikey=C#2 pitch_keycenter=C2
+<region> sample=D#2v1-PA.wav lokey=D2 hikey=E2 pitch_keycenter=D#2
+<region> sample=F#2v1-PA.wav lokey=F2 hikey=G2 pitch_keycenter=F#2
+<region> sample=A2v1-PA.wav lokey=G#2 hikey=A#2 pitch_keycenter=A2
+<region> sample=C3v1-PA.wav lokey=B2 hikey=C#3 pitch_keycenter=C3
+<region> sample=D#3v1-PA.wav lokey=D3 hikey=E3 pitch_keycenter=D#3
+<region> sample=F#3v1-PA.wav lokey=F3 hikey=G3 pitch_keycenter=F#3
+<region> sample=A3v1-PA.wav lokey=G#3 hikey=A#3 pitch_keycenter=A3
+<region> sample=C4v1-PA.wav lokey=B3 hikey=C#4  pitch_keycenter=C4
+<region> sample=D#4v1-PA.wav lokey=D4 hikey=E4 pitch_keycenter=D#4
+<region> sample=F#4v1-PA.wav lokey=F4 hikey=G4 pitch_keycenter=F#4
+<region> sample=A4v1-PA.wav lokey=G#4 hikey=A#4 pitch_keycenter=A4
+<region> sample=C5v1-PA.wav lokey=B4 hikey=C#5 pitch_keycenter=C5
+<region> sample=D#5v1-PA.wav lokey=D5 hikey=E5 pitch_keycenter=D#5
+<region> sample=F#5v1-PA.wav lokey=F5 hikey=G5 pitch_keycenter=F#5
+<region> sample=A5v1-PA.wav lokey=G#5 hikey=A#5 pitch_keycenter=A5
+<region> sample=C6v1-PA.wav lokey=B5 hikey=C#6 pitch_keycenter=C6
+<region> sample=D#6v1-PA.wav lokey=D6 hikey=E6 pitch_keycenter=D#6
+
+
+// LOW VELOCITY WITHOUT DAMPERS
+<group>
+amp_veltrack=73
+ampeg_release=5
+xf_velcurve=gain
+xfout_lovel=8
+xfout_hivel=59
+
+<region> sample=F#6v1-PA.wav lokey=F6 hikey=G6 pitch_keycenter=F#6
+<region> sample=A6v1-PA.wav lokey=G#6 hikey=A#6 pitch_keycenter=A6
+<region> sample=C7v1-PA.wav lokey=B6 hikey=C#7 pitch_keycenter=C7
+<region> sample=D#7v1-PA.wav lokey=D7 hikey=E7 pitch_keycenter=D#7
+<region> sample=F#7v1-PA.wav lokey=F7 hikey=G7 pitch_keycenter=F#7
+<region> sample=A7v1-PA.wav lokey=G#7 hikey=A#7 pitch_keycenter=A7
+<region> sample=C8v1-PA.wav lokey=B7 hikey=C8 pitch_keycenter=C8
+
+// MID VELOCITY
+<group>
+amp_veltrack=73
+ampeg_release=1
+xf_velcurve=gain
+xfin_lovel=8
+xfin_hivel=59
+xfout_lovel=67
+xfout_hivel=119
+
+<region> sample=A0v8.5-PA.wav lokey=A0 hikey=A#0 pitch_keycenter=A0
+<region> sample=C1v8.5-PA.wav lokey=B0 hikey=C#1 pitch_keycenter=C1
+<region> sample=D#1v8.5-PA.wav lokey=D1 hikey=E1 pitch_keycenter=D#1
+<region> sample=F#1v8.5-PA.wav lokey=F1 hikey=G1 pitch_keycenter=F#1
+<region> sample=A1v8.5-PA.wav lokey=G#1 hikey=A#1 pitch_keycenter=A1
+<region> sample=C2v8.5-PA.wav lokey=B1 hikey=C#2 pitch_keycenter=C2
+<region> sample=D#2v8.5-PA.wav lokey=D2 hikey=E2 pitch_keycenter=D#2
+<region> sample=F#2v8.5-PA.wav lokey=F2 hikey=G2 pitch_keycenter=F#2
+<region> sample=A2v8.5-PA.wav lokey=G#2 hikey=A#2 pitch_keycenter=A2
+<region> sample=C3v8.5-PA.wav lokey=B2 hikey=C#3 pitch_keycenter=C3
+<region> sample=D#3v8.5-PA.wav lokey=D3 hikey=E3 pitch_keycenter=D#3
+<region> sample=F#3v8.5-PA.wav lokey=F3 hikey=G3 pitch_keycenter=F#3
+<region> sample=A3v8.5-PA.wav lokey=G#3 hikey=A#3 pitch_keycenter=A3
+<region> sample=C4v8.5-PA.wav lokey=B3 hikey=C#4  pitch_keycenter=C4
+<region> sample=D#4v8.5-PA.wav lokey=D4 hikey=E4 pitch_keycenter=D#4
+<region> sample=F#4v8.5-PA.wav lokey=F4 hikey=G4 pitch_keycenter=F#4
+<region> sample=A4v8.5-PA.wav lokey=G#4 hikey=A#4 pitch_keycenter=A4
+<region> sample=C5v8.5-PA.wav lokey=B4 hikey=C#5 pitch_keycenter=C5
+<region> sample=D#5v8.5-PA.wav lokey=D5 hikey=E5 pitch_keycenter=D#5
+<region> sample=F#5v8.5-PA.wav lokey=F5 hikey=G5 pitch_keycenter=F#5
+<region> sample=A5v8.5-PA.wav lokey=G#5 hikey=A#5 pitch_keycenter=A5
+<region> sample=C6v8.5-PA.wav lokey=B5 hikey=C#6 pitch_keycenter=C6
+<region> sample=D#6v8.5-PA.wav lokey=D6 hikey=E6 pitch_keycenter=D#6
+
+
+// MID VELOCITY WITHOUT DAMPERS
+<group>
+amp_veltrack=73
+ampeg_release=5
+xf_velcurve=gain
+xfin_lovel=8
+xfin_hivel=59
+xfout_lovel=67
+xfout_hivel=119
+
+<region> sample=F#6v8.5-PA.wav lokey=F6 hikey=G6 pitch_keycenter=F#6
+<region> sample=A6v8.5-PA.wav lokey=G#6 hikey=A#6 pitch_keycenter=A6
+<region> sample=C7v8.5-PA.wav lokey=B6 hikey=C#7 pitch_keycenter=C7
+<region> sample=D#7v8.5-PA.wav lokey=D7 hikey=E7 pitch_keycenter=D#7
+<region> sample=F#7v8.5-PA.wav lokey=F7 hikey=G7 pitch_keycenter=F#7
+<region> sample=A7v8.5-PA.wav lokey=G#7 hikey=A#7 pitch_keycenter=A7
+<region> sample=C8v8.5-PA.wav lokey=B7 hikey=C8 pitch_keycenter=C8
+
+// HI VELOCITY
+<group>
+amp_veltrack=73
+ampeg_release=1
+xf_velcurve=gain
+xfin_lovel=67
+xfin_hivel=119
+
+<region> sample=A0v16.wav lokey=A0 hikey=A#0 pitch_keycenter=A0
+<region> sample=C1v16.wav lokey=B0 hikey=C#1 pitch_keycenter=C1
+<region> sample=D#1v16.wav lokey=D1 hikey=E1 pitch_keycenter=D#1
+<region> sample=F#1v16.wav lokey=F1 hikey=G1 pitch_keycenter=F#1
+<region> sample=A1v16.wav lokey=G#1 hikey=A#1 pitch_keycenter=A1
+<region> sample=C2v16.wav lokey=B1 hikey=C#2 pitch_keycenter=C2
+<region> sample=D#2v16.wav lokey=D2 hikey=E2 pitch_keycenter=D#2
+<region> sample=F#2v16.wav lokey=F2 hikey=G2 pitch_keycenter=F#2
+<region> sample=A2v16.wav lokey=G#2 hikey=A#2 pitch_keycenter=A2
+<region> sample=C3v16.wav lokey=B2 hikey=C#3 pitch_keycenter=C3
+<region> sample=D#3v16.wav lokey=D3 hikey=E3 pitch_keycenter=D#3
+<region> sample=F#3v16.wav lokey=F3 hikey=G3 pitch_keycenter=F#3
+<region> sample=A3v16.wav lokey=G#3 hikey=A#3 pitch_keycenter=A3
+<region> sample=C4v16.wav lokey=B3 hikey=C#4  pitch_keycenter=C4
+<region> sample=D#4v16.wav lokey=D4 hikey=E4 pitch_keycenter=D#4
+<region> sample=F#4v16.wav lokey=F4 hikey=G4 pitch_keycenter=F#4
+<region> sample=A4v16.wav lokey=G#4 hikey=A#4 pitch_keycenter=A4
+<region> sample=C5v16.wav lokey=B4 hikey=C#5 pitch_keycenter=C5
+<region> sample=D#5v16.wav lokey=D5 hikey=E5 pitch_keycenter=D#5
+<region> sample=F#5v16.wav lokey=F5 hikey=G5 pitch_keycenter=F#5
+<region> sample=A5v16.wav lokey=G#5 hikey=A#5 pitch_keycenter=A5
+<region> sample=C6v16.wav lokey=B5 hikey=C#6 pitch_keycenter=C6
+<region> sample=D#6v16.wav lokey=D6 hikey=E6 pitch_keycenter=D#6
+
+
+// HI VELOCITY WITHOUT DAMPERS
+<group>
+amp_veltrack=73
+ampeg_release=5
+xf_velcurve=gain
+xfin_lovel=67
+xfin_hivel=119
+
+<region> sample=F#6v16.wav lokey=F6 hikey=G6 pitch_keycenter=F#6
+<region> sample=A6v16.wav lokey=G#6 hikey=A#6 pitch_keycenter=A6
+<region> sample=C7v16.wav lokey=B6 hikey=C#7 pitch_keycenter=C7
+<region> sample=D#7v16.wav lokey=D7 hikey=E7 pitch_keycenter=D#7
+<region> sample=F#7v16.wav lokey=F7 hikey=G7 pitch_keycenter=F#7
+<region> sample=A7v16.wav lokey=G#7 hikey=A#7 pitch_keycenter=A7
+<region> sample=C8v16.wav lokey=B7 hikey=C8 pitch_keycenter=C8
+
+//Release string resonances
+<group> trigger=release volume=-4 amp_veltrack=94 rt_decay=6
+
+<region> sample=harmLA0.wav lokey=G#0 hikey=A#0 lovel=45 pitch_keycenter=A0
+<region> sample=harmLC1.wav lokey=B0 hikey=C#1 lovel=45 pitch_keycenter=C1
+<region> sample=harmLD#1.wav lokey=D1 hikey=E1 lovel=45 pitch_keycenter=D#1
+//========================
+<group> trigger=release volume=-4 amp_veltrack=94 rt_decay=7
+
+<region> sample=harmLF#1.wav lokey=F1 hikey=G1 lovel=45 pitch_keycenter=F#1
+<region> sample=harmLA1.wav lokey=G#1 hikey=A#1 lovel=45 pitch_keycenter=A1
+<region> sample=harmLC2.wav lokey=B1 hikey=C#2 lovel=45 pitch_keycenter=C2
+//========================
+<group> trigger=release volume=-4 amp_veltrack=90 rt_decay=8
+
+<region> sample=harmLD#2.wav lokey=D2 hikey=E2 lovel=45 pitch_keycenter=D#2
+<region> sample=harmLF#2.wav lokey=F2 hikey=G2 lovel=45 pitch_keycenter=F#2
+<region> sample=harmLA2.wav lokey=G#2 hikey=A#2 lovel=45 pitch_keycenter=A2
+<region> sample=harmLC3.wav lokey=B2 hikey=C#3 lovel=45 pitch_keycenter=C3
+//========================
+<group> trigger=release volume=-4 amp_veltrack=90 rt_decay=9
+
+<region> sample=harmLD#3.wav lokey=D3 hikey=E3 lovel=45 pitch_keycenter=D#3
+<region> sample=harmLF#3.wav lokey=F3 hikey=G3 lovel=45 pitch_keycenter=F#3
+<region> sample=harmLA3.wav lokey=G#3 hikey=A#3 lovel=45 pitch_keycenter=A3
+<region> sample=harmLC4.wav lokey=B3 hikey=C#4 lovel=45 pitch_keycenter=C4
+<region> sample=harmLD#4.wav lokey=D4 hikey=E4 lovel=45 pitch_keycenter=D#4
+<region> sample=harmLF#4.wav lokey=F4 hikey=G4 lovel=45 pitch_keycenter=F#4
+<region> sample=harmLA4.wav lokey=G#4 hikey=A#4 lovel=45 pitch_keycenter=A4
+<region> sample=harmLC5.wav lokey=B4 hikey=C#5 lovel=45 pitch_keycenter=C5
+<region> sample=harmLD#5.wav lokey=D5 hikey=E5 lovel=45 pitch_keycenter=D#5
+<region> sample=harmLF#5.wav lokey=F5 hikey=G5 lovel=45 pitch_keycenter=F#5
+<region> sample=harmLA5.wav lokey=G#5 hikey=A#5 lovel=45 pitch_keycenter=A5
+<region> sample=harmLC6.wav lokey=B5 hikey=C#6 lovel=45 pitch_keycenter=C6
+<region> sample=harmLD#6.wav lokey=D6 hikey=E6 lovel=45 pitch_keycenter=D#6
+//========================
+<group> trigger=release amp_veltrack=95 rt_decay=7
+
+<region> sample=harmSA0.wav lokey=G#0 hikey=A#0 hivel=44 pitch_keycenter=A0
+<region> sample=harmSC1.wav lokey=B0 hikey=C#1 hivel=44 pitch_keycenter=C1
+<region> sample=harmSD#1.wav lokey=D1 hikey=E1 hivel=44 pitch_keycenter=D#1
+<region> sample=harmSF#1.wav lokey=F1 hikey=G1 hivel=44 pitch_keycenter=F#1
+<region> sample=harmSA1.wav lokey=G#1 hikey=A#1 hivel=44 pitch_keycenter=A1
+<region> sample=harmSC2.wav lokey=B1 hikey=C#2 hivel=44 pitch_keycenter=C2
+<region> sample=harmSD#2.wav lokey=D2 hikey=E2 hivel=44 pitch_keycenter=D#2
+<region> sample=harmSF#2.wav lokey=F2 hikey=G2 hivel=44 pitch_keycenter=F#2
+//=======================
+<group> trigger=release amp_veltrack=90 rt_decay=7
+
+<region> sample=harmSA2.wav lokey=G#2 hikey=A#2 hivel=44 pitch_keycenter=A2
+<region> sample=harmSC3.wav lokey=B2 hikey=C#3 hivel=44 pitch_keycenter=C3
+<region> sample=harmSD#3.wav lokey=D3 hikey=E3 hivel=44 pitch_keycenter=D#3
+<region> sample=harmSF#3.wav lokey=F3 hikey=G3 hivel=44 pitch_keycenter=F#3
+<region> sample=harmSA3.wav lokey=G#3 hikey=A#3 hivel=44 pitch_keycenter=A3
+<region> sample=harmSC4.wav lokey=B3 hikey=C#4 hivel=44 pitch_keycenter=C4
+<region> sample=harmSD#4.wav lokey=D4 hikey=E4 hivel=44 pitch_keycenter=D#4
+<region> sample=harmSF#4.wav lokey=F4 hikey=G4 hivel=44 pitch_keycenter=F#4
+<region> sample=harmSA4.wav lokey=G#4 hikey=A#4 hivel=44 pitch_keycenter=A4
+<region> sample=harmSC5.wav lokey=B4 hikey=C#5 hivel=44 pitch_keycenter=C5
+<region> sample=harmSD#5.wav lokey=D5 hikey=E5 hivel=44 pitch_keycenter=D#5
+<region> sample=harmSF#5.wav lokey=F5 hikey=G5 hivel=44 pitch_keycenter=F#5
+<region> sample=harmSA5.wav lokey=G#5 hikey=A#5 hivel=44 pitch_keycenter=A5
+<region> sample=harmSC6.wav lokey=B5 hikey=C#6 hivel=44 pitch_keycenter=C6
+<region> sample=harmSD#6.wav lokey=D6 hikey=E6 hivel=44 pitch_keycenter=D#6
+//========================
+<group> trigger=release amp_veltrack=96 rt_decay=2
+
+<region> sample=harmV3A0.wav lokey=G#0 hikey=A#0 pitch_keycenter=A0
+<region> sample=harmV3C1.wav lokey=B0 hikey=C#1 pitch_keycenter=C1
+<region> sample=harmV3D#1.wav lokey=D1 hikey=E1 pitch_keycenter=D#1
+<region> sample=harmV3F#1.wav lokey=F1 hikey=G1 pitch_keycenter=F#1
+<region> sample=harmV3A1.wav lokey=G#1 hikey=A#1 pitch_keycenter=A1
+<region> sample=harmV3C2.wav lokey=B1 hikey=C#2 pitch_keycenter=C2
+<region> sample=harmV3D#2.wav lokey=D2 hikey=E2 pitch_keycenter=D#2
+<region> sample=harmV3F#2.wav lokey=F2 hikey=G2 pitch_keycenter=F#2
+<region> sample=harmV3A2.wav lokey=G#2 hikey=A#2 pitch_keycenter=A2
+<region> sample=harmV3C3.wav lokey=B2 hikey=C#3 pitch_keycenter=C3
+<region> sample=harmV3D#3.wav lokey=D3 hikey=E3 pitch_keycenter=D#3
+<region> sample=harmV3F#3.wav lokey=F3 hikey=G3 pitch_keycenter=F#3
+<region> sample=harmV3A3.wav lokey=G#3 hikey=A#3 pitch_keycenter=A3
+<region> sample=harmV3C4.wav lokey=B3 hikey=C#4 pitch_keycenter=C4
+<region> sample=harmV3D#4.wav lokey=D4 hikey=E4 pitch_keycenter=D#4
+<region> sample=harmV3F#4.wav lokey=F4 hikey=G4 pitch_keycenter=F#4
+<region> sample=harmV3A4.wav lokey=G#4 hikey=A#4 pitch_keycenter=A4
+<region> sample=harmV3C5.wav lokey=B4 hikey=C#5 pitch_keycenter=C5
+<region> sample=harmV3D#5.wav lokey=D5 hikey=E5 pitch_keycenter=D#5
+<region> sample=harmV3F#5.wav lokey=F5 hikey=G5 pitch_keycenter=F#5
+<region> sample=harmV3A5.wav lokey=G#5 hikey=A#5 pitch_keycenter=A5
+<region> sample=harmV3C6.wav lokey=B5 hikey=C#6 pitch_keycenter=C6
+<region> sample=harmV3D#6.wav lokey=D6 hikey=E6 pitch_keycenter=D#6
+
+//======================
+//HammerNoise
+<group> trigger=release pitch_keytrack=C-1 volume=-37 amp_veltrack=82 rt_decay=2
+
+<region> sample=rel1.wav lokey=A0 hikey=A0
+<region> sample=rel2.wav lokey=A#0 hikey=A#0
+<region> sample=rel3.wav lokey=B0 hikey=B0
+<region> sample=rel4.wav lokey=C1 hikey=C1
+<region> sample=rel5.wav lokey=C#1 hikey=C#1
+<region> sample=rel6.wav lokey=D1 hikey=D1
+<region> sample=rel7.wav lokey=D#1 hikey=D#1
+<region> sample=rel8.wav lokey=E1 hikey=E1
+<region> sample=rel9.wav lokey=F1 hikey=F1
+<region> sample=rel10.wav lokey=F#1 hikey=F#1
+<region> sample=rel11.wav lokey=G1 hikey=G1
+<region> sample=rel12.wav lokey=G#1 hikey=G#1
+<region> sample=rel13.wav lokey=A1 hikey=A1
+<region> sample=rel14.wav lokey=A#1 hikey=A#1
+<region> sample=rel15.wav lokey=B1 hikey=B1
+<region> sample=rel16.wav lokey=C2 hikey=C2
+<region> sample=rel17.wav lokey=C#2 hikey=C#2
+<region> sample=rel18.wav lokey=D2 hikey=D2
+<region> sample=rel19.wav lokey=D#2 hikey=D#2
+<region> sample=rel20.wav lokey=E2 hikey=E2
+<region> sample=rel21.wav lokey=F2 hikey=F2
+<region> sample=rel22.wav lokey=F#2 hikey=F#2
+<region> sample=rel23.wav lokey=G2 hikey=G2
+<region> sample=rel24.wav lokey=G#2 hikey=G#2
+<region> sample=rel25.wav lokey=A2 hikey=A2
+<region> sample=rel26.wav lokey=A#2 hikey=A#2
+<region> sample=rel27.wav lokey=B2 hikey=B2
+<region> sample=rel28.wav lokey=C3 hikey=C3
+<region> sample=rel29.wav lokey=C#3 hikey=C#3
+<region> sample=rel30.wav lokey=D3 hikey=D3
+<region> sample=rel31.wav lokey=D#3 hikey=D#3
+<region> sample=rel32.wav lokey=E3 hikey=E3
+<region> sample=rel33.wav lokey=F3 hikey=F3
+<region> sample=rel34.wav lokey=F#3 hikey=F#3
+<region> sample=rel35.wav lokey=G3 hikey=G3
+<region> sample=rel36.wav lokey=G#3 hikey=G#3
+<region> sample=rel37.wav lokey=A3 hikey=A3
+<region> sample=rel38.wav lokey=A#3 hikey=A#3
+<region> sample=rel39.wav lokey=B3 hikey=B3
+<region> sample=rel40.wav lokey=C4 hikey=C4
+<region> sample=rel41.wav lokey=C#4 hikey=C#4
+<region> sample=rel42.wav lokey=D4 hikey=D4
+<region> sample=rel43.wav lokey=D#4 hikey=D#4
+<region> sample=rel44.wav lokey=E4 hikey=E4
+<region> sample=rel45.wav lokey=F4 hikey=F4
+<region> sample=rel46.wav lokey=F#4 hikey=F#4
+<region> sample=rel47.wav lokey=G4 hikey=G4
+<region> sample=rel48.wav lokey=G#4 hikey=G#4
+<region> sample=rel49.wav lokey=A4 hikey=A4
+<region> sample=rel50.wav lokey=A#4 hikey=A#4
+<region> sample=rel51.wav lokey=B4 hikey=B4
+<region> sample=rel52.wav lokey=C5 hikey=C5
+<region> sample=rel53.wav lokey=C#5 hikey=C#5
+<region> sample=rel54.wav lokey=D5 hikey=D5
+<region> sample=rel55.wav lokey=D#5 hikey=D#5
+<region> sample=rel56.wav lokey=E5 hikey=E5
+<region> sample=rel57.wav lokey=F5 hikey=F5
+<region> sample=rel58.wav lokey=F#5 hikey=F#5
+<region> sample=rel59.wav lokey=G5 hikey=G5
+<region> sample=rel60.wav lokey=G#5 hikey=G#5
+<region> sample=rel61.wav lokey=A5 hikey=A5
+<region> sample=rel62.wav lokey=A#5 hikey=A#5
+<region> sample=rel63.wav lokey=B5 hikey=B5
+<region> sample=rel64.wav lokey=C6 hikey=C6
+<region> sample=rel65.wav lokey=C#6 hikey=C#6
+<region> sample=rel66.wav lokey=D6 hikey=D6
+<region> sample=rel67.wav lokey=D#6 hikey=D#6
+<region> sample=rel68.wav lokey=E6 hikey=E6
+<region> sample=rel69.wav lokey=F6 hikey=F6
+<region> sample=rel70.wav lokey=F#6 hikey=F#6
+<region> sample=rel71.wav lokey=G6 hikey=G6
+<region> sample=rel72.wav lokey=G#6 hikey=G#6
+<region> sample=rel73.wav lokey=A6 hikey=A6
+<region> sample=rel74.wav lokey=A#6 hikey=A#6
+<region> sample=rel75.wav lokey=B6 hikey=B6
+<region> sample=rel76.wav lokey=C7 hikey=C7
+<region> sample=rel77.wav lokey=C#7 hikey=C#7
+<region> sample=rel78.wav lokey=D7 hikey=D7
+<region> sample=rel79.wav lokey=D#7 hikey=D#7
+<region> sample=rel80.wav lokey=E7 hikey=E7
+<region> sample=rel81.wav lokey=F7 hikey=F7
+<region> sample=rel82.wav lokey=F#7 hikey=F#7
+<region> sample=rel83.wav lokey=G7 hikey=G7
+<region> sample=rel84.wav lokey=G#7 hikey=G#7
+<region> sample=rel85.wav lokey=A7 hikey=A7
+<region> sample=rel86.wav lokey=A#7 hikey=A#7
+<region> sample=rel87.wav lokey=B7 hikey=B7
+<region> sample=rel88.wav lokey=C8 hikey=C8
+//======================
+//pedalAction
+
+<group> group=1 hikey=B-2 lokey=B-2 on_locc64=126 on_hicc64=127 off_by=2 volume=-20
+
+<region> sample=pedalD1.wav lorand=0 hirand=0.5
+<region> sample=pedalD2.wav lorand=0.5 hirand=1
+
+<group> group=2 hikey=B-2 lokey=B-2 on_locc64=0 on_hicc64=1 volume=-19
+
+<region> sample=pedalU1.wav lorand=0 hirand=0.5
+<region> sample=pedalU2.wav lorand=0.5 hirand=1

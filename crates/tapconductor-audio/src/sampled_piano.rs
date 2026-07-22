@@ -9,17 +9,87 @@ use std::{
 const SOURCE_RATE: u32 = 44_100;
 const VELOCITIES: usize = 128;
 const PITCHES: usize = 128;
-const SILENT_REGION: Region = Region {
+const LAYERS_PER_VELOCITY: usize = 2;
+const SILENT_LAYER: LayerRegion = LayerRegion {
     sample: u16::MAX,
     key_center: 60,
     release_seconds: 1,
+    gain: 0.0,
 };
 
 #[derive(Clone, Copy, Debug)]
-struct Region {
+struct LayerRegion {
     sample: u16,
     key_center: u8,
     release_seconds: u8,
+    gain: f32,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct VelocityRegion {
+    layers: [LayerRegion; LAYERS_PER_VELOCITY],
+}
+
+const SILENT_REGION: VelocityRegion = VelocityRegion {
+    layers: [SILENT_LAYER; LAYERS_PER_VELOCITY],
+};
+
+#[derive(Clone, Copy, Debug)]
+struct GroupSettings {
+    release_seconds: u8,
+    fade_in: Option<(u8, u8)>,
+    fade_out: Option<(u8, u8)>,
+}
+
+impl Default for GroupSettings {
+    fn default() -> Self {
+        Self {
+            release_seconds: 1,
+            fade_in: None,
+            fade_out: None,
+        }
+    }
+}
+
+impl GroupSettings {
+    fn update(&mut self, line: &str) {
+        if let Some(value) = opcode(line, "ampeg_release") {
+            self.release_seconds =
+                value.parse::<f32>().unwrap_or(1.0).round().clamp(1.0, 10.0) as u8;
+        }
+        if let Some(low) = opcode(line, "xfin_lovel").and_then(|value| value.parse().ok()) {
+            self.fade_in.get_or_insert((0, 127)).0 = low;
+        }
+        if let Some(high) = opcode(line, "xfin_hivel").and_then(|value| value.parse().ok()) {
+            self.fade_in.get_or_insert((0, 127)).1 = high;
+        }
+        if let Some(low) = opcode(line, "xfout_lovel").and_then(|value| value.parse().ok()) {
+            self.fade_out.get_or_insert((0, 127)).0 = low;
+        }
+        if let Some(high) = opcode(line, "xfout_hivel").and_then(|value| value.parse().ok()) {
+            self.fade_out.get_or_insert((0, 127)).1 = high;
+        }
+    }
+
+    fn gain_at(self, velocity: u8) -> f32 {
+        fn rising(value: u8, low: u8, high: u8) -> f32 {
+            if value <= low {
+                0.0
+            } else if value >= high || high <= low {
+                1.0
+            } else {
+                f32::from(value - low) / f32::from(high - low)
+            }
+        }
+        let mut gain = 1.0;
+        if let Some((low, high)) = self.fade_in {
+            gain *= rising(velocity, low, high);
+        }
+        if let Some((low, high)) = self.fade_out {
+            gain *= 1.0 - rising(velocity, low, high);
+        }
+        gain
+    }
 }
 
 #[derive(Debug)]
@@ -39,26 +109,27 @@ impl PcmSample {
     }
 }
 
-/// Fully decoded/indexed Salamander note bank. WAV bytes remain 16-bit PCM so
-/// the high-quality 16-layer instrument occupies about 1.17 GiB rather than
-/// twice that amount as `f32`. Loading and validation happen off the callback.
+/// Fully decoded/indexed Slender Salamander note bank. WAV bytes remain 16-bit
+/// PCM and the phase-aligned velocity crossfades are compiled into lookup
+/// tables before the audio callback starts.
 #[derive(Debug)]
 pub struct SalamanderBank {
     samples: Vec<PcmSample>,
-    regions: Box<[Region; PITCHES * VELOCITIES]>,
+    regions: Box<[VelocityRegion; PITCHES * VELOCITIES]>,
     pcm_bytes: u64,
 }
 
 impl SalamanderBank {
     pub fn load(directory: impl AsRef<Path>) -> Result<Self, SalamanderLoadError> {
         let directory = directory.as_ref();
-        let sfz_path = directory.join("SalamanderGrandPianoV3.sfz");
+        let sfz_path = directory.join("SlenderSalamanderGrandPiano.sfz");
         let sfz = fs::read_to_string(&sfz_path)
             .map_err(|error| SalamanderLoadError::io(&sfz_path, error))?;
         let mut regions = Box::new([SILENT_REGION; PITCHES * VELOCITIES]);
-        let mut samples = Vec::with_capacity(480);
-        let mut sample_indices = HashMap::<PathBuf, u16>::with_capacity(480);
-        let mut release_seconds = 1u8;
+        let mut samples = Vec::with_capacity(90);
+        let mut sample_indices = HashMap::<PathBuf, u16>::with_capacity(90);
+        let mut group = GroupSettings::default();
+        let mut default_path = PathBuf::new();
 
         for line in sfz.lines() {
             let line = line.trim();
@@ -66,20 +137,24 @@ impl SalamanderBank {
                 break;
             }
             if line.starts_with("<group>") {
-                if let Some(value) = opcode(line, "ampeg_release") {
-                    release_seconds =
-                        value.parse::<f32>().unwrap_or(1.0).round().clamp(1.0, 10.0) as u8;
-                }
+                group = GroupSettings::default();
+                group.update(line);
                 continue;
             }
             if !line.starts_with("<region>") {
+                if let Some(path) = opcode(line, "default_path") {
+                    default_path = PathBuf::from(path.replace('\\', "/"));
+                }
+                group.update(line);
                 continue;
             }
 
             let relative = opcode(line, "sample").ok_or_else(|| {
                 SalamanderLoadError::InvalidSfz("note region has no sample opcode".to_owned())
             })?;
-            let sample_path = directory.join(relative.replace('\\', "/"));
+            let sample_path = directory
+                .join(&default_path)
+                .join(relative.replace('\\', "/"));
             let sample_index = if let Some(index) = sample_indices.get(&sample_path) {
                 *index
             } else {
@@ -89,24 +164,39 @@ impl SalamanderBank {
                 sample_indices.insert(sample_path, index);
                 index
             };
-            let low_key = parse_u8(line, "lokey", 0)?;
-            let high_key = parse_u8(line, "hikey", 127)?;
+            let low_key = parse_key(line, "lokey", 0)?;
+            let high_key = parse_key(line, "hikey", 127)?;
             let low_velocity = parse_u8(line, "lovel", 1)?;
             let high_velocity = parse_u8(line, "hivel", 127)?;
-            let key_center = parse_u8(line, "pitch_keycenter", 60)?;
+            let key_center = parse_key(line, "pitch_keycenter", 60)?;
             for pitch in low_key..=high_key {
                 for velocity in low_velocity..=high_velocity {
-                    regions[pitch as usize * VELOCITIES + velocity as usize] = Region {
+                    let gain = group.gain_at(velocity);
+                    if gain <= 0.0 {
+                        continue;
+                    }
+                    let region = &mut regions[pitch as usize * VELOCITIES + velocity as usize];
+                    let slot = region
+                        .layers
+                        .iter_mut()
+                        .find(|layer| layer.sample == u16::MAX)
+                        .ok_or_else(|| {
+                            SalamanderLoadError::InvalidSfz(format!(
+                                "more than {LAYERS_PER_VELOCITY} layers at pitch {pitch}, velocity {velocity}"
+                            ))
+                        })?;
+                    *slot = LayerRegion {
                         sample: sample_index,
                         key_center,
-                        release_seconds,
+                        release_seconds: group.release_seconds,
+                        gain,
                     };
                 }
             }
         }
 
         for pitch in 21usize..=108 {
-            if regions[pitch * VELOCITIES + 64].sample == u16::MAX {
+            if regions[pitch * VELOCITIES + 64].layers[0].sample == u16::MAX {
                 return Err(SalamanderLoadError::InvalidSfz(format!(
                     "no playable region for MIDI pitch {pitch}"
                 )));
@@ -135,11 +225,11 @@ impl SalamanderBank {
         self.samples.len()
     }
 
-    fn region(&self, pitch: u8, velocity: u8) -> Option<Region> {
+    fn region(&self, pitch: u8, velocity: u8) -> Option<VelocityRegion> {
         let pitch = pitch.clamp(21, 108) as usize;
         let velocity = velocity.max(1) as usize;
         let region = self.regions[pitch * VELOCITIES + velocity];
-        (region.sample != u16::MAX).then_some(region)
+        (region.layers[0].sample != u16::MAX).then_some(region)
     }
 }
 
@@ -153,6 +243,48 @@ fn parse_u8(line: &str, name: &str, default: u8) -> Result<u8, SalamanderLoadErr
         value
             .parse::<u8>()
             .map_err(|_| SalamanderLoadError::InvalidSfz(format!("invalid {name} value `{value}`")))
+    })
+}
+
+fn parse_key(line: &str, name: &str, default: u8) -> Result<u8, SalamanderLoadError> {
+    let Some(value) = opcode(line, name) else {
+        return Ok(default);
+    };
+    if let Ok(number) = value.parse::<u8>() {
+        return Ok(number);
+    }
+    let split = value
+        .char_indices()
+        .find(|(_, character)| character.is_ascii_digit() || *character == '-')
+        .map(|(index, _)| index)
+        .ok_or_else(|| {
+            SalamanderLoadError::InvalidSfz(format!("invalid {name} value `{value}`"))
+        })?;
+    let (note, octave) = value.split_at(split);
+    let semitone = match note {
+        "C" => 0,
+        "C#" | "Db" => 1,
+        "D" => 2,
+        "D#" | "Eb" => 3,
+        "E" => 4,
+        "F" => 5,
+        "F#" | "Gb" => 6,
+        "G" => 7,
+        "G#" | "Ab" => 8,
+        "A" => 9,
+        "A#" | "Bb" => 10,
+        "B" => 11,
+        _ => {
+            return Err(SalamanderLoadError::InvalidSfz(format!(
+                "invalid {name} value `{value}`"
+            )));
+        }
+    };
+    let octave = octave
+        .parse::<i16>()
+        .map_err(|_| SalamanderLoadError::InvalidSfz(format!("invalid {name} value `{value}`")))?;
+    u8::try_from((octave + 1) * 12 + semitone).map_err(|_| {
+        SalamanderLoadError::InvalidSfz(format!("out-of-range {name} value `{value}`"))
     })
 }
 
@@ -242,7 +374,7 @@ impl Voice {
     };
 }
 
-/// Allocation-free, memory-resident player for Salamander Grand Piano V3.
+/// Allocation-free, memory-resident player for Slender Salamander Grand Piano.
 pub struct SampledPiano<const VOICES: usize = 128> {
     bank: Arc<SalamanderBank>,
     voices: [Voice; VOICES],
@@ -310,24 +442,36 @@ impl<const VOICES: usize> Sampler for SampledPiano<VOICES> {
         let Some(region) = self.bank.region(pitch, midi_velocity) else {
             return VoiceStart::Rejected;
         };
-        let (index, stole) = self.allocate_voice();
         let velocity_gain = 0.55 + 0.45 * (f32::from(midi_velocity) / 127.0);
-        self.voices[index] = Voice {
-            active: true,
-            released: false,
-            group,
-            sample: region.sample,
-            position: 0.0,
-            step: self.pitch_steps[pitch as usize][region.key_center as usize],
-            gain: velocity_gain,
-            release_decay: self.release_decays[region.release_seconds as usize],
-            age: self.next_age,
-        };
-        self.next_age = self.next_age.wrapping_add(1);
-        if stole {
+        let mut started = false;
+        let mut stole_any = false;
+        for layer in region
+            .layers
+            .into_iter()
+            .filter(|layer| layer.sample != u16::MAX && layer.gain > 0.0)
+        {
+            let (index, stole) = self.allocate_voice();
+            self.voices[index] = Voice {
+                active: true,
+                released: false,
+                group,
+                sample: layer.sample,
+                position: 0.0,
+                step: self.pitch_steps[pitch as usize][layer.key_center as usize],
+                gain: velocity_gain * layer.gain,
+                release_decay: self.release_decays[layer.release_seconds as usize],
+                age: self.next_age,
+            };
+            self.next_age = self.next_age.wrapping_add(1);
+            started = true;
+            stole_any |= stole;
+        }
+        if stole_any {
             VoiceStart::StoleOlderVoice
-        } else {
+        } else if started {
             VoiceStart::Started
+        } else {
+            VoiceStart::Rejected
         }
     }
 
@@ -492,14 +636,15 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "loads the 1.2 GB licensed sample asset"]
+    #[ignore = "loads the 238 MB licensed sample asset"]
     fn bundled_salamander_bank_loads_and_renders() {
         let directory = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
-            .join("assets/SalamanderGrandPianoV3_44.1khz16bit");
+            .join("assets/SlenderSalamander44khz16bit");
         let bank = Arc::new(SalamanderBank::load(directory).unwrap());
-        assert_eq!(bank.sample_count(), 480);
-        assert!(bank.pcm_bytes() > 1_100_000_000);
+        assert_eq!(bank.sample_count(), 90);
+        assert!(bank.pcm_bytes() > 200_000_000);
+        assert!(bank.pcm_bytes() < 220_000_000);
         let mut piano = SampledPiano::<16>::new(bank, 44_100).unwrap();
         assert_eq!(
             piano.note_on(VoiceGroupId(1), 60, u16::MAX),
@@ -508,6 +653,11 @@ mod tests {
         let mut output = [0.0; 512];
         piano.render(&mut output, 2);
         assert!(output.iter().any(|sample| *sample != 0.0));
+
+        piano.panic();
+        piano.note_on(VoiceGroupId(1), 60, 15_500);
+        assert_eq!(piano.active_voice_count(), 2);
+        piano.panic();
 
         for (index, pitch) in [48, 52, 55, 60, 64, 67, 72, 76, 79, 84]
             .into_iter()
@@ -521,5 +671,20 @@ mod tests {
         let elapsed = started.elapsed();
         eprintln!("rendered five seconds of an 11-note texture in {elapsed:?}");
         assert!(elapsed.as_secs_f32() < 5.0);
+    }
+
+    #[test]
+    fn parses_named_sfz_keys_and_crossfade_gains() {
+        assert_eq!(parse_key("lokey=C4", "lokey", 0).unwrap(), 60);
+        assert_eq!(parse_key("lokey=A0", "lokey", 0).unwrap(), 21);
+        assert_eq!(parse_key("lokey=C-1", "lokey", 0).unwrap(), 0);
+        let settings = GroupSettings {
+            release_seconds: 1,
+            fade_in: Some((8, 59)),
+            fade_out: None,
+        };
+        assert_eq!(settings.gain_at(8), 0.0);
+        assert_eq!(settings.gain_at(59), 1.0);
+        assert!(settings.gain_at(30) > 0.0 && settings.gain_at(30) < 1.0);
     }
 }

@@ -6,19 +6,20 @@ transitive dependencies remain subject to their own licenses. The lockfiles are 
 inventory for a particular source build. Release engineering should generate and retain a complete
 SBOM/license report for every distributed binary.
 
-## Salamander Grand Piano V3
+## Slender Salamander Grand Piano
 
-TapConductor bundles the 44.1 kHz, 16-bit edition of **Salamander Grand Piano V3**, a sampled
-Yamaha C5 recorded by Alexander Holm. Copyright Alexander Holm. The samples and SFZ mappings are
-licensed under the [Creative Commons Attribution 3.0 Unported license](https://creativecommons.org/licenses/by/3.0/).
-The unmodified upstream instrument archive is distributed by FreePats/SFZ Instruments. TapConductor
-loads the original note samples and mapping data with its own native real-time player; it does not
-claim authorship of the recordings.
+TapConductor bundles the 44.1 kHz, 16-bit edition of **Slender Salamander Grand Piano**, Signal
+Experiments' phase-aligned, three-velocity-layer derivative of Salamander Grand Piano V3. The
+original Yamaha C5 recordings are by Alexander Holm; phase alignment and Slender SFZ mappings are
+by Signal Experiments. The instrument is licensed under the
+[Creative Commons Attribution 3.0 Unported license](https://creativecommons.org/licenses/by/3.0/).
+TapConductor loads the supplied note samples and crossfade mapping data with its own native
+real-time player; it does not claim authorship of the recordings or derivative sample work.
 
 Source and instrument information:
 
-- <https://sfzinstruments.github.io/pianos/salamander/>
-- <https://freepats.zenvoid.org/Piano/SalamanderGrandPiano/>
+- <https://sig-ex.com/2017/11/11/slender-salmander-grand-piano/>
+- <https://musical-artifacts.com/artifacts/534>
 
 The small procedural piano remains part of TapConductor as a recovery instrument if the sampled
 asset is missing or cannot be loaded.

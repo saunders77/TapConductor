@@ -33,7 +33,7 @@
     "active": true,
     "targets": ["nsis", "msi"],
     "resources": {
-      "../assets/SalamanderGrandPianoV3_44.1khz16bit": "instruments/salamander",
+      "../assets/SlenderSalamander44khz16bit": "instruments/salamander",
       "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
     },
     "category": "Music",

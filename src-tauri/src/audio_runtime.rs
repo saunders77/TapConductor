@@ -46,7 +46,7 @@ impl AudioManager {
             Some(directory) => match SalamanderBank::load(directory) {
                 Ok(bank) => {
                     let message = format!(
-                        "Salamander Grand Piano V3 loaded: {} samples, {:.1} MiB PCM.",
+                        "Slender Salamander Grand Piano loaded: {} samples, {:.1} MiB PCM.",
                         bank.sample_count(),
                         bank.pcm_bytes() as f64 / (1024.0 * 1024.0),
                     );
@@ -55,13 +55,16 @@ impl AudioManager {
                 Err(error) => (
                     None,
                     Some(format!(
-                        "Salamander Grand Piano could not be loaded; using the procedural fallback: {error}"
+                        "Slender Salamander could not be loaded; using the procedural fallback: {error}"
                     )),
                 ),
             },
             None => (
                 None,
-                Some("Salamander Grand Piano asset path is unavailable; using the procedural fallback.".to_owned()),
+                Some(
+                    "Slender Salamander asset path is unavailable; using the procedural fallback."
+                        .to_owned(),
+                ),
             ),
         };
         let mut manager = Self {

@@ -92,10 +92,13 @@ app.innerHTML = `
             <div class="empty-score" aria-hidden="true">
               <span>𝄞</span><i></i><i></i><i></i><i></i><i></i>
             </div>
-            <h1>Put the score under your fingers.</h1>
-            <p>Open MusicXML, compressed MXL, or MIDI. Every tap plays the next written note or chord.</p>
+            <h1>Play sheet music by tapping.</h1>
+            <p>Open your sheet music score in TapConductor using any of these file formats: <b>.musicxml</b>, <b>.xml</b>, <b>.mxl</b>, <b>.mid</b>, <b>.midi</b>.</p>
+            <p>If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read.
+            <p>If you only have a PDF, you can use a converter program to create a file TapConductor can read (such as Audiveris or MuseScore).</p>
             <button id="empty-open" class="primary-button large" type="button">Open a score</button>
-            <small>Space, Enter, mouse, or a MIDI keyboard can conduct.</small>
+            <small>Every tap plays the next written note or chord. You can also connect a piano or other MIDI instruments and control dynamics.</small>
+            <small>Use any keyboard keys, mouse, tapping the touchscreen, or MIDI</small>
           </div>
           <div id="score-stage" class="score-stage hidden">
             <div id="score-targets" class="score-targets"></div>
@@ -113,8 +116,9 @@ app.innerHTML = `
         <button id="back-button" class="transport" type="button" disabled aria-label="Previous event">‹</button>
         <button id="tap-button" class="tap-button" type="button" disabled>
           <span>TAP</span>
-          <small>Or tap any keyboard key.</small>
+          <small>Tap <b>any key A-Z</b> to play.</small>
           <small>Hold for longer notes.</small>
+          <small><b>Spacebar</b> to replay a chord.</small>
         </button>
         <button id="forward-button" class="transport" type="button" disabled aria-label="Next event">›</button>
         <div class="next-readout">
@@ -206,6 +210,7 @@ function ensureBottomControls(): void {
 let score: LoadedScore | null = null;
 let cursorIndex = 0;
 let highlightIndex = 0;
+let mostRecentChordIndex: number | null = null;
 let zoom = 0.9;
 const ZOOM_STEPS = [50, 75, 90, 100, 110, 125, 150, 175];
 let osmd: OpenSheetMusicDisplay | null = null;
@@ -554,6 +559,7 @@ async function displayScore(loaded: LoadedScore, preserved?: ScoreViewState): Pr
   measureHorizontalPositions = new Map();
   cursorIndex = preserveView ? Math.min(preservedCursor, Math.max(0, loaded.events.length - 1)) : 0;
   highlightIndex = cursorIndex;
+  mostRecentChordIndex = null;
   elements.empty.classList.add("hidden");
   elements.scoreStage.classList.remove("hidden");
   elements.tap.disabled = false;
@@ -1223,6 +1229,7 @@ async function installListeners(): Promise<void> {
       if (payload.type === "cursor") {
         cursorIndex = payload.index;
         highlightIndex = payload.playedIndex ?? payload.index;
+        if (payload.playedIndex !== undefined) mostRecentChordIndex = payload.playedIndex;
       }
       if (payload.type === "ended") toast("End of score", "info");
       updatePosition();
@@ -1277,7 +1284,6 @@ elements.forward.addEventListener("click", async () => {
 });
 
 const tapKeyCodes = new Set([
-  "Space",
   "Enter",
   "ShiftLeft",
   "ShiftRight",
@@ -1310,12 +1316,24 @@ document.addEventListener("keydown", (event) => {
     void invokeSafe("panic");
     return;
   }
+  if (event.code === "Space" && !event.repeat) {
+    event.preventDefault();
+    if (mostRecentChordIndex !== null) {
+      void auditionDown("audition:key:Space", mostRecentChordIndex);
+    }
+    return;
+  }
   if (tapKeyCodes.has(event.code) && !event.repeat) {
     event.preventDefault();
     void performDown(`key:${event.code}`);
   }
 });
 document.addEventListener("keyup", (event) => {
+  if (event.code === "Space") {
+    event.preventDefault();
+    void performUp("audition:key:Space");
+    return;
+  }
   if (tapKeyCodes.has(event.code)) {
     event.preventDefault();
     void performUp(`key:${event.code}`);

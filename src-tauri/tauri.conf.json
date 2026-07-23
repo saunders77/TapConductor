@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build:bundle",
+    "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -34,7 +34,6 @@
     "targets": ["nsis", "msi"],
     "resources": {
       "../assets/SlenderSalamander44khz16bit": "instruments/salamander",
-      "../sidecars/audiveris": "audiveris",
       "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
     },
     "category": "Music",

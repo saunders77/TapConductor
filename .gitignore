@@ -6,8 +6,4 @@
 *.pdb
 *.log
 .DS_Store
-/sidecars/audiveris/runtime/
-/sidecars/audiveris/profile/
-/sidecars/audiveris/source/
-/sidecars/audiveris/BUNDLE-MANIFEST.json
-/.release-inputs/
+

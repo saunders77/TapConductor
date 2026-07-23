@@ -24,29 +24,6 @@ Source and instrument information:
 The small procedural piano remains part of TapConductor as a recovery instrument if the sampled
 asset is missing or cannot be loaded.
 
-## Audiveris optical music recognition sidecar
-
-Windows installers bundle **Audiveris 5.11.0** as a separate desktop application image, including
-the private Java runtime and native Tesseract/Leptonica components produced by Audiveris's official
-Windows distribution. Audiveris is licensed under the GNU Affero General Public License version 3.
-It is launched as an independent process; it is not linked into TapConductor. The two programs
-exchange file paths and `.mxl`/`.omr` files through Audiveris's documented command-line and plugin
-interfaces.
-
-The installer payload includes the exact Audiveris corresponding-source archive under
-`audiveris/source/`, the Audiveris license materials carried by the official application image, and
-a generated `BUNDLE-MANIFEST.json` recording SHA-256 hashes of the MSI, source archive, and bundled
-OCR language files. Audiveris source and license information are available from:
-
-- <https://github.com/Audiveris/audiveris/tree/5.11.0>
-- <https://github.com/Audiveris/audiveris/blob/5.11.0/LICENSE>
-- <https://audiveris.github.io/audiveris/>
-
-Tesseract OCR and its language data have their own Apache-2.0 license and notices in the Audiveris
-distribution/source materials. Release engineering must review every staged language file and the
-Audiveris transitive/native notices before distribution; the staging manifest is an inventory, not
-a substitute for those licenses.
-
 ## JavaScript/TypeScript direct dependencies
 
 | Package | Locked version | License |

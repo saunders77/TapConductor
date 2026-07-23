@@ -33,46 +33,50 @@ app.innerHTML = `
     </header>
 
     <section class="control-deck" aria-label="Performance controls">
-      <label class="field">
+      <label class="field" title="Choose the audio device that TapConductor plays through.">
         <span>Audio out</span>
         <select id="audio-output" aria-label="Audio output"><option>System default</option></select>
       </label>
-      <label class="field instrument-field">
+      <label class="field instrument-field" title="Choose the sound used for score playback.">
         <span>Instrument</span>
         <select id="instrument" aria-label="Instrument">
           <option value="piano">Grand piano</option>
           <option value="synth">Synthesizer</option>
         </select>
       </label>
-      <label class="field">
+      <label class="field" title="Choose a MIDI controller for conducting or direct play.">
         <span>MIDI in</span>
         <select id="midi-input" aria-label="MIDI input"><option value="">Off</option></select>
       </label>
-      <label class="field midi-output-field">
+      <label class="field midi-output-field" title="Choose a MIDI device to receive TapConductor's notes.">
         <span>MIDI out</span>
         <select id="midi-output" aria-label="MIDI output"><option value="">Off</option></select>
       </label>
-      <label class="field tap-mode-field">
+      <label class="field tap-mode-field" title="Choose whether each tap plays a written event or conducts whole beats.">
         <span>Tap mode</span>
         <select id="tap-mode" aria-label="Tap mode">
           <option value="rhythm">Rhythm Tap</option>
           <option value="beat">Beat Tap</option>
         </select>
       </label>
-        <label class="range-field">
+        <label class="range-field" title="Set the playback volume.">
         <span>Vol <output id="volume-value">100%</output></span>
         <input id="volume" type="range" min="0" max="100" value="100" />
       </label>
-      <label class="range-field delay-field">
+      <label class="range-field delay-field" title="Set the delay between notes when regular score chords are rolled.">
         <span>Roll <output id="regular-roll-value">0 ms</output></span>
         <input id="regular-roll" type="range" min="0" max="250" value="0" />
       </label>
-      <label class="range-field delay-field">
+      <label class="range-field delay-field" title="Set the delay between notes when auditioned chords are rolled.">
         <span>Chord <output id="audition-roll-value">120 ms</output></span>
         <input id="audition-roll" type="range" min="0" max="250" value="120" />
       </label>
-      <button id="parts-button" class="deck-button" type="button">Parts</button>
-        <button id="diagnostics-button" class="deck-button diagnostics-button" type="button" title="Audio diagnostics" aria-label="Audio diagnostics">⚙</button>
+      <button id="parts-button" class="field deck-menu-button" type="button" title="Choose which score parts TapConductor plays.">
+        <span>Parts</span><strong id="parts-value">—</strong>
+      </button>
+        <button id="diagnostics-button" class="field deck-menu-button diagnostics-button" type="button" title="View live audio and MIDI diagnostics." aria-label="Audio diagnostics">
+          <span>Diagnostics</span><strong id="diagnostics-value">Starting</strong>
+        </button>
         <button id="panic-button" class="panic-button" type="button" title="Play MIDI input directly" aria-label="Play MIDI input directly">■</button>
     </section>
 
@@ -87,7 +91,7 @@ app.innerHTML = `
       <section class="score-panel" aria-label="Musical score">
         <div class="score-toolbar">
           <div class="score-help">Tap to advance · <span aria-hidden="true">◖)</span> play single chord · <span aria-hidden="true">▼</span> start here · select a note to play it</div>
-          <div class="zoom-controls">
+          <div class="zoom-controls" title="Change the displayed score size.">
             <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
             <span class="zoom-label">Zoom</span><output id="zoom-value">90%</output>
             <button id="zoom-in" type="button" aria-label="Zoom in">＋</button>
@@ -168,9 +172,11 @@ const elements = {
   auditionRoll: byId<HTMLInputElement>("audition-roll"),
   auditionRollValue: byId<HTMLOutputElement>("audition-roll-value"),
   partsButton: byId<HTMLButtonElement>("parts-button"),
+  partsValue: byId<HTMLElement>("parts-value"),
   partsList: byId("parts-list"),
   partsPopover: byId("parts-popover"),
   diagnosticsButton: byId<HTMLButtonElement>("diagnostics-button"),
+  diagnosticsValue: byId<HTMLElement>("diagnostics-value"),
   diagnostics: byId("diagnostics-popover"),
   panic: byId<HTMLButtonElement>("panic-button"),
   empty: byId("empty-state"),
@@ -244,6 +250,45 @@ function updateMidiFreePlayButton(): void {
 }
 const pendingDowns = new Map<string, Promise<void>>();
 const DEFAULT_VELOCITY = 96;
+const MINIMUM_POINTER_NOTE_HOLD_MS = 250;
+type PointerHold = {
+  token: string;
+  releaseAt: Promise<number>;
+  released: boolean;
+};
+
+function rolledFinalOnsetDelay(noteCount: number, rollMs: number): number {
+  return Math.max(0, noteCount - 1) * Math.max(0, rollMs);
+}
+
+function createPointerHold(
+  token: string,
+  down: Promise<void>,
+  finalOnsetDelayMs: number,
+  minimumHoldMs = MINIMUM_POINTER_NOTE_HOLD_MS,
+): PointerHold {
+  return {
+    token,
+    releaseAt: down.then(() => performance.now() + finalOnsetDelayMs + minimumHoldMs),
+    released: false,
+  };
+}
+
+async function releasePointerHold(hold: PointerHold): Promise<void> {
+  if (hold.released) return;
+  hold.released = true;
+  try {
+    const releaseAt = await hold.releaseAt;
+    const remaining = releaseAt - performance.now();
+    if (remaining > 0) {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, remaining));
+    }
+  } catch {
+    // The down path already reported its error and removed the held token.
+  }
+  await performUp(hold.token);
+}
+
 type TapMode = "rhythm" | "beat";
 let tapMode: TapMode = "rhythm";
 let beatCountRequired = 0;
@@ -1024,17 +1069,23 @@ function installAuditionHandlers(
   resolveIndex: () => number,
   midiPitches?: number[],
 ): void {
-  let token: string | null = null;
+  const pointerHolds = new Map<number, PointerHold>();
   button.addEventListener("pointerdown", (event) => {
     event.preventDefault();
     event.stopPropagation();
-    token = `audition:${event.pointerId}:${crypto.randomUUID()}`;
+    const token = `audition:${event.pointerId}:${crypto.randomUUID()}`;
+    const index = resolveIndex();
+    const noteCount = midiPitches?.length ?? score?.events[index]?.notes.length ?? 1;
+    const finalOnsetDelayMs = rolledFinalOnsetDelay(noteCount, Number(elements.auditionRoll.value));
     button.setPointerCapture(event.pointerId);
-    void auditionDown(token, resolveIndex(), midiPitches);
+    const down = auditionDown(token, index, midiPitches);
+    pointerHolds.set(event.pointerId, createPointerHold(token, down, finalOnsetDelayMs));
   });
-  const release = (): void => {
-    if (token) void performUp(token);
-    token = null;
+  const release = (event: PointerEvent): void => {
+    const hold = pointerHolds.get(event.pointerId);
+    if (!hold) return;
+    pointerHolds.delete(event.pointerId);
+    void releasePointerHold(hold);
   };
   button.addEventListener("pointerup", release);
   button.addEventListener("pointercancel", release);
@@ -1115,6 +1166,10 @@ async function performUp(token: string): Promise<void> {
 
 function renderParts(): void {
   if (!score) return;
+  const enabledParts = score.parts.filter((part) => part.enabled).length;
+  elements.partsValue.textContent = enabledParts === score.parts.length
+    ? "All parts"
+    : `${enabledParts} of ${score.parts.length}`;
   elements.partsList.replaceChildren();
   score.parts.forEach((part) => {
     const label = document.createElement("label");
@@ -1179,6 +1234,7 @@ async function refreshDevices(): Promise<void> {
 
 function showDiagnostics(diagnostics: DiagnosticsDto): void {
   lastDiagnostics = diagnostics;
+  elements.diagnosticsValue.textContent = diagnostics.ready ? "Ready" : "Needs attention";
   const rows: Array<[string, string]> = [
     ["State", diagnostics.ready ? "Ready" : diagnostics.message ?? "Unavailable"],
     ["Backend", diagnostics.audioBackend],
@@ -1249,6 +1305,7 @@ async function refreshDiagnostics(): Promise<void> {
     elements.diagnosticsButton.classList.toggle("not-ready", !diagnostics.ready);
   } catch {
     elements.diagnosticsButton.classList.add("not-ready");
+    elements.diagnosticsValue.textContent = "Unavailable";
   }
 }
 
@@ -1285,15 +1342,29 @@ elements.panic.addEventListener("click", async () => {
   midiFreePlay = nextMode;
   updateMidiFreePlayButton();
 });
+const tapPointerHolds = new Map<number, PointerHold>();
 elements.tap.addEventListener("pointerdown", (event) => {
   elements.tap.setPointerCapture(event.pointerId);
-  void performDown(`pointer:${event.pointerId}`);
+  const token = `pointer:${event.pointerId}:${crypto.randomUUID()}`;
+  const noteCount = score?.events[cursorIndex]?.notes.length ?? 1;
+  const finalOnsetDelayMs = tapMode === "rhythm"
+    ? rolledFinalOnsetDelay(noteCount, Number(elements.regularRoll.value))
+    : 0;
+  const down = performDown(token);
+  tapPointerHolds.set(
+    event.pointerId,
+    createPointerHold(token, down, finalOnsetDelayMs, tapMode === "rhythm" ? MINIMUM_POINTER_NOTE_HOLD_MS : 0),
+  );
 });
-elements.tap.addEventListener("pointerup", (event) => void performUp(`pointer:${event.pointerId}`));
-elements.tap.addEventListener("pointercancel", (event) => void performUp(`pointer:${event.pointerId}`));
-elements.tap.addEventListener("lostpointercapture", (event) => {
-  if (event instanceof PointerEvent) void performUp(`pointer:${event.pointerId}`);
-});
+const releaseTapPointer = (event: PointerEvent): void => {
+  const hold = tapPointerHolds.get(event.pointerId);
+  if (!hold) return;
+  tapPointerHolds.delete(event.pointerId);
+  void releasePointerHold(hold);
+};
+elements.tap.addEventListener("pointerup", releaseTapPointer);
+elements.tap.addEventListener("pointercancel", releaseTapPointer);
+elements.tap.addEventListener("lostpointercapture", releaseTapPointer);
 elements.tap.addEventListener("click", (event) => {
   if (event.detail !== 0) return;
   const token = `tap-keyboard:${crypto.randomUUID()}`;

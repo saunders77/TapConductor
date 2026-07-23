@@ -29,6 +29,9 @@ app.innerHTML = `
       <button id="open-score" class="primary-button" type="button">
         <span aria-hidden="true">＋</span> Open score
       </button>
+      <button id="help-button" class="help-button" type="button" aria-haspopup="dialog" aria-controls="help-overlay" aria-expanded="false">
+        Help
+      </button>
       <div class="status-pill loading" id="status-pill"><span></span><b>Starting audio…</b></div>
     </header>
 
@@ -60,15 +63,15 @@ app.innerHTML = `
         </select>
       </label>
         <label class="range-field" title="Set the playback volume.">
-        <span>Vol <output id="volume-value">100%</output></span>
+        <span>Volume <output id="volume-value">100%</output></span>
         <input id="volume" type="range" min="0" max="100" value="100" />
       </label>
       <label class="range-field delay-field" title="Set the delay between notes when regular score chords are rolled.">
-        <span>Roll <output id="regular-roll-value">0 ms</output></span>
+        <span>Tap Roll <output id="regular-roll-value">0 ms</output></span>
         <input id="regular-roll" type="range" min="0" max="250" value="0" />
       </label>
       <label class="range-field delay-field" title="Set the delay between notes when auditioned chords are rolled.">
-        <span>Chord <output id="audition-roll-value">120 ms</output></span>
+        <span>Chord Roll <output id="audition-roll-value">120 ms</output></span>
         <input id="audition-roll" type="range" min="0" max="250" value="120" />
       </label>
       <button id="parts-button" class="field deck-menu-button" type="button" title="Choose which score parts TapConductor plays.">
@@ -87,6 +90,40 @@ app.innerHTML = `
 
     <aside id="diagnostics-popover" class="popover diagnostics hidden" aria-label="Audio diagnostics"></aside>
 
+    <div id="help-overlay" class="help-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <section class="help-card">
+        <div class="help-card-header">
+          <div><span class="help-kicker">TapConductor guide</span><h2 id="help-title">How to use TapConductor</h2></div>
+          <button id="help-close" class="help-close" type="button" aria-label="Close help">×</button>
+        </div>
+        <div class="help-content">
+          <section><h3>1. Open a score</h3><p>Select a MusicXML, compressed MusicXML, or MIDI file (file extensions .musicxml, .xml, .mxl, .mid, or .midi). If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read. If you only have a PDF, you can use a converter program to create a file TapConductor can read (such as Audiveris or MuseScore).</p></section>
+          <section><h3>2. Configure audio settings</h3>
+            <p>Use the Audio Out control to select the speakers or sound card to use. On Windows, options marked (ASIO) are better because latency is lower.</p>
+            <p>Choose an instrument, either the grand piano or a synthesizer.</p>
+            <p>If you want to control TapConductor with a piano or another MIDI instrument, then plug in the instrument and select it from the MIDI In menu. You'll still be able to tap using normal mouse and keyboard controls too. When you use a piano, TapConductor will use the dynamics you play for each note. You may need to restart TapConductor if you plugged in your instrument after opening it.</p>
+            <p>The MIDI OUT setting is only needed if you want to route your performance to another program for recording or further manipulation. For normal playing, it's not necessary.</p>
+            <p>By default, all staves (parts) will play during tapping, but you can select specific staves in the PARTS menu.</p>
+          </section>
+          <section><h3>3. Conduct the score</h3>
+            <p>Press the large <b>TAP</b> button, a supported keyboard key (A-Z, numbers, Shift, or punctuation), or your MIDI instrument/piano to play the next written note or chord, starting from the beginning. The location marker will automatically progress to the next note or chord. If you do nothing further, playing does not continue; every note waits for your tap. Hold down the control for longer notes. To play legato, use multiple fingers to hold keys down as you alternate between them. This mode is useful for rehearsals with a choir, performance, or recording. If you want each tap to roll each chord, you can use the ROLL slider at the bottom of the window. </p>
+            <p>If you don't want to play a note/chord on every tap, but you instead want to use the program for normal conducting, keeping a steady beat while the notes play, then switch from the Rhythm mode to the Beat mode in the TAP MODE menu. Then you'll need to start by counting in with taps, and each tap will be interpreted as one beat in the music.</p>
+            <p>The Stop button on the top right switches to a mode where TapConductor ignores your taps, except for MIDI IN, which it plays directly. Use this mode if you want to play on your piano as you would normally.</p>
+          </section>
+          <section><h3>4. Hear specific notes and chords</h3>
+            <p>Click a note on the score to hear it played at any time - the position indicator doesn't need to be on that note, and the click won't move the position indicator.</p>
+            <p>Use the speaker buttons above the score system to hear any chord at any time. It will play a rolled chord from bottom to top if there are multiple notes. You can configure how long time time between rolled notes is with the CHORD slider at the bottom.</p>
+          </section>   
+          <section><h3>5. Navigate</h3>
+            <p>Use the downward-pointing arrows above each score location to control the green location selector and choose where to start playing when you resume tapping. You can also use the left and right arrow keys to move the selector left and right.</p>
+            <p>The Spacebar replays the last chord, which can be useful in a rehearsal situation.</p>
+          </section>
+        
+        </div>
+        <button id="help-done" class="primary-button" type="button">Got it</button>
+      </section>
+    </div>
+
     <main class="workspace">
       <section class="score-panel" aria-label="Musical score">
         <div class="score-toolbar">
@@ -100,9 +137,6 @@ app.innerHTML = `
         </div>
         <div id="score-scroll" class="score-scroll">
           <div id="empty-state" class="empty-state">
-            <div class="empty-score" aria-hidden="true">
-              <span>𝄞</span><i></i><i></i><i></i><i></i><i></i>
-            </div>
             <h1>Play sheet music by tapping.</h1>
             <p>Open your sheet music score in TapConductor using any of these file formats: <b>.musicxml</b>, <b>.xml</b>, <b>.mxl</b>, <b>.mid</b>, <b>.midi</b>.</p>
             <p>If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read.
@@ -127,9 +161,9 @@ app.innerHTML = `
         <button id="back-button" class="transport" type="button" disabled aria-label="Previous event">‹</button>
         <button id="tap-button" class="tap-button" type="button" disabled>
           <span>TAP</span>
-          <small>Tap <b>any key A-Z</b> to play.</small>
+          <small>Tap <strong>any key A-Z</strong> to play.</small>
           <small>Hold for longer notes.</small>
-          <small><b>Spacebar</b> to replay a chord.</small>
+          <small><strong>Spacebar</strong> to replay a chord.</small>
         </button>
         <button id="forward-button" class="transport" type="button" disabled aria-label="Next event">›</button>
         <div class="next-readout">
@@ -158,6 +192,10 @@ const byId = <T extends HTMLElement>(id: string): T => {
 
 const elements = {
   open: byId<HTMLButtonElement>("open-score"),
+  helpButton: byId<HTMLButtonElement>("help-button"),
+  helpOverlay: byId("help-overlay"),
+  helpClose: byId<HTMLButtonElement>("help-close"),
+  helpDone: byId<HTMLButtonElement>("help-done"),
   emptyOpen: byId<HTMLButtonElement>("empty-open"),
   status: byId("status-pill"),
   audioOutput: byId<HTMLSelectElement>("audio-output"),
@@ -1336,6 +1374,24 @@ async function installListeners(): Promise<void> {
 
 elements.open.addEventListener("click", () => void chooseScore());
 elements.emptyOpen.addEventListener("click", () => void chooseScore());
+let helpPreviousFocus: HTMLElement | null = null;
+function closeHelp(): void {
+  elements.helpOverlay.classList.add("hidden");
+  elements.helpButton.setAttribute("aria-expanded", "false");
+  helpPreviousFocus?.focus();
+  helpPreviousFocus = null;
+}
+elements.helpButton.addEventListener("click", () => {
+  helpPreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  elements.helpOverlay.classList.remove("hidden");
+  elements.helpButton.setAttribute("aria-expanded", "true");
+  elements.helpClose.focus();
+});
+elements.helpClose.addEventListener("click", closeHelp);
+elements.helpDone.addEventListener("click", closeHelp);
+elements.helpOverlay.addEventListener("pointerdown", (event) => {
+  if (event.target === elements.helpOverlay) closeHelp();
+});
 elements.panic.addEventListener("click", async () => {
   const nextMode = !midiFreePlay;
   await invokeSafe("set_midi_free_play", { enabled: nextMode });
@@ -1419,6 +1475,10 @@ document.addEventListener("keydown", (event) => {
   }
   if (event.code === "Escape") {
     event.preventDefault();
+    if (!elements.helpOverlay.classList.contains("hidden")) {
+      closeHelp();
+      return;
+    }
     void invokeSafe("panic");
     return;
   }

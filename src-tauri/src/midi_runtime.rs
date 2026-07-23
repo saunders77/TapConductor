@@ -148,7 +148,16 @@ impl MidiManager {
             .map(|device| device.name)
             .ok_or_else(|| "The selected MIDI input is unavailable.".to_owned())?;
         let sender = self.input_action_sender.clone();
-        let mut mapper = MidiInputMapper::<256>::new(MidiInputConfig::default());
+        // In normal rhythm/free-play modes, keep a MIDI key's input token
+        // latched while CC64 sustain is down. The mapper emits its matching
+        // Up when the pedal is released, so the existing performance gate
+        // sustains the sounded score note (or direct MIDI note) without a
+        // separate audio-only pedal path. Beat mode only consumes note-down
+        // timing, so its tap behavior remains unchanged.
+        let mut mapper = MidiInputMapper::<256>::new(MidiInputConfig {
+            respect_sustain_pedal: true,
+            ..MidiInputConfig::default()
+        });
         let connection = self
             .backend
             .connect_input(

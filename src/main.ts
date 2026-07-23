@@ -1275,6 +1275,24 @@ elements.forward.addEventListener("click", async () => {
   if (tapMode === "beat") resetBeatTap();
 });
 
+const tapKeyCodes = new Set([
+  "Space",
+  "Enter",
+  "ShiftLeft",
+  "ShiftRight",
+  ...Array.from({ length: 26 }, (_, index) => `Key${String.fromCharCode(65 + index)}`),
+  ...Array.from({ length: 10 }, (_, index) => `Digit${index}`),
+  "Comma",
+  "Period",
+  "Semicolon",
+  "BracketLeft",
+  "BracketRight",
+  "Quote",
+  "Equal",
+  "Minus",
+  "Backquote",
+]);
+
 document.addEventListener("keydown", (event) => {
   if (event.code === "ArrowLeft") {
     event.preventDefault();
@@ -1291,13 +1309,13 @@ document.addEventListener("keydown", (event) => {
     void invokeSafe("panic");
     return;
   }
-  if ((event.code === "Space" || event.code === "Enter") && !event.repeat) {
+  if (tapKeyCodes.has(event.code) && !event.repeat) {
     event.preventDefault();
     void performDown(`key:${event.code}`);
   }
 });
 document.addEventListener("keyup", (event) => {
-  if (event.code === "Space" || event.code === "Enter") {
+  if (tapKeyCodes.has(event.code)) {
     event.preventDefault();
     void performUp(`key:${event.code}`);
   }

@@ -50,16 +50,6 @@ export interface LoadedScore {
   warnings: string[];
 }
 
-export interface OmrRecognition {
-  recognitionId: string;
-  suggestedFileName: string;
-}
-
-export interface OmrProject {
-  omrPath: string;
-  musicXmlPath: string;
-}
-
 export interface DeviceDto {
   id: string;
   name: string;

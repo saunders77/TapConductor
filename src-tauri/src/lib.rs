@@ -3,7 +3,6 @@ mod commands;
 mod core;
 mod dto;
 mod midi_runtime;
-mod omr;
 mod session;
 
 use crate::{core::AppCore, midi_runtime::MidiInputAction};
@@ -12,11 +11,6 @@ use tauri::{Emitter, Manager};
 
 pub struct AppState {
     core: Mutex<AppCore>,
-    omr: Mutex<omr::OmrManager>,
-}
-
-pub fn handle_omr_export_callback() -> bool {
-    omr::handle_export_callback_arguments(std::env::args_os())
 }
 
 pub fn run() {
@@ -50,25 +44,14 @@ pub fn run() {
             commands::set_midi_input,
             commands::set_midi_output,
             commands::diagnostics,
-            omr::omr_available,
-            omr::recognize_pdf,
-            omr::finish_omr_recognition,
-            omr::discard_omr_recognition,
-            omr::review_recognition,
-            omr::omr_project_for_score,
-            omr::poll_omr_export,
         ])
         .setup(move |app| {
             let resource_dir = app.path().resource_dir()?;
-            let app_local_data_dir = app.path().app_local_data_dir()?;
             let salamander_directory = resource_dir.join("instruments").join("salamander");
             let core = AppCore::new(midi_sender, Some(&salamander_directory))
                 .map_err(std::io::Error::other)?;
-            let omr = omr::OmrManager::new(&resource_dir, &app_local_data_dir)
-                .map_err(std::io::Error::other)?;
             let state = Arc::new(AppState {
                 core: Mutex::new(core),
-                omr: Mutex::new(omr),
             });
             // The dispatch thread must not own the last strong application-state
             // reference: AppCore owns the channel sender, so a strong reference

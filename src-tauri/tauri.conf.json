@@ -34,7 +34,6 @@
     "targets": ["nsis", "msi"],
     "resources": {
       "../assets/SlenderSalamander44khz16bit": "instruments/salamander",
-      "../sidecars/audiveris": "audiveris",
       "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
     },
     "category": "Music",

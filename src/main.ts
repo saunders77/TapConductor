@@ -1,7 +1,7 @@
 import "./styles.css";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { open } from "@tauri-apps/plugin-dialog";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import { autoFollowTarget } from "./auto-follow";
 import { planBeatInterval, rationalValue } from "./beat-scheduler";
@@ -12,8 +12,6 @@ import type {
   DiagnosticsDto,
   LoadedScore,
   MidiPortsDto,
-  OmrProject,
-  OmrRecognition,
   TapEventDto,
 } from "./types";
 
@@ -30,9 +28,6 @@ app.innerHTML = `
       </div>
       <button id="open-score" class="primary-button" type="button">
         <span aria-hidden="true">＋</span> Open score
-      </button>
-      <button id="review-recognition" class="review-button hidden" type="button">
-        Review recognition
       </button>
       <div class="status-pill loading" id="status-pill"><span></span><b>Starting audio…</b></div>
     </header>
@@ -147,7 +142,6 @@ const byId = <T extends HTMLElement>(id: string): T => {
 
 const elements = {
   open: byId<HTMLButtonElement>("open-score"),
-  reviewRecognition: byId<HTMLButtonElement>("review-recognition"),
   emptyOpen: byId<HTMLButtonElement>("empty-open"),
   status: byId("status-pill"),
   audioOutput: byId<HTMLSelectElement>("audio-output"),
@@ -210,9 +204,6 @@ function ensureBottomControls(): void {
 }
 
 let score: LoadedScore | null = null;
-let activeOmrProject: OmrProject | null = null;
-let omrExportPollInProgress = false;
-const omrAvailable = /Windows/i.test(navigator.userAgent);
 let cursorIndex = 0;
 let highlightIndex = 0;
 let zoom = 0.9;
@@ -506,29 +497,18 @@ async function invokeSafe<T>(command: string, args?: Record<string, unknown>): P
 
 async function chooseScore(): Promise<void> {
   const extensions = ["musicxml", "xml", "mxl", "mid", "midi"];
-  if (omrAvailable) extensions.push("pdf");
   const path = await open({
     multiple: false,
     directory: false,
     filters: [{ name: "Musical scores", extensions }],
   });
   if (!path) return;
-  if (path.toLowerCase().endsWith(".pdf")) {
-    if (!omrAvailable) {
-      toast("Optical music recognition is currently supported only on Windows.", "error");
-      return;
-    }
-    await recognizePdf(path);
-    return;
-  }
   setStatus("loading", "Loading score…");
   elements.open.disabled = true;
   let loaded: LoadedScore | null = null;
   try {
     loaded = await invokeSafe<LoadedScore>("load_score", { path });
     await displayScore(loaded);
-    activeOmrProject = await invoke<OmrProject | null>("omr_project_for_score", { musicXmlPath: path });
-    updateReviewRecognitionButton();
   } catch (error) {
     // Native load failures are already surfaced by invokeSafe. Rendering is a
     // separate step, so make OSMD failures visible instead of looking like an
@@ -540,75 +520,6 @@ async function chooseScore(): Promise<void> {
     setStatus("fault", "Score load failed");
   } finally {
     elements.open.disabled = false;
-  }
-}
-
-async function initializeOmrAvailability(): Promise<void> {
-  if (omrAvailable) {
-    elements.emptyDescription.textContent = "Open MusicXML, compressed MXL, MIDI, or a scanned PDF. Every tap plays the next written note or chord.";
-  }
-}
-
-function updateReviewRecognitionButton(): void {
-  elements.reviewRecognition.classList.toggle("hidden", activeOmrProject === null);
-  elements.reviewRecognition.title = activeOmrProject
-    ? `Open ${activeOmrProject.omrPath} in Audiveris`
-    : "No Audiveris project is associated with this score";
-}
-
-async function recognizePdf(path: string): Promise<void> {
-  setStatus("loading", "Recognizing PDF…");
-  elements.open.disabled = true;
-  elements.emptyOpen.disabled = true;
-  let recognition: OmrRecognition | null = null;
-  try {
-    recognition = await invokeSafe<OmrRecognition>("recognize_pdf", { path });
-    const musicXmlPath = await save({
-      defaultPath: recognition.suggestedFileName,
-      filters: [{ name: "Compressed MusicXML", extensions: ["mxl"] }],
-    });
-    if (!musicXmlPath) {
-      await invoke<void>("discard_omr_recognition", { recognitionId: recognition.recognitionId });
-      setStatus(score ? "ready" : "fault", score ? "Ready" : "Recognition canceled");
-      return;
-    }
-    const project = await invokeSafe<OmrProject>("finish_omr_recognition", {
-      recognitionId: recognition.recognitionId,
-      musicXmlPath,
-    });
-    recognition = null;
-    activeOmrProject = project;
-    updateReviewRecognitionButton();
-    const loaded = await invokeSafe<LoadedScore>("load_score", { path: project.musicXmlPath });
-    await displayScore(loaded);
-    toast(`Recognition project saved as ${project.omrPath}`, "info");
-  } catch {
-    if (recognition) {
-      await invoke("discard_omr_recognition", { recognitionId: recognition.recognitionId }).catch(() => undefined);
-    }
-    setStatus("fault", "Recognition failed");
-  } finally {
-    elements.open.disabled = false;
-    elements.emptyOpen.disabled = false;
-  }
-}
-
-async function pollOmrExport(): Promise<void> {
-  if (!activeOmrProject || omrExportPollInProgress) return;
-  omrExportPollInProgress = true;
-  try {
-    const updated = await invoke<LoadedScore | null>("poll_omr_export");
-    if (!updated) return;
-    const preserved = score
-      ? { event: score.events[cursorIndex], scrollLeft: elements.scoreScroll.scrollLeft }
-      : undefined;
-    await displayScore(updated, preserved);
-    toast("Corrected MusicXML received from Audiveris.", "info");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    toast(message, "error");
-  } finally {
-    omrExportPollInProgress = false;
   }
 }
 
@@ -1327,17 +1238,6 @@ async function installListeners(): Promise<void> {
 
 elements.open.addEventListener("click", () => void chooseScore());
 elements.emptyOpen.addEventListener("click", () => void chooseScore());
-elements.reviewRecognition.addEventListener("click", async () => {
-  elements.reviewRecognition.disabled = true;
-  try {
-    await invokeSafe("review_recognition");
-    toast("In Audiveris, save corrections and use Plugins → Send to TapConductor.", "info");
-  } catch {
-    // invokeSafe already surfaced the launch error.
-  } finally {
-    elements.reviewRecognition.disabled = false;
-  }
-});
 elements.panic.addEventListener("click", async () => {
   const nextMode = !midiFreePlay;
   await invokeSafe("set_midi_free_play", { enabled: nextMode });
@@ -1495,10 +1395,8 @@ window.addEventListener("resize", () => {
   if (osmd) window.requestAnimationFrame(renderOsmd);
 });
 
-void initializeOmrAvailability();
 void installListeners().then(refreshDevices).catch((error: unknown) => {
   setStatus("fault", "Core unavailable");
   toast(String(error), "error");
 });
 window.setInterval(() => void refreshDiagnostics(), 1_000);
-window.setInterval(() => void pollOmrExport(), 750);

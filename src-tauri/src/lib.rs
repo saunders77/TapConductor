@@ -39,6 +39,7 @@ pub fn run() {
             commands::set_midi_free_play,
             commands::audio_devices,
             commands::set_audio_device,
+            commands::set_instrument,
             commands::set_volume,
             commands::midi_ports,
             commands::set_midi_input,

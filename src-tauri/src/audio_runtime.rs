@@ -1,8 +1,8 @@
 use crate::dto::{DeviceDto, DiagnosticsDto, WasapiPeriodsDto};
 use std::{path::Path, sync::Arc};
 use tapconductor_audio::{
-    AudioCommand, AudioCommandSender, AudioDiagnostics, Chord, Note, PianoInstrument,
-    SalamanderBank, VoiceGroupId, audio_engine,
+    AudioCommand, AudioCommandSender, AudioDiagnostics, Chord, Note, PianoConfig, PianoInstrument,
+    PianoSynth, SalamanderBank, VoiceGroupId, audio_engine,
     backend::{AudioBackend, RunningAudioStream},
 };
 use tapconductor_performance as performance;
@@ -17,6 +17,13 @@ const REQUESTED_BUFFER_FRAMES: u32 = 128;
 const COMMAND_QUEUE: usize = 2_048;
 const SCHEDULE_CAPACITY: usize = 2_048;
 const VOICES: usize = 256;
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum Instrument {
+    #[default]
+    Piano,
+    Synth,
+}
 
 struct AudioRuntime {
     sender: AudioCommandSender<COMMAND_QUEUE>,
@@ -38,6 +45,7 @@ pub struct AudioManager {
     master_gain: f32,
     wasapi_periods: Option<WasapiPeriodsDto>,
     sample_rate: u32,
+    instrument: Instrument,
 }
 
 impl AudioManager {
@@ -81,6 +89,7 @@ impl AudioManager {
             // This is used only if endpoint discovery fails. A successful
             // restart immediately replaces it with the device's native rate.
             sample_rate: DEFAULT_SAMPLE_RATE,
+            instrument: Instrument::Piano,
         };
         if let Err(error) = manager.restart(None) {
             manager.last_error = Some(error);
@@ -167,8 +176,16 @@ impl AudioManager {
         // the actual value visible in diagnostics and let the stream run.
 
         let wasapi_periods = self.probe_periods(selected_device.as_deref());
-        let sampler = PianoInstrument::<VOICES>::new(self.salamander.clone(), sample_rate)
-            .map_err(|error| error.to_string())?;
+        let sampler = match self.instrument {
+            Instrument::Piano => {
+                PianoInstrument::<VOICES>::new(self.salamander.clone(), sample_rate)
+                    .map_err(|error| error.to_string())?
+            }
+            Instrument::Synth => PianoInstrument::Procedural(
+                PianoSynth::new(PianoConfig::new(sample_rate))
+                    .map_err(|error| error.to_string())?,
+            ),
+        };
         let (mut sender, engine, diagnostics) = audio_engine::<_, COMMAND_QUEUE, SCHEDULE_CAPACITY>(
             sampler,
             sample_rate,
@@ -339,6 +356,25 @@ impl AudioManager {
             .map_err(|_| "The real-time audio command queue is full.".to_owned())?;
         self.master_gain = gain;
         Ok(())
+    }
+
+    pub fn set_instrument(&mut self, instrument: &str) -> Result<(), String> {
+        let instrument = match instrument {
+            "piano" => Instrument::Piano,
+            "synth" => Instrument::Synth,
+            other => return Err(format!("Unknown instrument '{other}'.")),
+        };
+        if instrument == self.instrument {
+            return Ok(());
+        }
+        let previous = self.instrument;
+        self.instrument = instrument;
+        let selected_device = self.selected_device.clone();
+        let result = self.restart(selected_device);
+        if result.is_err() {
+            self.instrument = previous;
+        }
+        result
     }
 
     pub fn diagnostics(

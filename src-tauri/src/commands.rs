@@ -172,6 +172,16 @@ pub fn set_audio_device(
 }
 
 #[tauri::command]
+pub fn set_instrument(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    instrument: String,
+) -> Result<(), String> {
+    let event = lock_core(&state)?.set_instrument(&instrument)?;
+    emit_event(&app, event)
+}
+
+#[tauri::command]
 pub fn set_volume(state: State<'_, Arc<AppState>>, value: f32) -> Result<(), String> {
     lock_core(&state)?.audio.set_volume(value)
 }

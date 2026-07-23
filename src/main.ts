@@ -37,11 +37,18 @@ app.innerHTML = `
         <span>Audio out</span>
         <select id="audio-output" aria-label="Audio output"><option>System default</option></select>
       </label>
+      <label class="field instrument-field">
+        <span>Instrument</span>
+        <select id="instrument" aria-label="Instrument">
+          <option value="piano">Grand piano</option>
+          <option value="synth">Synthesizer</option>
+        </select>
+      </label>
       <label class="field">
         <span>MIDI in</span>
         <select id="midi-input" aria-label="MIDI input"><option value="">Off</option></select>
       </label>
-      <label class="field">
+      <label class="field midi-output-field">
         <span>MIDI out</span>
         <select id="midi-output" aria-label="MIDI output"><option value="">Off</option></select>
       </label>
@@ -150,6 +157,7 @@ const elements = {
   emptyOpen: byId<HTMLButtonElement>("empty-open"),
   status: byId("status-pill"),
   audioOutput: byId<HTMLSelectElement>("audio-output"),
+  instrument: byId<HTMLSelectElement>("instrument"),
   midiInput: byId<HTMLSelectElement>("midi-input"),
   midiOutput: byId<HTMLSelectElement>("midi-output"),
   tapMode: byId<HTMLSelectElement>("tap-mode"),
@@ -484,7 +492,7 @@ function moveOsmdCursorToStep(visualStep: number): void {
       osmd.cursor.next();
       osmdCurrentStep += 1;
     }
-    osmd.cursor.show();
+    osmd.cursor.hide();
   } catch {
     // Some malformed scores have fewer graphical cursor positions than semantic events.
   }
@@ -576,7 +584,7 @@ async function displayScore(loaded: LoadedScore, preserved?: ScoreViewState): Pr
       drawTitle: false,
       drawingParameters: "compacttight",
       followCursor: false,
-      cursorsOptions: [{ type: 1, color: "#75ffb3", alpha: 0.8, follow: false }],
+      cursorsOptions: [{ type: 1, color: "#75ffb3", alpha: 0, follow: false }],
       pageFormat: "Endless",
       renderSingleHorizontalStaffline: true,
       newSystemFromXML: false,
@@ -844,7 +852,15 @@ function buildScoreTargets(): void {
     elements.scoreTargets.append(controls);
   }
 
-  const seenNoteheads = new Set<string>();
+  type StaffNoteGroup = {
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+    midiPitches: Set<number>;
+    resolveIndex: () => number;
+  };
+  const staffNoteGroups = new Map<string, StaffNoteGroup>();
   for (const visual of visualSteps) {
     const exactIndices = eventIndicesByStep.get(visual.step) ?? [];
     const nearestIndex = activeScore.events.reduce(
@@ -873,25 +889,44 @@ function buildScoreTargets(): void {
       // pitch class only as a last-resort bridge between the two conventions.
       const midiPitch = choosePitch(sameStaff) ?? choosePitch(samePart) ?? choosePitch(expectedNotes);
       if (midiPitch === undefined) continue;
-      const key = `${Math.round(note.left)}:${Math.round(note.top)}:${midiPitch}`;
-      if (seenNoteheads.has(key)) continue;
-      seenNoteheads.add(key);
-      const noteButton = document.createElement("button");
-      noteButton.type = "button";
-      noteButton.className = "note-target";
-      noteButton.style.left = `${note.left - 4}px`;
-      noteButton.style.top = `${note.top - 4}px`;
-      noteButton.style.width = `${Math.max(16, note.width + 8)}px`;
-      noteButton.style.height = `${Math.max(16, note.height + 8)}px`;
       const staffChord = [...new Set((sameStaff.length > 0 ? sameStaff : [ { midiPitch } ]).map((expected) => expected.midiPitch))]
         .sort((left, right) => left - right);
-      noteButton.title = staffChord.length > 1 ? "Play this staff chord" : `Play single note ${noteName(midiPitch)}`;
-      noteButton.setAttribute("aria-label", noteButton.title);
-      installAuditionHandlers(noteButton, resolveIndex, staffChord);
-      elements.scoreTargets.append(noteButton);
+      const groupKey = `${visual.step}:${note.partIndex ?? "part"}:${staffId ?? "staff"}`;
+      const existing = staffNoteGroups.get(groupKey);
+      if (existing) {
+        existing.left = Math.min(existing.left, note.left);
+        existing.right = Math.max(existing.right, note.left + note.width);
+        existing.top = Math.min(existing.top, note.top);
+        existing.bottom = Math.max(existing.bottom, note.top + note.height);
+        staffChord.forEach((pitch) => existing.midiPitches.add(pitch));
+      } else {
+        staffNoteGroups.set(groupKey, {
+          left: note.left,
+          right: note.left + note.width,
+          top: note.top,
+          bottom: note.top + note.height,
+          midiPitches: new Set(staffChord),
+          resolveIndex,
+        });
+      }
     }
   }
+  for (const group of staffNoteGroups.values()) {
+    const midiPitches = [...group.midiPitches].sort((left, right) => left - right);
+    const noteButton = document.createElement("button");
+    noteButton.type = "button";
+    noteButton.className = "note-target";
+    noteButton.style.left = `${group.left - 6}px`;
+    noteButton.style.top = `${group.top - 6}px`;
+    noteButton.style.width = `${Math.max(18, group.right - group.left + 12)}px`;
+    noteButton.style.height = `${Math.max(18, group.bottom - group.top + 12)}px`;
+    noteButton.title = midiPitches.length > 1 ? "Play this staff chord" : `Play single note ${noteName(midiPitches[0]!)}`;
+    noteButton.setAttribute("aria-label", noteButton.title);
+    installAuditionHandlers(noteButton, group.resolveIndex, midiPitches);
+    elements.scoreTargets.append(noteButton);
+  }
   moveOsmdCursor(highlightIndex);
+  osmd.cursor.hide();
 }
 
 type OsmdPitch = {
@@ -1388,6 +1423,10 @@ document.addEventListener("pointerdown", (event) => {
 
 elements.partsButton.addEventListener("click", () => togglePopover(elements.partsButton, elements.partsPopover));
 elements.audioOutput.addEventListener("change", () => void invokeSafe("set_audio_device", { id: elements.audioOutput.value }));
+elements.instrument.addEventListener("change", () => {
+  fitSelect(elements.instrument);
+  void invokeSafe("set_instrument", { instrument: elements.instrument.value });
+});
 elements.midiInput.addEventListener("change", () => { fitSelect(elements.midiInput); void invokeSafe("set_midi_input", { id: elements.midiInput.value || null }); });
 elements.midiOutput.addEventListener("change", () => { fitSelect(elements.midiOutput); void invokeSafe("set_midi_output", { id: elements.midiOutput.value || null }); });
 elements.tapMode.addEventListener("change", () => {

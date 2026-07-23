@@ -75,7 +75,7 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .start-here { margin-top: 2px; }
 .start-here svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 .slice-controls.current .slice-action { color: #75ffb3; }
-.slice-ghost { position: absolute; z-index: 1; pointer-events: none; opacity: 0; background: #75ffb330; transition: opacity .1s ease; }
+.slice-ghost { position: absolute; z-index: 1; pointer-events: none; opacity: 0; background: #75ffb35c; transition: opacity .1s ease; }
 .slice-ghost.current { opacity: 1; }
 .note-target { position: absolute; padding: 0; border: 1px solid transparent; border-radius: 50%; background: transparent; cursor: pointer; pointer-events: auto; z-index: 2; }
 .note-target:hover, .note-target:focus-visible { border-color: #75ffb3; outline: 2px solid #75ffb3aa; background: #75ffb32e; }
@@ -111,7 +111,7 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .hidden { display: none !important; }
 
 @media (max-width: 960px) {
-  .control-deck .field:nth-child(3) { display: none; }
+  .control-deck .midi-output-field { display: none; }
   .performance-strip { grid-template-columns: minmax(0, 1fr) 36px minmax(110px, 150px) 36px minmax(0, 1fr); padding-inline: 14px; gap: 8px; }
   .bottom-controls { right: 14px; width: 280px; gap: 10px 6px; }
   .score-stage { min-width: 100%; margin-inline: 0; padding-inline: 20px; }

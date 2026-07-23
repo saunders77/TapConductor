@@ -145,6 +145,12 @@ impl AppCore {
         Ok(event)
     }
 
+    pub fn set_instrument(&mut self, instrument: &str) -> Result<Option<CoreEventDto>, String> {
+        let event = self.panic()?;
+        self.audio.set_instrument(instrument)?;
+        Ok(event)
+    }
+
     pub fn set_roll_delays(&mut self, regular_ms: u16, audition_ms: u16) -> Result<(), String> {
         self.performance.set_roll_delays(regular_ms, audition_ms);
         Ok(())
@@ -252,13 +258,21 @@ impl AppCore {
         self.ensure_audio_ready()?;
         let engine_generation = self.require_ui_generation(generation)?;
         let event = self.event_id(index)?;
+        let sounding_pitches = self
+            .score
+            .as_ref()
+            .ok_or_else(|| "No score is loaded.".to_owned())?
+            .sounding_pitches_at(index)?;
+        let chord =
+            Chord::from_midi_numbers(&sounding_pitches).map_err(|error| error.to_string())?;
         let (input, inserted) = self.input_for_down(token.clone())?;
         let velocity = velocity_from_midi1(midi_velocity)?;
         let result = self
             .performance
-            .handle(PerformanceCommand::Audition {
+            .handle(PerformanceCommand::AuditionChord {
                 generation: engine_generation,
                 event,
+                chord,
                 input,
                 at: self.now(),
                 velocity,

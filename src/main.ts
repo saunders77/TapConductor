@@ -64,13 +64,13 @@ app.innerHTML = `
         <span>Chord <output id="audition-roll-value">120 ms</output></span>
         <input id="audition-roll" type="range" min="0" max="250" value="120" />
       </label>
-      <button id="parts-button" class="deck-button" type="button">Staves</button>
+      <button id="parts-button" class="deck-button" type="button">Parts</button>
         <button id="diagnostics-button" class="deck-button diagnostics-button" type="button" title="Audio diagnostics" aria-label="Audio diagnostics">⚙</button>
         <button id="panic-button" class="panic-button" type="button" title="Play MIDI input directly" aria-label="Play MIDI input directly">■</button>
     </section>
 
-    <aside id="parts-popover" class="popover hidden" aria-label="Staves">
-      <h3>Staves</h3><p>Choose which staves are included when you tap.</p>
+    <aside id="parts-popover" class="popover hidden" aria-label="Parts">
+      <h3>Parts</h3><p>Choose which staves play when you tap.</p>
       <div id="parts-list"></div>
     </aside>
 
@@ -113,7 +113,8 @@ app.innerHTML = `
         <button id="back-button" class="transport" type="button" disabled aria-label="Previous event">‹</button>
         <button id="tap-button" class="tap-button" type="button" disabled>
           <span>TAP</span>
-          <small>Space / Enter</small>
+          <small>Or tap any keyboard key.</small>
+          <small>Hold for longer notes.</small>
         </button>
         <button id="forward-button" class="transport" type="button" disabled aria-label="Next event">›</button>
         <div class="next-readout">
@@ -224,8 +225,8 @@ function updateMidiFreePlayButton(): void {
   elements.panic.classList.toggle("midi-free-play", midiFreePlay);
   elements.panic.textContent = midiFreePlay ? "☟" : "■";
   elements.panic.title = midiFreePlay
-    ? "Return to score-following MIDI input"
-    : "Play MIDI input directly";
+    ? "Taps start following the score again"
+    : "Stop conducting the score";
   elements.panic.setAttribute("aria-label", elements.panic.title);
 }
 const pendingDowns = new Map<string, Promise<void>>();

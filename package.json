@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "build:bundle": "npm run build",
+    "build:bundle": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/verify-audiveris-bundle.ps1 && npm run build",
     "test:auto-follow": "node --experimental-strip-types --test src/auto-follow.test.ts",
     "test:beat": "node --experimental-strip-types --test src/beat-scheduler.test.ts",
     "preview": "vite preview",

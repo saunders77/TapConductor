@@ -62,13 +62,13 @@ app.innerHTML = `
           <option value="beat">Beat Tap</option>
         </select>
       </label>
-        <label class="range-field" title="Set the playback volume.">
-        <span>Volume <output id="volume-value">100%</output></span>
-        <input id="volume" type="range" min="0" max="100" value="100" />
-      </label>
       <label class="range-field delay-field" title="Set the delay between notes when regular score chords are rolled.">
         <span>Tap Roll <output id="regular-roll-value">0 ms</output></span>
         <input id="regular-roll" type="range" min="0" max="250" value="0" />
+      </label>
+      <label class="range-field" title="Set the playback volume.">
+        <span>Volume <output id="volume-value">100%</output></span>
+        <input id="volume" type="range" min="0" max="100" value="100" />
       </label>
       <label class="range-field delay-field" title="Set the delay between notes when auditioned chords are rolled.">
         <span>Chord Roll <output id="audition-roll-value">120 ms</output></span>
@@ -90,16 +90,25 @@ app.innerHTML = `
 
     <aside id="diagnostics-popover" class="popover diagnostics hidden" aria-label="Audio diagnostics"></aside>
 
-    <div id="help-overlay" class="help-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="help-title">
+    <div id="help-overlay" class="help-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="help-title" aria-describedby="help-summary">
       <section class="help-card">
         <div class="help-card-header">
-          <div><span class="help-kicker">TapConductor guide</span><h2 id="help-title">How to use TapConductor</h2></div>
+          <div>
+            <span class="help-kicker">TapConductor guide</span>
+            <h2 id="help-title">Help, privacy, and acknowledgements</h2>
+            <p id="help-summary" class="help-summary">Instructions and product information for TapConductor.</p>
+          </div>
           <button id="help-close" class="help-close" type="button" aria-label="Close help">×</button>
         </div>
+        <nav class="help-jump-links" aria-label="Help topics">
+          <a href="#help-instructions">Instructions</a>
+          <a href="#privacy">Privacy</a>
+          <a href="#acknowledgements">Acknowledgements</a>
+        </nav>
         <div class="help-content">
-          <section><h3>1. Open a score</h3><p>Select a MusicXML, compressed MusicXML, or MIDI file (file extensions .musicxml, .xml, .mxl, .mid, or .midi). If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read. If you only have a PDF, you can use a converter program to create a file TapConductor can read (such as Audiveris or MuseScore).</p></section>
+          <section id="help-instructions" tabindex="-1"><h3>1. Open a score</h3><p>Select a MusicXML, compressed MusicXML, or MIDI file (file extensions .musicxml, .xml, .mxl, .mid, or .midi). If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read. If you only have a PDF, you can use a converter program to create a file TapConductor can read (such as Audiveris or MuseScore).</p></section>
           <section><h3>2. Configure audio settings</h3>
-            <p>Use the Audio Out control to select the speakers or sound card to use. On Windows, options marked (ASIO) are better because latency is lower.</p>
+            <p>Use the Audio Out control to select the speakers or sound card to use. On Windows, an option marked (ASIO) uses that device manufacturer's ASIO driver and may provide lower latency on supported hardware. ASIO is not automatically the best choice for every device or configuration; choose the output that is stable and responsive with your hardware.</p>
             <p>Choose an instrument, either the grand piano or a synthesizer.</p>
             <p>If you want to control TapConductor with a piano or another MIDI instrument, then plug in the instrument and select it from the MIDI In menu. You'll still be able to tap using normal mouse and keyboard controls too. When you use a piano, TapConductor will use the dynamics you play for each note. You may need to restart TapConductor if you plugged in your instrument after opening it.</p>
             <p>The MIDI OUT setting is only needed if you want to route your performance to another program for recording or further manipulation. For normal playing, it's not necessary.</p>
@@ -118,7 +127,17 @@ app.innerHTML = `
             <p>Use the downward-pointing arrows above each score location to control the green location selector and choose where to start playing when you resume tapping. You can also use the left and right arrow keys to move the selector left and right.</p>
             <p>The Spacebar replays the last chord, which can be useful in a rehearsal situation.</p>
           </section>
-        
+          <section id="privacy" class="legal-disclosure" tabindex="-1">
+            <h3>Privacy</h3>
+            <p>TapConductor processes your selected score, taps, connected MIDI device information, audio output information, and performance diagnostics locally on your device. It has no account system, advertising, analytics, tracking, or cloud sync, and it does not upload your scores or performances.</p>
+            <p>On iPadOS and macOS, a score chosen through the document picker is copied into TapConductor's private app storage so the sandboxed app can read it. Your original document is not changed. The imported copy may remain in app storage until the operating system clears it or you clear or remove the app's data.</p>
+            <p>TapConductor does not request access to your microphone, camera, location, contacts, or photos. The full policy is available in <b>PRIVACY.md</b> and at <span class="legal-url">github.com/saunders77/TapConductor</span>.</p>
+          </section>
+          <section id="acknowledgements" class="legal-disclosure" tabindex="-1">
+            <h3>Acknowledgements</h3>
+            <p>The bundled grand piano is <b>Slender Salamander Grand Piano</b>, Signal Experiments' phase-aligned derivative of Salamander Grand Piano V3. The original Yamaha C5 recordings are by Alexander Holm, with phase alignment and Slender SFZ mappings by Signal Experiments. It is used under the Creative Commons Attribution 3.0 Unported license.</p>
+            <p>TapConductor also uses open-source Tauri, OpenSheetMusicDisplay, Rust, TypeScript, and supporting libraries. TapConductor is distributed under the GNU General Public License version 3 only. Complete dependency and instrument notices are in the bundled <b>THIRD_PARTY_NOTICES.md</b>.</p>
+          </section>
         </div>
         <button id="help-done" class="primary-button" type="button">Got it</button>
       </section>
@@ -141,7 +160,10 @@ app.innerHTML = `
             <p>Open your sheet music score in TapConductor using any of these file formats: <b>.musicxml</b>, <b>.xml</b>, <b>.mxl</b>, <b>.mid</b>, <b>.midi</b>.</p>
             <p>If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read.
             <p>If you only have a PDF, you can use a converter program to create a file TapConductor can read (such as Audiveris or MuseScore).</p>
-            <button id="empty-open" class="primary-button large" type="button">Open a score</button>
+            <div class="empty-actions" aria-label="Choose a score">
+              <button id="empty-open" class="primary-button large" type="button">Open a score</button>
+              <button id="demo-open" class="secondary-button large" type="button">Open demo score</button>
+            </div>
             <small>Every tap plays the next written note or chord. You can also connect a piano or other MIDI instruments and control dynamics.</small>
             <small>Use any keyboard keys, mouse, tapping the touchscreen, or MIDI</small>
           </div>
@@ -197,6 +219,7 @@ const elements = {
   helpClose: byId<HTMLButtonElement>("help-close"),
   helpDone: byId<HTMLButtonElement>("help-done"),
   emptyOpen: byId<HTMLButtonElement>("empty-open"),
+  demoOpen: byId<HTMLButtonElement>("demo-open"),
   status: byId("status-pill"),
   audioOutput: byId<HTMLSelectElement>("audio-output"),
   instrument: byId<HTMLSelectElement>("instrument"),
@@ -247,7 +270,7 @@ if (performanceStrip) {
     performanceStrip.prepend(footerBrand);
   }
   performanceStrip.append(bottomControls);
-  [elements.volume.parentElement, elements.regularRoll.parentElement, elements.auditionRoll.parentElement, zoomControls]
+  [elements.regularRoll.parentElement, elements.volume.parentElement, elements.auditionRoll.parentElement, zoomControls]
     .filter((element): element is HTMLElement => element instanceof HTMLElement)
     .forEach((element) => bottomControls.append(element));
 }
@@ -595,14 +618,36 @@ async function chooseScore(): Promise<void> {
   const path = await open({
     multiple: false,
     directory: false,
+    pickerMode: "document",
+    fileAccessMode: "copy",
     filters: [{ name: "Musical scores", extensions: ["musicxml", "xml", "mxl", "mid", "midi"] }],
   });
   if (!path) return;
-  setStatus("loading", "Loading score…");
-  elements.open.disabled = true;
+  await loadScore(
+    () => invokeSafe<LoadedScore>("load_score", { path }),
+    "Loading score…",
+  );
+}
+
+async function loadDemoScore(): Promise<void> {
+  await loadScore(
+    () => invokeSafe<LoadedScore>("load_demo_score"),
+    "Loading demo score…",
+  );
+}
+
+async function loadScore(
+  loader: () => Promise<LoadedScore>,
+  loadingMessage: string,
+): Promise<void> {
+  setStatus("loading", loadingMessage);
+  const loadButtons = [elements.open, elements.emptyOpen, elements.demoOpen];
+  loadButtons.forEach((button) => {
+    button.disabled = true;
+  });
   let loaded: LoadedScore | null = null;
   try {
-    loaded = await invokeSafe<LoadedScore>("load_score", { path });
+    loaded = await loader();
     await displayScore(loaded);
   } catch (error) {
     // Native load failures are already surfaced by invokeSafe. Rendering is a
@@ -614,7 +659,9 @@ async function chooseScore(): Promise<void> {
     }
     setStatus("fault", "Score load failed");
   } finally {
-    elements.open.disabled = false;
+    loadButtons.forEach((button) => {
+      button.disabled = false;
+    });
   }
 }
 
@@ -1060,7 +1107,7 @@ function createStartIcon(): SVGSVGElement {
   icon.setAttribute("viewBox", "0 0 24 24");
   icon.setAttribute("aria-hidden", "true");
   const path = document.createElementNS(namespace, "path");
-  path.setAttribute("d", "M12 3v13m0 0 6-6m-6 6-6-6M4 20h16");
+  path.setAttribute("d", "M12 3v13m0 0 6-6m-6 6-6-6");
   icon.append(path);
   return icon;
 }
@@ -1374,6 +1421,7 @@ async function installListeners(): Promise<void> {
 
 elements.open.addEventListener("click", () => void chooseScore());
 elements.emptyOpen.addEventListener("click", () => void chooseScore());
+elements.demoOpen.addEventListener("click", () => void loadDemoScore());
 let helpPreviousFocus: HTMLElement | null = null;
 function closeHelp(): void {
   elements.helpOverlay.classList.add("hidden");
@@ -1391,6 +1439,35 @@ elements.helpClose.addEventListener("click", closeHelp);
 elements.helpDone.addEventListener("click", closeHelp);
 elements.helpOverlay.addEventListener("pointerdown", (event) => {
   if (event.target === elements.helpOverlay) closeHelp();
+});
+elements.helpOverlay.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    closeHelp();
+    return;
+  }
+
+  if (event.key === "Tab") {
+    const focusable = [...elements.helpOverlay.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )].filter((element) => !element.hasAttribute("hidden"));
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (first && last) {
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  }
+
+  // Help owns its keyboard interaction while modal so score navigation,
+  // replay, and conducting shortcuts cannot fire behind it.
+  event.stopPropagation();
 });
 elements.panic.addEventListener("click", async () => {
   const nextMode = !midiFreePlay;

@@ -22,13 +22,16 @@ tauri = { version = "2.10", features = [] }
 tauri-plugin-dialog = "2.6"
 tapconductor-score = { path = "../crates/tapconductor-score" }
 tapconductor-performance = { path = "../crates/tapconductor-performance" }
-tapconductor-audio = { path = "../crates/tapconductor-audio", features = ["wasapi-cpal-fallback", "asio-backend"] }
 tapconductor-midi = { path = "../crates/tapconductor-midi", features = ["midir-backend"] }
 
 [target.'cfg(windows)'.dependencies]
+tapconductor-audio = { path = "../crates/tapconductor-audio", features = ["wasapi-cpal-fallback", "asio-backend"] }
 windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_Media_Audio",
   "Win32_System_Com",
   "Win32_System_Threading",
 ] }
+
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+tapconductor-audio = { path = "../crates/tapconductor-audio", features = ["cpal-backend"] }

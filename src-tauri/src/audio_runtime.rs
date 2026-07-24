@@ -148,6 +148,29 @@ impl AudioManager {
         result
     }
 
+    /// Release the platform stream while retaining the selected endpoint and
+    /// a monotonic performance clock. Mobile operating systems can revoke the
+    /// audio session while the application is inactive.
+    #[cfg(mobile)]
+    pub fn suspend(&mut self) {
+        let handoff_sample = self.now_sample();
+        self.runtime.take();
+        self.clock_epoch = handoff_sample;
+        self.last_error = Some("Audio is suspended while TapConductor is inactive.".to_owned());
+    }
+
+    /// Re-open the retained endpoint after a mobile foreground transition.
+    /// If a route disappeared while inactive, fall back to the system route.
+    #[cfg(mobile)]
+    pub fn resume(&mut self) -> Result<(), String> {
+        let selected_device = self.selected_device.clone();
+        match self.restart(selected_device.clone()) {
+            Ok(()) => Ok(()),
+            Err(_) if selected_device.is_some() => self.restart(None),
+            Err(error) => Err(error),
+        }
+    }
+
     fn try_restart(&mut self, selected_device: Option<String>) -> Result<(), String> {
         let selected_name = self
             .backend

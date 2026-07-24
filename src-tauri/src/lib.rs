@@ -13,6 +13,7 @@ pub struct AppState {
     core: Mutex<AppCore>,
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let (midi_sender, midi_receiver) = mpsc::channel();
     let midi_shutdown_sender = midi_sender.clone();
@@ -23,9 +24,32 @@ pub fn run() {
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 let _ = midi_shutdown_sender.send(MidiInputAction::Shutdown);
             }
+            #[cfg(mobile)]
+            match event {
+                tauri::WindowEvent::Suspended => {
+                    if let Some(state) = _window.try_state::<Arc<AppState>>() {
+                        if let Ok(mut core) = state.core.lock() {
+                            if let Ok(Some(event)) = core.suspend_audio() {
+                                let _ = _window.emit("performance-event", event);
+                            }
+                        }
+                    }
+                }
+                tauri::WindowEvent::Resumed => {
+                    if let Some(state) = _window.try_state::<Arc<AppState>>() {
+                        if let Ok(mut core) = state.core.lock() {
+                            if let Err(message) = core.resume_audio() {
+                                let _ = _window.emit("audio-lifecycle-error", message);
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::load_score,
+            commands::load_demo_score,
             commands::set_part_enabled,
             commands::set_roll_delays,
             commands::set_tap_mode,

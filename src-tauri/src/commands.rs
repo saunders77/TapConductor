@@ -4,7 +4,7 @@ use crate::{
     dto::{DeviceDto, DiagnosticsDto, LoadedScoreDto, MidiPortsDto},
 };
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 fn lock_core<'a>(
     state: &'a State<'_, Arc<AppState>>,
@@ -26,9 +26,28 @@ fn emit_event(app: &AppHandle, event: Option<crate::dto::CoreEventDto>) -> Resul
 pub fn load_score(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,
-    path: String,
+    path: tauri_plugin_dialog::FilePath,
 ) -> Result<LoadedScoreDto, String> {
-    let (score, event) = lock_core(&state)?.load_score(path.into())?;
+    let path = path
+        .into_path()
+        .map_err(|error| format!("The selected score is not a readable local file: {error}"))?;
+    let (score, event) = lock_core(&state)?.load_score(path)?;
+    emit_event(&app, event)?;
+    Ok(score)
+}
+
+#[tauri::command]
+pub fn load_demo_score(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+) -> Result<LoadedScoreDto, String> {
+    let path = app
+        .path()
+        .resource_dir()
+        .map_err(|error| error.to_string())?
+        .join("demo")
+        .join("TapConductor-Demo.musicxml");
+    let (score, event) = lock_core(&state)?.load_score(path)?;
     emit_event(&app, event)?;
     Ok(score)
 }

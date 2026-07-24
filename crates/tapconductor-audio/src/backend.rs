@@ -212,6 +212,14 @@ mod cpal_impl {
             let requested_channels = default.as_ref().map(|config| config.channels());
             let (sample_rate, channels, buffer_range) =
                 self.supported_f32_config(&device, requested_rate, requested_channels)?;
+            // CPAL 0.15's iOS backend reports a placeholder 0..=0 range and
+            // rejects every BufferSize::Fixed value. AVAudioSession owns the
+            // physical I/O duration on iPad, so leave the stream at the
+            // negotiated system default there. macOS and Windows retain the
+            // existing low-latency fixed-buffer preference.
+            #[cfg(target_os = "ios")]
+            let buffer_frames = None;
+            #[cfg(not(target_os = "ios"))]
             let buffer_frames =
                 buffer_range.map(|(minimum, maximum)| 128_u32.clamp(minimum, maximum));
             Ok(OutputStreamConfig {

@@ -133,6 +133,31 @@ impl AppCore {
         // no deadline expressed in the old device's frames survives.
         let event = self.panic()?;
         self.audio.restart(selected_device)?;
+        self.apply_audio_sample_rate()?;
+        Ok(event)
+    }
+
+    /// Silence all held voices and release the mobile output stream before the
+    /// operating system suspends the application.
+    #[cfg(mobile)]
+    pub fn suspend_audio(&mut self) -> Result<Option<CoreEventDto>, String> {
+        let event = self.panic()?;
+        self.audio.suspend();
+        self.input_ids.clear();
+        self.direct_midi_tokens.clear();
+        self.tap_input_gate = TapInputGate::default();
+        Ok(event)
+    }
+
+    /// Rebuild the mobile stream because its route, channel count, or sample
+    /// rate may have changed while the application was inactive.
+    #[cfg(mobile)]
+    pub fn resume_audio(&mut self) -> Result<(), String> {
+        self.audio.resume()?;
+        self.apply_audio_sample_rate()
+    }
+
+    fn apply_audio_sample_rate(&mut self) -> Result<(), String> {
         let sample_rate = SampleRate::new(self.audio.sample_rate())
             .ok_or_else(|| "Invalid audio sample rate.".to_owned())?;
         self.performance
@@ -142,7 +167,7 @@ impl AppCore {
             .set_sample_rate(sample_rate)
             .map_err(|error| error.to_string())?;
         self.midi.set_sample_rate(sample_rate.get());
-        Ok(event)
+        Ok(())
     }
 
     pub fn set_instrument(&mut self, instrument: &str) -> Result<Option<CoreEventDto>, String> {

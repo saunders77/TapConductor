@@ -11,7 +11,11 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "store:windows:validate": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/windows-store.ps1 -ValidateOnly",
+    "store:windows:test": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/windows-store.ps1 -Mode TestUnsigned",
+    "store:windows:production": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/windows-store.ps1 -Mode Production",
+    "store:windows:verify": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/windows-store.ps1 -VerifyOnly"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.8.0",

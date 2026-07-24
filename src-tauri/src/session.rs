@@ -124,4 +124,13 @@ mod tests {
         assert_eq!(session.sounding_pitches_at(1).unwrap(), vec![60, 62]);
         assert_eq!(session.sounding_pitches_at(2).unwrap(), vec![64]);
     }
+
+    #[test]
+    fn bundled_demo_score_is_importable() {
+        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../assets/demo/TapConductor-Demo.musicxml");
+        let session = ScoreSession::load(fixture, 1).unwrap();
+
+        assert!(session.events().len() >= 10);
+    }
 }

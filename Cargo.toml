@@ -4,6 +4,7 @@ members = [
   "crates/tapconductor-score",
   "crates/tapconductor-performance",
   "crates/tapconductor-audio",
+  "crates/tauri-plugin-apple-audio-session",
   "crates/tapconductor-midi",
   "tools/latency-probe",
   "src-tauri",
@@ -14,7 +15,7 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0-only"
 authors = ["TapConductor contributors"]
-repository = "https://github.com/micha/CLITapConductor"
+repository = "https://github.com/saunders77/TapConductor"
 
 [workspace.dependencies]
 serde = { version = "1.0", features = ["derive"] }

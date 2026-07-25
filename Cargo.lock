@@ -3361,6 +3361,7 @@ dependencies = [
  "tapconductor-score",
  "tauri",
  "tauri-build",
+ "tauri-plugin-apple-audio-session",
  "tauri-plugin-dialog",
  "thiserror 2.0.19",
  "tracing",
@@ -3538,6 +3539,16 @@ dependencies = [
  "serde_json",
  "tauri-utils",
  "walkdir",
+]
+
+[[package]]
+name = "tauri-plugin-apple-audio-session"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.19",
 ]
 
 [[package]]

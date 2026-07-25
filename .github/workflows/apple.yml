@@ -1,0 +1,60 @@
+name: Apple CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-bundles:
+    runs-on: macos-26
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Rust targets
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy --no-self-update
+          rustup default stable
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios-sim
+
+      - name: Report Apple toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Validate and build ad-hoc universal Mac bundle
+        run: bash tools/apple-release.sh mac-test
+
+      - name: Generate and build iPad simulator application
+        env:
+          SKIP_QUALITY_CHECKS: "1"
+        run: bash tools/apple-release.sh ios-simulator
+
+      - name: Upload macOS test bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: TapConductor-macOS-ad-hoc
+          path: target/apple-artifacts/macos-ad-hoc/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload iPad simulator bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: TapConductor-iPad-simulator
+          path: src-tauri/gen/apple/build/
+          if-no-files-found: error
+          retention-days: 14

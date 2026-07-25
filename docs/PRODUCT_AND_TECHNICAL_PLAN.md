@@ -1,5 +1,10 @@
 # TapConductor product and technical plan
 
+> Cross-platform implementation update (July 24, 2026): the additive macOS, iPadOS, and Microsoft
+> Store architecture, build commands, package matrix, policy gates, and execution status are in
+> [CROSS_PLATFORM_IMPLEMENTATION.md](CROSS_PLATFORM_IMPLEMENTATION.md). Where this older plan calls
+> implemented work "future," the cross-platform runbook and source are authoritative.
+
 Status: proposed plan for a new codebase  
 Initial platform: Windows 10/11  
 Planned platforms: macOS and iPadOS/iOS

@@ -109,7 +109,9 @@ function Assert-StoreOverlay {
 
     $requiredResources = [ordered]@{
         "../assets/SlenderSalamander44khz16bit" = "instruments/salamander"
+        "../assets/demo/TapConductor-Demo.musicxml" = "demo/TapConductor-Demo.musicxml"
         "../LICENSE" = "LICENSE"
+        "../PRIVACY.md" = "PRIVACY.md"
         "../THIRD_PARTY_NOTICES.md" = "THIRD_PARTY_NOTICES.md"
     }
     foreach ($entry in $requiredResources.GetEnumerator()) {
@@ -385,6 +387,7 @@ try {
     $outputArtifact = Join-Path $outputDirectory $outputName
     Copy-Item -LiteralPath $builtArtifact -Destination $outputArtifact -Force
     Copy-Item -LiteralPath (Join-Path $repositoryRoot "LICENSE") -Destination $outputDirectory -Force
+    Copy-Item -LiteralPath (Join-Path $repositoryRoot "PRIVACY.md") -Destination $outputDirectory -Force
     Copy-Item -LiteralPath (
         Join-Path $repositoryRoot "THIRD_PARTY_NOTICES.md"
     ) -Destination $outputDirectory -Force

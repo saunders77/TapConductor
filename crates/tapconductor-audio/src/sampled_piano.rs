@@ -399,9 +399,9 @@ impl<const VOICES: usize> SampledPiano<VOICES> {
             }
         }
         let mut release_decays = [1.0; 11];
-        for seconds in 1..release_decays.len() {
+        for (seconds, decay) in release_decays.iter_mut().enumerate().skip(1) {
             let release_frames = output_rate as f32 * seconds as f32;
-            release_decays[seconds] = 0.001_f32.powf(1.0 / release_frames);
+            *decay = 0.001_f32.powf(1.0 / release_frames);
         }
         Ok(Self {
             bank,
@@ -540,6 +540,10 @@ impl<const VOICES: usize> Sampler for SampledPiano<VOICES> {
 
 /// Single concrete sampler type lets the native backend use Salamander when
 /// available while retaining the dependency-free recovery instrument.
+// The procedural variant intentionally owns its fixed voice pool inline. It is
+// constructed outside the realtime callback, and avoiding a conditional heap
+// indirection keeps both sampler variants predictable inside render().
+#[allow(clippy::large_enum_variant)]
 pub enum PianoInstrument<const VOICES: usize = 128> {
     Salamander(SampledPiano<VOICES>),
     Procedural(PianoSynth<VOICES>),

@@ -15,7 +15,14 @@
     "store:windows:validate": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/windows-store.ps1 -ValidateOnly",
     "store:windows:test": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/windows-store.ps1 -Mode TestUnsigned",
     "store:windows:production": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/windows-store.ps1 -Mode Production",
-    "store:windows:verify": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/windows-store.ps1 -VerifyOnly"
+    "store:windows:verify": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/windows-store.ps1 -VerifyOnly",
+    "apple:validate": "bash tools/apple-release.sh validate",
+    "apple:mac:test": "bash tools/apple-release.sh mac-test",
+    "apple:mac:release": "bash tools/apple-release.sh mac-developer-id",
+    "apple:mac:store": "bash tools/apple-release.sh mac-app-store",
+    "apple:ipad:simulator": "bash tools/apple-release.sh ios-simulator",
+    "apple:ipad:development": "bash tools/apple-release.sh ios-development",
+    "apple:ipad:store": "bash tools/apple-release.sh ios-app-store"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.8.0",

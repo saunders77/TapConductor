@@ -1,0 +1,19 @@
+[package]
+name = "tauri-plugin-apple-audio-session"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "TapConductor iPad AVAudioSession integration"
+links = "tauri-plugin-apple-audio-session"
+
+[build-dependencies]
+tauri-plugin = { version = "2.6", features = ["build"] }
+
+[dependencies]
+serde.workspace = true
+tauri = { version = "2.10" }
+thiserror.workspace = true
+
+[target.'cfg(target_os = "ios")'.dependencies]
+tauri = { version = "2.10", features = ["wry"] }

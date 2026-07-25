@@ -83,8 +83,7 @@ Keep the final note within Partner Center's 2,000-character limit:
 
 > Date: `<YYYY-MM-DD>`. No account, login, or application server is required. TapConductor is fully
 > functional with the Windows System default audio output; ASIO and MIDI hardware are optional, and
-> the app installs no driver or service. Download the reviewer-owned sample from
-> `<REVIEW-SCORE-HTTPS-URL>`, launch TapConductor, choose Open score, select that file, and press A,
+> the app installs no driver or service. Launch TapConductor, choose Open demo score, and press A,
 > Enter, or the TAP button. Grand piano is the default installed instrument. Use an ear control to
 > audition a chord, a down-arrow control to reposition, and Panic to stop sound. The installer is
 > offline, current-user, and silent with `/S`. Contact: `<CERTIFICATION-CONTACT>`.

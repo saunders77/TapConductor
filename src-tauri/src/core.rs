@@ -384,10 +384,7 @@ impl AppCore {
             &mut self.performance
         };
         let transition = engine
-            .handle(PerformanceCommand::InputReleased {
-                input,
-                at,
-            })
+            .handle(PerformanceCommand::InputReleased { input, at })
             .map_err(|error| error.to_string())?;
         // The engine has now accepted the physical release and removed its
         // latch. Keep the token if handle() rejects so a later release can retry.
@@ -523,7 +520,10 @@ impl AppCore {
             // quick automatic key-up must not engage the new piano damping
             // envelope. Rhythm Tap and audition/free-piano keep it.
             if self.beat_tap_mode
-                && matches!(command, tapconductor_performance::AudioCommand::DampenGroup { .. })
+                && matches!(
+                    command,
+                    tapconductor_performance::AudioCommand::DampenGroup { .. }
+                )
             {
                 continue;
             }

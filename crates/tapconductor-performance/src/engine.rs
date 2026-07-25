@@ -631,8 +631,10 @@ impl<G: GatePolicy> PerformanceEngine<G> {
 
         self.next_group_id = next_group_id;
         let first_group_id = VoiceGroupId::new(self.next_group_id - group_count as u64);
-        for index in 0..group_count {
-            let staff_group = staff_groups[index].expect("the staff group prefix is populated");
+        for (index, staff_group) in staff_groups.iter().take(group_count).enumerate() {
+            let staff_group = staff_group
+                .as_ref()
+                .expect("the staff group prefix is populated");
             let group_id = VoiceGroupId::new(first_group_id.get() + index as u64);
             self.active_groups.push(VoiceGroup {
                 id: group_id,

@@ -8,6 +8,8 @@ mod session;
 use crate::{core::AppCore, midi_runtime::MidiInputAction};
 use std::sync::{Arc, Mutex, mpsc};
 use tauri::{Emitter, Manager};
+#[cfg(target_os = "ios")]
+use tauri_plugin_apple_audio_session::AppleAudioSessionExt;
 
 pub struct AppState {
     core: Mutex<AppCore>,
@@ -18,7 +20,11 @@ pub fn run() {
     let (midi_sender, midi_receiver) = mpsc::channel();
     let midi_shutdown_sender = midi_sender.clone();
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(target_os = "ios")]
+    let builder = builder.plugin(tauri_plugin_apple_audio_session::init());
+
+    builder
         .plugin(tauri_plugin_dialog::init())
         .on_window_event(move |_window, event| {
             if matches!(event, tauri::WindowEvent::Destroyed) {
@@ -34,8 +40,17 @@ pub fn run() {
                             }
                         }
                     }
+                    #[cfg(target_os = "ios")]
+                    if let Err(error) = _window.apple_audio_session().deactivate() {
+                        let _ = _window.emit("audio-lifecycle-error", error.to_string());
+                    }
                 }
                 tauri::WindowEvent::Resumed => {
+                    #[cfg(target_os = "ios")]
+                    if let Err(error) = _window.apple_audio_session().activate() {
+                        let _ = _window.emit("audio-lifecycle-error", error.to_string());
+                        return;
+                    }
                     if let Some(state) = _window.try_state::<Arc<AppState>>() {
                         if let Ok(mut core) = state.core.lock() {
                             if let Err(message) = core.resume_audio() {

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [
+      {
+        "title": "TapConductor",
+        "label": "main",
+        "width": 1024,
+        "height": 768,
+        "resizable": true,
+        "fullscreen": false,
+        "backgroundColor": "#e9e8df"
+      }
+    ]
+  },
+  "bundle": {
+    "targets": ["app"],
+    "resources": {
+      "../assets/SlenderSalamander44khz16bit": "instruments/salamander",
+      "../assets/demo/TapConductor-Demo.musicxml": "demo/TapConductor-Demo.musicxml",
+      "../LICENSE": "LICENSE",
+      "../PRIVACY.md": "PRIVACY.md",
+      "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
+      "apple/PrivacyInfo.xcprivacy": "PrivacyInfo.xcprivacy"
+    },
+    "icon": [
+      "icons/icon.png",
+      "icons/ios/AppIcon-20x20@1x.png",
+      "icons/ios/AppIcon-20x20@2x.png",
+      "icons/ios/AppIcon-20x20@3x.png",
+      "icons/ios/AppIcon-29x29@1x.png",
+      "icons/ios/AppIcon-29x29@2x.png",
+      "icons/ios/AppIcon-29x29@3x.png",
+      "icons/ios/AppIcon-40x40@1x.png",
+      "icons/ios/AppIcon-40x40@2x.png",
+      "icons/ios/AppIcon-40x40@3x.png",
+      "icons/ios/AppIcon-60x60@2x.png",
+      "icons/ios/AppIcon-60x60@3x.png",
+      "icons/ios/AppIcon-76x76@1x.png",
+      "icons/ios/AppIcon-76x76@2x.png",
+      "icons/ios/AppIcon-83.5x83.5@2x.png",
+      "icons/ios/AppIcon-512@2x.png"
+    ],
+    "iOS": {
+      "minimumSystemVersion": "16.0",
+      "infoPlist": "apple/Info.ios.plist"
+    }
+  }
+}

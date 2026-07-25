@@ -1,4 +1,42 @@
-# Windows MVP build report
+# Cross-platform build report
+
+## 2026-07-24 cross-platform implementation
+
+The Windows Store test lane now produces an offline, current-user NSIS installer containing the
+same score import, performance, MIDI, and sampled-piano implementation as the desktop application.
+It is intentionally unsigned and is only for local sideload testing:
+
+| Artifact | Size | SHA-256 | Signing |
+| --- | ---: | --- | --- |
+| `target/store-artifacts/test-unsigned/TapConductor_0.1.0_x64_TEST-ONLY-UNSIGNED_store-setup.exe` | 324,194,121 bytes | `A007F169AD7124B592EAF80F3B14C9D280D6A07B4FA175EDBFE27E5EA54A544D` | Not signed; test only |
+
+The staged directory also contains `LICENSE`, `PRIVACY.md`, `THIRD_PARTY_NOTICES.md`,
+`SHA256SUMS.txt`, and `DO_NOT_SUBMIT_TO_STORE.txt`.
+
+Verification completed from the current source:
+
+- TypeScript production build passed.
+- Both frontend suites passed: 5 tests total.
+- Locked Rust workspace tests passed: 84 tests, with the large piano-bank test skipped in the
+  normal pass.
+- The separately invoked full Salamander bank test passed after loading and rendering the bundled
+  assets.
+- `cargo fmt --all -- --check` passed.
+- `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings` passed.
+- The generated installer passed a silent current-user sideload and uninstall cycle in a temporary
+  workspace directory.
+- The installed payload contained 255 piano files totalling 250,243,209 bytes and the bundled demo
+  score.
+- The installed executable remained running through the five-second launch smoke interval.
+
+The Apple source, privacy manifest, platform configuration, native iOS audio-session bridge,
+packaging script, and macOS CI workflow are present. Apple `.app`, `.dmg`, `.pkg`, simulator `.app`,
+and device `.ipa` outputs cannot be compiled on this Windows host. They must be produced on macOS
+with Xcode; device/App Store outputs additionally require the project's Apple team, certificates,
+and provisioning profiles. See `CROSS_PLATFORM_IMPLEMENTATION.md` for the exact commands and
+qualification matrix.
+
+## 2026-07-21 Windows MVP
 
 Build date: 2026-07-21
 Target: Windows x64 (`x86_64-pc-windows-msvc`)

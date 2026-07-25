@@ -1344,14 +1344,14 @@ function showDiagnostics(diagnostics: DiagnosticsDto): void {
       ? diagnostics.bufferFrames * 1_000 / diagnostics.sampleRate
       : 0;
     rows.splice(5, 0,
-      ["Last UI â†’ native reply", `${lastUiNativeRoundTripMs.toFixed(2)} ms (enqueue is earlier)`],
-      ["UI â†’ endpoint bound", `< ${(lastUiNativeRoundTripMs + callbackPeriodMs + diagnostics.estimatedLatencyMs).toFixed(1)} ms`],
+      ["Last UI → native reply", `${lastUiNativeRoundTripMs.toFixed(2)} ms (enqueue is earlier)`],
+      ["UI → endpoint bound", `< ${(lastUiNativeRoundTripMs + callbackPeriodMs + diagnostics.estimatedLatencyMs).toFixed(1)} ms`],
     );
   }
   if (diagnostics.outputDevice.toUpperCase().includes("QUAD-CAPTURE")) {
     rows.push([
       "Driver buffer",
-      "QUAD-CAPTURE Control Panel â†’ Driver â†’ Driver Settings: lower Audio Buffer Size",
+      "QUAD-CAPTURE Control Panel → Driver → Driver Settings: lower Audio Buffer Size",
     ]);
   }
   if (diagnostics.wasapiPeriods) {

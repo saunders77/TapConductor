@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>ITSAppUsesNonExemptEncryption</key>
+  <false/>
+  <key>LSSupportsOpeningDocumentsInPlace</key>
+  <false/>
+  <key>UIFileSharingEnabled</key>
+  <false/>
+  <key>UISupportedInterfaceOrientations~ipad</key>
+  <array>
+    <string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationPortraitUpsideDown</string>
+    <string>UIInterfaceOrientationLandscapeLeft</string>
+    <string>UIInterfaceOrientationLandscapeRight</string>
+  </array>
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>MusicXML Score</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>com.tapconductor.musicxml</string>
+        <string>com.tapconductor.compressed-musicxml</string>
+      </array>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>MIDI Sequence</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+      <key>LSItemContentTypes</key>
+      <array><string>public.midi-audio</string></array>
+    </dict>
+  </array>
+  <key>UTImportedTypeDeclarations</key>
+  <array>
+    <dict>
+      <key>UTTypeIdentifier</key>
+      <string>com.tapconductor.musicxml</string>
+      <key>UTTypeDescription</key>
+      <string>MusicXML Score</string>
+      <key>UTTypeConformsTo</key>
+      <array><string>public.xml</string></array>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key>
+        <array><string>musicxml</string><string>xml</string></array>
+        <key>public.mime-type</key>
+        <string>application/vnd.recordare.musicxml+xml</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>UTTypeIdentifier</key>
+      <string>com.tapconductor.compressed-musicxml</string>
+      <key>UTTypeDescription</key>
+      <string>Compressed MusicXML Score</string>
+      <key>UTTypeConformsTo</key>
+      <array><string>public.zip-archive</string></array>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key>
+        <string>mxl</string>
+        <key>public.mime-type</key>
+        <string>application/vnd.recordare.musicxml</string>
+      </dict>
+    </dict>
+  </array>
+</dict>
+</plist>

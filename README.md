@@ -1,15 +1,15 @@
 # TapConductor
 
-TapConductor is a Windows desktop score-performance app. It supplies the pitches from a written
-score while the performer supplies the timing: each keyboard, pointer, or MIDI-key press sounds the
-next set of notes that begin at exactly the same score position, including notes across staves and
-parts. Rests do not consume taps.
+TapConductor is a cross-platform score-performance app targeting Windows, macOS, and iPadOS. It
+supplies the pitches from a written score while the performer supplies the timing: each keyboard,
+pointer/touch, or MIDI-key press sounds the next set of notes that begin at exactly the same score
+position, including notes across staves and parts. Rests do not consume taps.
 
 This repository contains an MVP foundation spanning phases 0–4: score import and display,
 deterministic conducting, low-latency built-in audio, score navigation/audition, and MIDI
 input/output. It is not yet a release-qualified completion of every phase gate; hardware loopback,
-long-duration stress/rehearsal, signing, ASIO hardware qualification, and physical-controller coverage remain explicit
-validation work.
+long-duration stress/rehearsal, signing, Apple-device qualification, ASIO hardware qualification,
+and physical-controller coverage remain explicit validation work.
 
 ## MVP capabilities
 
@@ -29,8 +29,11 @@ validation work.
 - Selects score parts, audio output, MIDI input, and MIDI output at runtime. **Panic** immediately
   clears sounding groups and MIDI output notes.
 - Uses a bounded, allocation-free audio callback path, sample-clock scheduling, a fixed voice pool,
-  and an SPSC command queue. Installed native ASIO drivers are exposed as low-latency outputs;
-  ordinary Windows endpoints use the direct event-driven `IAudioClient3` path.
+  and an SPSC command queue. Windows retains its native ASIO and direct event-driven
+  `IAudioClient3` paths. Apple hosts use CoreAudio; iPadOS also has a native `AVAudioSession`
+  lifecycle bridge.
+- Includes Rhythm Tap and Beat Tap/count-in modes, independently configurable score/audition chord
+  rolls, a bundled reviewer demo, and in-app help, privacy, and acknowledgements.
 
 The default instrument is the 44.1 kHz, 16-bit Slender Salamander Grand Piano: Signal Experiments'
 phase-aligned derivative of Alexander Holm's Salamander Grand Piano V3. Its three sampled velocity
@@ -114,6 +117,11 @@ Steinberg's SDK from its official stable URL, so release engineering must archiv
 license materials used for each build.
 Local development bundles are unsigned; production distribution still requires code signing.
 
+For the Microsoft Store test/production lanes and the macOS/iPadOS build commands, see
+[`docs/CROSS_PLATFORM_IMPLEMENTATION.md`](docs/CROSS_PLATFORM_IMPLEMENTATION.md). Apple bundles must
+be built on macOS with Xcode; device and App Store packages also require the relevant Apple
+Developer identities and provisioning profiles.
+
 ## Test and measure
 
 ```powershell
@@ -143,16 +151,18 @@ The verified Windows artifact paths, hashes, and test record are in
 | Path | Responsibility |
 | --- | --- |
 | `src/` | Tauri WebView UI and OSMD score rendering |
-| `src-tauri/` | Windows application adapter, device lifecycle, and IPC |
+| `src-tauri/` | Cross-platform Tauri host, device lifecycle, IPC, and bundle configuration |
 | `crates/tapconductor-score/` | MusicXML/MXL/MIDI import and normalized score events |
 | `crates/tapconductor-performance/` | Cursor, gesture, generation, and piano-gate state machine |
 | `crates/tapconductor-audio/` | Real-time command queue, scheduler, diagnostics, and synth |
 | `crates/tapconductor-midi/` | MIDI message mapping, ports, and overlapping-note tracking |
 | `tools/latency-probe/` | Repeatable offline command-to-render benchmark |
 | `docs/PRODUCT_AND_TECHNICAL_PLAN.md` | Product semantics, budgets, phases, and acceptance criteria |
+| `docs/CROSS_PLATFORM_IMPLEMENTATION.md` | Implemented architecture, policy matrix, and release runbook |
 
 The score, performance, audio, and MIDI crates are UI-independent Rust libraries. That separation
-keeps a future macOS/iPadOS host possible without moving correctness-sensitive logic into a WebView.
+lets Windows, macOS, and iPadOS share correctness-sensitive behavior without moving it into a
+WebView.
 
 ## MVP boundaries
 
@@ -164,7 +174,8 @@ keeps a future macOS/iPadOS host possible without moving correctness-sensitive l
 - Salamander's 44.1 kHz source samples are linearly resampled when an output device operates at a
   different native rate. The procedural synth is a recovery instrument rather than the default.
 - MIDI output currently uses the MVP routing/channel behavior rather than per-part routing.
-- PDF/optical recognition, rolled-chord modes, beat-tap mode, and Apple hosts are future work.
+- PDF/optical recognition remains future work. Apple hardware testing and signed packaging remain
+  release qualification work performed by the macOS release lane.
 - The software latency harness is included, but release qualification still requires end-to-end
   loopback and sustained-load testing on representative Windows audio hardware.
 

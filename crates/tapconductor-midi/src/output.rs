@@ -125,46 +125,74 @@ impl<const GROUPS: usize> MidiOutState<GROUPS> {
         {
             return Err(MidiOutError::DuplicateGroup(group_id));
         }
-        let slot = self
-            .groups
-            .iter()
-            .position(Option::is_none)
-            .ok_or(MidiOutError::GroupCapacity)?;
         if chord.is_empty() {
             return Err(MidiOutError::EmptyChord);
         }
 
-        let mut active = ActiveOutputGroup {
-            id: group_id,
-            channel,
-            ..ActiveOutputGroup::EMPTY
-        };
-        // Mark the channel before the first write. If a device accepts only a
-        // prefix of the chord and then errors, panic() must still send All
-        // Sound Off/All Notes Off for that partially sounded channel.
-        self.used_channels |= 1 << channel.zero_based();
         for note in chord.as_slice() {
-            let pitch = note.note.get();
-            // Multiple score parts may contain the same unison in one slice.
-            // One MIDI channel cannot distinguish those voices, so deduplicate
-            // within a group while retaining overlap across separate taps.
-            if active.pitches[..active.len as usize].contains(&pitch) {
-                continue;
-            }
-            output
-                .send(MidiMessage::NoteOn {
-                    channel,
-                    note: note.note,
-                    velocity: note.velocity,
-                })
-                .map_err(MidiOutError::Backend)?;
-            let reference =
-                &mut self.pitch_references[channel.zero_based() as usize][pitch as usize];
-            *reference = reference.saturating_add(1);
-            active.pitches[active.len as usize] = pitch;
-            active.len += 1;
+            self.play_group_note(output, group_id, channel, *note)?;
         }
-        self.groups[slot] = Some(active);
+        Ok(())
+    }
+
+    /// Adds one note to a voice group, creating the group when needed.
+    ///
+    /// This supports schedulers that roll a chord over time while preserving
+    /// the same overlap-safe release semantics as [`Self::play_group`].
+    pub fn play_group_note(
+        &mut self,
+        output: &mut dyn MidiOutputConnection,
+        group_id: MidiOutGroupId,
+        channel: MidiChannel,
+        note: MidiOutNote,
+    ) -> Result<(), MidiOutError> {
+        let slot = if let Some(slot) = self
+            .groups
+            .iter()
+            .position(|entry| entry.as_ref().is_some_and(|group| group.id == group_id))
+        {
+            if self.groups[slot]
+                .as_ref()
+                .is_some_and(|group| group.channel != channel)
+            {
+                return Err(MidiOutError::DuplicateGroup(group_id));
+            }
+            slot
+        } else {
+            let slot = self
+                .groups
+                .iter()
+                .position(Option::is_none)
+                .ok_or(MidiOutError::GroupCapacity)?;
+            self.groups[slot] = Some(ActiveOutputGroup {
+                id: group_id,
+                channel,
+                ..ActiveOutputGroup::EMPTY
+            });
+            slot
+        };
+
+        let active = self.groups[slot].as_mut().expect("group slot is active");
+        let pitch = note.note.get();
+        // Multiple score parts may contain the same unison in one slice.
+        if active.pitches[..active.len as usize].contains(&pitch) {
+            return Ok(());
+        }
+        if active.len as usize == MAX_MIDI_OUT_CHORD_NOTES {
+            return Err(MidiOutError::ChordTooLarge);
+        }
+        self.used_channels |= 1 << channel.zero_based();
+        output
+            .send(MidiMessage::NoteOn {
+                channel,
+                note: note.note,
+                velocity: note.velocity,
+            })
+            .map_err(MidiOutError::Backend)?;
+        let reference = &mut self.pitch_references[channel.zero_based() as usize][pitch as usize];
+        *reference = reference.saturating_add(1);
+        active.pitches[active.len as usize] = pitch;
+        active.len += 1;
         Ok(())
     }
 
@@ -351,6 +379,28 @@ mod tests {
             })
             .collect();
         assert_eq!(released, vec![60, 64, 67]);
+    }
+
+    #[test]
+    fn notes_can_be_added_to_a_group_for_rolled_output() {
+        let mut state = MidiOutState::<4>::default();
+        let mut output = RecordingOutput::default();
+        let channel = MidiChannel::new(0).unwrap();
+        for pitch in [60, 64, 67] {
+            state
+                .play_group_note(
+                    &mut output,
+                    MidiOutGroupId(1),
+                    channel,
+                    MidiOutNote {
+                        note: MidiNote::new(pitch).unwrap(),
+                        velocity: Velocity::MAX,
+                    },
+                )
+                .unwrap();
+        }
+        state.release_group(&mut output, MidiOutGroupId(1)).unwrap();
+        assert_eq!(output.0.len(), 6);
     }
 
     #[test]

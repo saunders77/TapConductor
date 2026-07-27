@@ -5,8 +5,8 @@ use std::{
     time::{Duration, Instant},
 };
 use tapconductor_midi::{
-    MidiChannel, MidiInputConfig, MidiInputMapper, MidiNote, MidiOutChord, MidiOutGroupId,
-    MidiOutNote, MidiOutState, MidiTapEvent, Velocity,
+    MidiChannel, MidiInputConfig, MidiInputMapper, MidiNote, MidiOutGroupId, MidiOutNote,
+    MidiOutState, MidiTapEvent, Velocity,
     backend::{MidiBackend, MidiInputConnection, MidiOutputConnection, MidirBackend},
 };
 use tapconductor_performance as performance;
@@ -29,7 +29,7 @@ enum OutputWorkerCommand {
     Play {
         due: Instant,
         group: MidiOutGroupId,
-        notes: Vec<MidiOutNote>,
+        note: MidiOutNote,
     },
     Release {
         due: Instant,
@@ -226,13 +226,13 @@ impl MidiManager {
         if self.output_worker.is_none() {
             return;
         }
-        let output_command = match command {
+        let output_commands = match command {
             performance::AudioCommand::PlaySlice {
                 at,
                 group,
                 chord,
                 velocity,
-                roll_interval_frames: _,
+                roll_interval_frames,
             } => {
                 let mut notes = Vec::with_capacity(chord.pitches().len());
                 for pitch in chord.pitches() {
@@ -250,30 +250,47 @@ impl MidiManager {
                         velocity: Velocity::new(velocity.get()),
                     });
                 }
-                OutputWorkerCommand::Play {
+                notes.sort_by_key(|note| note.note.get());
+                notes
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, note)| OutputWorkerCommand::Play {
+                        due: due_instant(
+                            at.frame().saturating_add(
+                                u64::from(roll_interval_frames).saturating_mul(index as u64),
+                            ),
+                            now_sample,
+                            now_instant,
+                            self.sample_rate,
+                        ),
+                        group: MidiOutGroupId(group.get()),
+                        note,
+                    })
+                    .collect()
+            }
+            performance::AudioCommand::ReleaseGroup { at, group } => {
+                vec![OutputWorkerCommand::Release {
                     due: due_instant(at.frame(), now_sample, now_instant, self.sample_rate),
                     group: MidiOutGroupId(group.get()),
-                    notes,
-                }
+                }]
             }
-            performance::AudioCommand::ReleaseGroup { at, group } => OutputWorkerCommand::Release {
-                due: due_instant(at.frame(), now_sample, now_instant, self.sample_rate),
-                group: MidiOutGroupId(group.get()),
-            },
             // DampenGroup is generated for every physical input release,
             // including score taps, direct MIDI play, and all audition forms.
             // An external instrument has no equivalent of the sampler's
             // key-up envelope, so translate that boundary to MIDI Note Off.
-            performance::AudioCommand::DampenGroup { at, group } => OutputWorkerCommand::Release {
-                due: due_instant(at.frame(), now_sample, now_instant, self.sample_rate),
-                group: MidiOutGroupId(group.get()),
-            },
-            performance::AudioCommand::Panic { .. } => OutputWorkerCommand::Panic,
+            performance::AudioCommand::DampenGroup { at, group } => {
+                vec![OutputWorkerCommand::Release {
+                    due: due_instant(at.frame(), now_sample, now_instant, self.sample_rate),
+                    group: MidiOutGroupId(group.get()),
+                }]
+            }
+            performance::AudioCommand::Panic { .. } => vec![OutputWorkerCommand::Panic],
         };
-        let send_failed = self
-            .output_worker
-            .as_ref()
-            .is_some_and(|worker| worker.sender.send(output_command).is_err());
+        let send_failed = self.output_worker.as_ref().is_some_and(|worker| {
+            output_commands
+                .into_iter()
+                .any(|command| worker.sender.send(command).is_err())
+        });
         if send_failed {
             // Internal audio has already accepted this transition. Disable a
             // failed optional MIDI sink without turning a sounded tap into a
@@ -339,7 +356,21 @@ fn output_worker_loop(
                 let _ = state.panic(output.as_mut());
                 break;
             }
-            Ok(command) => pending.push(command),
+            Ok(command) => {
+                if let OutputWorkerCommand::Release { due, group } = command {
+                    pending.retain(|pending_command| {
+                        !matches!(
+                            pending_command,
+                            OutputWorkerCommand::Play {
+                                due: note_due,
+                                group: note_group,
+                                ..
+                            } if *note_group == group && *note_due >= due
+                        )
+                    });
+                }
+                pending.push(command);
+            }
             Err(RecvTimeoutError::Timeout) => {}
         }
 
@@ -349,10 +380,8 @@ fn output_worker_loop(
             if command_due(&pending[index]).is_some_and(|due| due <= now) {
                 let command = pending.remove(index);
                 let result = match command {
-                    OutputWorkerCommand::Play { group, notes, .. } => {
-                        MidiOutChord::try_from_slice(&notes).and_then(|chord| {
-                            state.play_group(output.as_mut(), group, channel, &chord)
-                        })
+                    OutputWorkerCommand::Play { group, note, .. } => {
+                        state.play_group_note(output.as_mut(), group, channel, note)
                     }
                     OutputWorkerCommand::Release { group, .. } => {
                         match state.release_group(output.as_mut(), group) {

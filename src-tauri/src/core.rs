@@ -518,25 +518,25 @@ impl AppCore {
         for command in transition.audio_commands().copied() {
             // Beat Tap intentionally retains the pre-release behavior: its
             // quick automatic key-up must not engage the new piano damping
-            // envelope. Rhythm Tap and audition/free-piano keep it.
-            if self.beat_tap_mode
+            // envelope. MIDI OUT must still receive the command because it is
+            // the physical note-release boundary for the external device.
+            let suppress_audio_damping = self.beat_tap_mode
                 && matches!(
                     command,
                     tapconductor_performance::AudioCommand::DampenGroup { .. }
-                )
-            {
-                continue;
-            }
-            if let Err(error) = self.audio.send_performance_command(command) {
-                self.recover_audio_delivery_failure(retry_target);
-                return Err(format!(
-                    "{error} Playback was stopped{} so the failed gesture can be retried safely.",
-                    if retry_target.is_some() {
-                        " and the score cursor was restored"
-                    } else {
-                        ""
-                    }
-                ));
+                );
+            if !suppress_audio_damping {
+                if let Err(error) = self.audio.send_performance_command(command) {
+                    self.recover_audio_delivery_failure(retry_target);
+                    return Err(format!(
+                        "{error} Playback was stopped{} so the failed gesture can be retried safely.",
+                        if retry_target.is_some() {
+                            " and the score cursor was restored"
+                        } else {
+                            ""
+                        }
+                    ));
+                }
             }
             self.midi
                 .send_performance_command(command, midi_clock_sample, midi_clock_instant);

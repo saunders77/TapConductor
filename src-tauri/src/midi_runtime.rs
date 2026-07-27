@@ -226,11 +226,6 @@ impl MidiManager {
         if self.output_worker.is_none() {
             return;
         }
-        // Damping is an internal piano-timbre change. It must not alter the
-        // existing MIDI note-off schedule.
-        if matches!(command, performance::AudioCommand::DampenGroup { .. }) {
-            return;
-        }
         let output_command = match command {
             performance::AudioCommand::PlaySlice {
                 at,
@@ -265,8 +260,15 @@ impl MidiManager {
                 due: due_instant(at.frame(), now_sample, now_instant, self.sample_rate),
                 group: MidiOutGroupId(group.get()),
             },
+            // DampenGroup is generated for every physical input release,
+            // including score taps, direct MIDI play, and all audition forms.
+            // An external instrument has no equivalent of the sampler's
+            // key-up envelope, so translate that boundary to MIDI Note Off.
+            performance::AudioCommand::DampenGroup { at, group } => OutputWorkerCommand::Release {
+                due: due_instant(at.frame(), now_sample, now_instant, self.sample_rate),
+                group: MidiOutGroupId(group.get()),
+            },
             performance::AudioCommand::Panic { .. } => OutputWorkerCommand::Panic,
-            performance::AudioCommand::DampenGroup { .. } => unreachable!("handled above"),
         };
         let send_failed = self
             .output_worker
@@ -353,7 +355,14 @@ fn output_worker_loop(
                         })
                     }
                     OutputWorkerCommand::Release { group, .. } => {
-                        state.release_group(output.as_mut(), group)
+                        match state.release_group(output.as_mut(), group) {
+                            // A physical release now sends MIDI Note Off at
+                            // DampenGroup. The performance engine can still
+                            // deliver its later sampler ReleaseGroup; that
+                            // stale duplicate is expected and harmless.
+                            Err(tapconductor_midi::MidiOutError::UnknownGroup(_)) => Ok(()),
+                            result => result,
+                        }
                     }
                     OutputWorkerCommand::Panic | OutputWorkerCommand::Shutdown => Ok(()),
                 };

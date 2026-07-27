@@ -314,6 +314,46 @@ mod tests {
     }
 
     #[test]
+    fn releasing_a_chord_sends_note_off_for_every_unique_pitch() {
+        let mut state = MidiOutState::<4>::default();
+        let mut output = RecordingOutput::default();
+        let chord = MidiOutChord::try_from_slice(&[
+            MidiOutNote {
+                note: MidiNote::new(60).unwrap(),
+                velocity: Velocity::MAX,
+            },
+            MidiOutNote {
+                note: MidiNote::new(64).unwrap(),
+                velocity: Velocity::MAX,
+            },
+            MidiOutNote {
+                note: MidiNote::new(67).unwrap(),
+                velocity: Velocity::MAX,
+            },
+        ])
+        .unwrap();
+        state
+            .play_group(
+                &mut output,
+                MidiOutGroupId(1),
+                MidiChannel::new(0).unwrap(),
+                &chord,
+            )
+            .unwrap();
+        state.release_group(&mut output, MidiOutGroupId(1)).unwrap();
+
+        let released: Vec<u8> = output
+            .0
+            .iter()
+            .filter_map(|message| match message {
+                MidiMessage::NoteOff { note, .. } => Some(note.get()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(released, vec![60, 64, 67]);
+    }
+
+    #[test]
     fn panic_sends_safety_controllers_and_clears_tracking() {
         let mut state = MidiOutState::<4>::default();
         let mut output = RecordingOutput::default();

@@ -705,9 +705,12 @@ mod asio_impl {
         let mut result = Vec::new();
         for device in devices {
             let Ok(name) = device.name() else { continue };
-            if device.default_output_config().is_err() {
-                continue;
-            }
+            // Enumerating the menu must not initialize every installed driver.
+            // Some ASIO drivers cannot answer configuration queries while
+            // another application owns them, and wrapper drivers may need to
+            // show their control panel before they can report a format.  Keep
+            // every driver exposed by the ASIO host visible and perform the
+            // definitive compatibility check only when the user selects it.
             result.push(OutputDeviceInfo {
                 id: format!("{ID_PREFIX}{name}"),
                 name: format!("{name} (ASIO)"),

@@ -99,6 +99,9 @@ the minimum clicks or drops out. Built-in devices such as Realtek remain availab
 low-latency WASAPI path unless an installed ASIO driver exposes them. ASIO is a host API, not a
 universal replacement driver, so TapConductor cannot create native ASIO support for hardware whose
 manufacturer supplies none.
+TapConductor lists every driver registered with the Windows ASIO host and validates its current
+format when selected. Wrapper drivers such as ASIO4ALL appear as one ASIO entry; choose the desired
+Realtek speakers or headphone endpoint in the wrapper's own control panel.
 
 To exercise MIDI, connect the device before opening its selector, choose it under **MIDI in** or
 **MIDI out**, and use **Panic** before disconnecting or changing a live routing setup.

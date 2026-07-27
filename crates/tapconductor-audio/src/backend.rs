@@ -85,8 +85,11 @@ mod cpal_impl {
     };
     use crate::RenderCallbackInfo;
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-    use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
+    use std::sync::mpsc::{sync_channel, Receiver, RecvTimeoutError, SyncSender, TrySendError};
     use std::thread::{self, JoinHandle};
+    use std::time::Duration;
+
+    const DEVICE_OPERATION_TIMEOUT: Duration = Duration::from_secs(5);
 
     #[derive(Clone, Copy, Debug, Default)]
     pub struct CpalBackend;
@@ -249,7 +252,7 @@ mod cpal_impl {
                 .name("tapconductor-cpal-owner".into())
                 .spawn(move || run_stream_thread(config, renderer, startup_tx, control_rx))
                 .map_err(|error| BackendError::new("stream thread", error.to_string()))?;
-            match startup_rx.recv() {
+            match startup_rx.recv_timeout(DEVICE_OPERATION_TIMEOUT) {
                 Ok(Ok(())) => Ok(Box::new(CpalRunningStream {
                     control: control_tx,
                     thread: Some(thread),
@@ -258,13 +261,14 @@ mod cpal_impl {
                     let _ = thread.join();
                     Err(error)
                 }
-                Err(_) => {
-                    let _ = thread.join();
-                    Err(BackendError::new(
-                        "stream thread",
-                        "stream owner exited during startup",
-                    ))
-                }
+                Err(RecvTimeoutError::Disconnected) => Err(BackendError::new(
+                    "stream thread",
+                    "stream owner exited during startup",
+                )),
+                Err(RecvTimeoutError::Timeout) => Err(BackendError::new(
+                    "stream startup",
+                    "the audio device did not respond within 5 seconds",
+                )),
             }
         }
     }
@@ -382,30 +386,60 @@ mod cpal_impl {
         fn pause(&self) -> Result<(), BackendError> {
             let (reply, result) = sync_channel(1);
             self.control
-                .send(StreamControl::Pause(reply))
-                .map_err(|_| BackendError::new("stream pause", "stream owner has stopped"))?;
+                .try_send(StreamControl::Pause(reply))
+                .map_err(|error| {
+                    let detail = match error {
+                        TrySendError::Full(_) => "stream owner is not responding",
+                        TrySendError::Disconnected(_) => "stream owner has stopped",
+                    };
+                    BackendError::new("stream pause", detail)
+                })?;
             result
-                .recv()
-                .map_err(|_| BackendError::new("stream pause", "stream owner did not reply"))?
+                .recv_timeout(DEVICE_OPERATION_TIMEOUT)
+                .map_err(|error| match error {
+                    RecvTimeoutError::Timeout => BackendError::new(
+                        "stream pause",
+                        "the audio device did not respond within 5 seconds",
+                    ),
+                    RecvTimeoutError::Disconnected => {
+                        BackendError::new("stream pause", "stream owner did not reply")
+                    }
+                })?
         }
 
         fn resume(&self) -> Result<(), BackendError> {
             let (reply, result) = sync_channel(1);
             self.control
-                .send(StreamControl::Resume(reply))
-                .map_err(|_| BackendError::new("stream resume", "stream owner has stopped"))?;
+                .try_send(StreamControl::Resume(reply))
+                .map_err(|error| {
+                    let detail = match error {
+                        TrySendError::Full(_) => "stream owner is not responding",
+                        TrySendError::Disconnected(_) => "stream owner has stopped",
+                    };
+                    BackendError::new("stream resume", detail)
+                })?;
             result
-                .recv()
-                .map_err(|_| BackendError::new("stream resume", "stream owner did not reply"))?
+                .recv_timeout(DEVICE_OPERATION_TIMEOUT)
+                .map_err(|error| match error {
+                    RecvTimeoutError::Timeout => BackendError::new(
+                        "stream resume",
+                        "the audio device did not respond within 5 seconds",
+                    ),
+                    RecvTimeoutError::Disconnected => {
+                        BackendError::new("stream resume", "stream owner did not reply")
+                    }
+                })?
         }
     }
 
     impl Drop for CpalRunningStream {
         fn drop(&mut self) {
-            let _ = self.control.send(StreamControl::Shutdown);
-            if let Some(thread) = self.thread.take() {
-                let _ = thread.join();
-            }
+            let _ = self.control.try_send(StreamControl::Shutdown);
+            // A faulty native driver can leave its owner thread inside an
+            // operating-system call forever. Dropping the JoinHandle detaches
+            // that thread so endpoint recovery and the UI are never held
+            // hostage by driver teardown.
+            self.thread.take();
         }
     }
 
@@ -427,12 +461,14 @@ mod asio_impl {
     use crate::RenderCallbackInfo;
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
     use std::sync::{
-        mpsc::{sync_channel, Receiver, SyncSender},
+        mpsc::{sync_channel, Receiver, RecvTimeoutError, SyncSender, TrySendError},
         Mutex,
     };
     use std::thread::{self, JoinHandle};
+    use std::time::Duration;
 
     const ID_PREFIX: &str = "asio:";
+    const DRIVER_OPERATION_TIMEOUT: Duration = Duration::from_secs(5);
 
     pub struct AsioBackend {
         control: SyncSender<OwnerRequest>,
@@ -656,12 +692,24 @@ mod asio_impl {
         operation: &'static str,
     ) -> Result<T, BackendError> {
         let (reply, result) = sync_channel(1);
-        control
-            .send(request(reply))
-            .map_err(|_| BackendError::new(operation, "the ASIO owner thread has stopped"))?;
+        control.try_send(request(reply)).map_err(|error| {
+            let detail = match error {
+                TrySendError::Full(_) => "the ASIO owner thread is not responding",
+                TrySendError::Disconnected(_) => "the ASIO owner thread has stopped",
+            };
+            BackendError::new(operation, detail)
+        })?;
         result
-            .recv()
-            .map_err(|_| BackendError::new(operation, "the ASIO owner thread did not reply"))?
+            .recv_timeout(DRIVER_OPERATION_TIMEOUT)
+            .map_err(|error| match error {
+                RecvTimeoutError::Timeout => BackendError::new(
+                    operation,
+                    "the ASIO driver did not respond within 5 seconds",
+                ),
+                RecvTimeoutError::Disconnected => {
+                    BackendError::new(operation, "the ASIO owner thread did not reply")
+                }
+            })?
     }
 
     fn output_config(
@@ -828,19 +876,20 @@ mod asio_impl {
     impl Drop for AsioRunningStream {
         fn drop(&mut self) {
             let (reply, result) = sync_channel(1);
-            if self.control.send(OwnerRequest::Close(reply)).is_ok() {
-                let _ = result.recv();
+            if self.control.try_send(OwnerRequest::Close(reply)).is_ok() {
+                let _ = result.recv_timeout(DRIVER_OPERATION_TIMEOUT);
             }
         }
     }
 
     impl Drop for AsioBackend {
         fn drop(&mut self) {
-            let _ = self.control.send(OwnerRequest::Terminate);
+            let _ = self.control.try_send(OwnerRequest::Terminate);
             if let Ok(mut owner) = self.owner.lock() {
-                if let Some(owner) = owner.take() {
-                    let _ = owner.join();
-                }
+                // Never join a thread that may be stuck inside a third-party
+                // driver. Detaching it allows a fresh backend to be created by
+                // the in-app reload action.
+                owner.take();
             }
         }
     }

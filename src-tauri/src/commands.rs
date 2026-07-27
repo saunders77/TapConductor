@@ -191,6 +191,12 @@ pub fn set_audio_device(
 }
 
 #[tauri::command]
+pub fn reload_audio_systems(app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<(), String> {
+    let event = lock_core(&state)?.reload_audio_systems()?;
+    emit_event(&app, event)
+}
+
+#[tauri::command]
 pub fn set_instrument(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,

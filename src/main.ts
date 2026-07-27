@@ -110,7 +110,7 @@ app.innerHTML = `
           <section><h3>2. Configure audio settings</h3>
             <p>Use the Audio Out control to select the speakers or sound card to use. On Windows, an option marked (ASIO) is an installed ASIO driver and may provide lower latency on supported hardware. A driver such as ASIO4ALL can route to built-in Realtek speakers or headphones after that endpoint is enabled in the driver's control panel. ASIO is not automatically the best choice for every device or configuration; choose the output that is stable and responsive with your hardware.</p>
             <p>Choose an instrument, either the grand piano or a synthesizer.</p>
-            <p>If you want to control TapConductor with a piano or another MIDI instrument, then plug in the instrument and select it from the MIDI In menu. You'll still be able to tap using normal mouse and keyboard controls too. When you use a piano, TapConductor will use the dynamics you play for each note. You may need to restart TapConductor if you plugged in your instrument after opening it.</p>
+            <p>If you want to control TapConductor with a piano or another MIDI instrument, then plug in the instrument and select it from the MIDI In menu. You'll still be able to tap using normal mouse and keyboard controls too. When you use a piano, TapConductor will use the dynamics you play for each note. If you connect or reconnect a device while TapConductor is open, choose <b>Reload audio &amp; MIDI devices</b> from Audio Out.</p>
             <p>The MIDI OUT setting is only needed if you want to route your performance to another program for recording or further manipulation. For normal playing, it's not necessary.</p>
             <p>By default, all staves (parts) will play during tapping, but you can select specific staves in the PARTS menu.</p>
           </section>
@@ -300,6 +300,8 @@ let lastUiNativeRoundTripMs: number | null = null;
 let unlisteners: UnlistenFn[] = [];
 const heldTokens = new Set<string>();
 let midiFreePlay = false;
+let selectedAudioDeviceId = "";
+const RELOAD_AUDIO_SYSTEMS_VALUE = "__reload_audio_systems__";
 
 function updateMidiFreePlayButton(): void {
   elements.panic.classList.toggle("midi-free-play", midiFreePlay);
@@ -1293,27 +1295,74 @@ function populateSelect(select: HTMLSelectElement, devices: DeviceDto[], offLabe
   fitSelect(select);
 }
 
+function populateAudioSelect(devices: DeviceDto[]): void {
+  elements.audioOutput.replaceChildren();
+  elements.audioOutput.add(new Option("System default", ""));
+  for (const device of devices) {
+    elements.audioOutput.add(
+      new Option(`${device.name}${device.isDefault ? " (default)" : ""}`, device.id),
+    );
+  }
+  const separator = new Option("────────────", "");
+  separator.disabled = true;
+  elements.audioOutput.add(separator);
+  elements.audioOutput.add(new Option("↻ Reload audio & MIDI devices", RELOAD_AUDIO_SYSTEMS_VALUE));
+  const selectionStillExists = [...elements.audioOutput.options]
+    .some((option) => option.value === selectedAudioDeviceId && !option.disabled);
+  elements.audioOutput.value = selectionStillExists ? selectedAudioDeviceId : "";
+  if (!selectionStillExists) selectedAudioDeviceId = "";
+  fitSelect(elements.audioOutput);
+}
+
 function fitSelect(select: HTMLSelectElement): void {
   const text = select.selectedOptions[0]?.textContent ?? "";
   select.style.width = `${Math.max(38, Math.min(190, text.length * 7 + 22))}px`;
 }
 
 async function refreshDevices(): Promise<void> {
-  try {
-    const [audioDevices, midiPorts, diagnostics] = await Promise.all([
-      invoke<DeviceDto[]>("audio_devices"),
-      invoke<MidiPortsDto>("midi_ports"),
-      invoke<DiagnosticsDto>("diagnostics"),
-    ]);
-    populateSelect(elements.audioOutput, audioDevices);
+  const [audioResult, midiResult, diagnosticsResult] = await Promise.allSettled([
+    invoke<DeviceDto[]>("audio_devices"),
+    invoke<MidiPortsDto>("midi_ports"),
+    invoke<DiagnosticsDto>("diagnostics"),
+  ]);
+  const errors: string[] = [];
+  if (audioResult.status === "fulfilled") {
+    populateAudioSelect(audioResult.value);
+  } else {
+    errors.push(`Audio device discovery failed: ${String(audioResult.reason)}`);
+  }
+  if (midiResult.status === "fulfilled") {
+    const midiPorts = midiResult.value;
     populateSelect(elements.midiInput, midiPorts.inputs, "Off");
     populateSelect(elements.midiOutput, midiPorts.outputs, "Off");
     if (midiPorts.selectedInput) elements.midiInput.value = midiPorts.selectedInput;
     if (midiPorts.selectedOutput) elements.midiOutput.value = midiPorts.selectedOutput;
-    showDiagnostics(diagnostics);
-    elements.diagnosticsButton.classList.toggle("not-ready", !diagnostics.ready);
-  } catch {
+  } else {
+    errors.push(`MIDI device discovery failed: ${String(midiResult.reason)}`);
+  }
+  if (diagnosticsResult.status === "fulfilled") {
+    showDiagnostics(diagnosticsResult.value);
+    elements.diagnosticsButton.classList.toggle("not-ready", !diagnosticsResult.value.ready);
+  } else {
+    errors.push(`Diagnostics failed: ${String(diagnosticsResult.reason)}`);
+  }
+  if (errors.length > 0) {
     elements.diagnosticsButton.classList.add("not-ready");
+    toast(errors.join(" "), "error");
+  }
+}
+
+async function reloadAudioSystems(): Promise<void> {
+  elements.audioOutput.disabled = true;
+  setStatus("loading", "Reloading devices…");
+  try {
+    await invokeSafe("reload_audio_systems");
+    toast("Audio and MIDI devices reloaded.", "info");
+  } finally {
+    await refreshDevices();
+    elements.audioOutput.disabled = false;
+    if (lastDiagnostics?.ready) setStatus("ready", "Audio ready");
+    else setStatus("fault", "Audio needs attention");
   }
 }
 
@@ -1382,10 +1431,20 @@ function showDiagnostics(diagnostics: DiagnosticsDto): void {
 async function refreshDiagnostics(): Promise<void> {
   try {
     const diagnostics = await invoke<DiagnosticsDto>("diagnostics");
-    const previousMidiError = lastDiagnostics?.midiOutputError;
+    const previousDiagnostics = lastDiagnostics;
+    const previousMidiError = previousDiagnostics?.midiOutputError;
     showDiagnostics(diagnostics);
     if (diagnostics.midiOutputError && diagnostics.midiOutputError !== previousMidiError) {
       toast(diagnostics.midiOutputError, "warning");
+    }
+    if (
+      !diagnostics.ready
+      && (previousDiagnostics?.ready !== false || diagnostics.message !== previousDiagnostics.message)
+    ) {
+      toast(
+        `${diagnostics.message ?? "The audio output is unavailable."} Reload devices from Audio Out.`,
+        "error",
+      );
     }
     elements.diagnosticsButton.classList.toggle("not-ready", !diagnostics.ready);
   } catch {
@@ -1412,6 +1471,10 @@ async function installListeners(): Promise<void> {
       updatePosition();
     }),
     await listen<DiagnosticsDto>("audio-diagnostics", ({ payload }) => showDiagnostics(payload)),
+    await listen<string>("audio-lifecycle-error", ({ payload }) => {
+      elements.diagnosticsButton.classList.add("not-ready");
+      toast(`${payload} Reload devices from Audio Out.`, "error");
+    }),
     await listen<BeatMidiInput>("beat-midi-input", ({ payload }) => {
       if (payload.type === "down") void performDown(payload.token, payload.velocity);
       else void performUp(payload.token);
@@ -1630,7 +1693,28 @@ document.addEventListener("pointerdown", (event) => {
 });
 
 elements.partsButton.addEventListener("click", () => togglePopover(elements.partsButton, elements.partsPopover));
-elements.audioOutput.addEventListener("change", () => void invokeSafe("set_audio_device", { id: elements.audioOutput.value }));
+elements.audioOutput.addEventListener("change", async () => {
+  const requested = elements.audioOutput.value;
+  if (requested === RELOAD_AUDIO_SYSTEMS_VALUE) {
+    elements.audioOutput.value = selectedAudioDeviceId;
+    fitSelect(elements.audioOutput);
+    try {
+      await reloadAudioSystems();
+    } catch {
+      // invokeSafe and refreshDevices already surfaced the relevant errors.
+    }
+    return;
+  }
+  const previous = selectedAudioDeviceId;
+  try {
+    await invokeSafe("set_audio_device", { id: requested });
+    selectedAudioDeviceId = requested;
+    fitSelect(elements.audioOutput);
+  } catch {
+    elements.audioOutput.value = previous;
+    fitSelect(elements.audioOutput);
+  }
+});
 elements.instrument.addEventListener("change", () => {
   fitSelect(elements.instrument);
   void invokeSafe("set_instrument", { instrument: elements.instrument.value });

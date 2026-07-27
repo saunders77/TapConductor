@@ -47,11 +47,13 @@ struct OutputWorker {
 impl Drop for OutputWorker {
     fn drop(&mut self) {
         let _ = self.sender.send(OutputWorkerCommand::Shutdown);
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
-        }
+        // A disconnected hardware port can leave a native MIDI send or close
+        // call stuck. Detach instead of blocking the application state lock.
+        self.thread.take();
     }
 }
+
+const MIDI_OPERATION_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub struct MidiManager {
     backend: MidirBackend,
@@ -83,27 +85,34 @@ impl MidiManager {
     }
 
     pub fn ports(&self) -> Result<MidiPortsDto, String> {
-        let inputs = self
-            .backend
-            .input_devices()
-            .map_err(|error| error.to_string())?
-            .into_iter()
-            .map(|device| DeviceDto {
-                id: device.id,
-                name: device.name,
-                is_default: false,
+        let backend = self.backend;
+        let (input_sender, input_receiver) = mpsc::sync_channel(1);
+        thread::Builder::new()
+            .name("tapconductor-midi-input-discovery".to_owned())
+            .spawn(move || {
+                let result = backend.input_devices().map_err(|error| error.to_string());
+                let _ = input_sender.send(result);
             })
+            .map_err(|error| format!("Unable to start MIDI input discovery: {error}"))?;
+
+        let backend = self.backend;
+        let (output_sender, output_receiver) = mpsc::sync_channel(1);
+        thread::Builder::new()
+            .name("tapconductor-midi-output-discovery".to_owned())
+            .spawn(move || {
+                let result = backend.output_devices().map_err(|error| error.to_string());
+                let _ = output_sender.send(result);
+            })
+            .map_err(|error| format!("Unable to start MIDI output discovery: {error}"))?;
+
+        let deadline = Instant::now() + MIDI_OPERATION_TIMEOUT;
+        let inputs = receive_midi_result(input_receiver, deadline, "input discovery")?
+            .into_iter()
+            .map(device_dto)
             .collect();
-        let outputs = self
-            .backend
-            .output_devices()
-            .map_err(|error| error.to_string())?
+        let outputs = receive_midi_result(output_receiver, deadline, "output discovery")?
             .into_iter()
-            .map(|device| DeviceDto {
-                id: device.id,
-                name: device.name,
-                is_default: false,
-            })
+            .map(device_dto)
             .collect();
         Ok(MidiPortsDto {
             inputs,
@@ -131,7 +140,13 @@ impl MidiManager {
     }
 
     pub fn set_input(&mut self, device_id: Option<String>) -> Result<(), String> {
-        self.input_connection.take();
+        if let Some(connection) = self.input_connection.take() {
+            // Native disconnect has no portable cancellation API. Keep it away
+            // from the shared application-state lock.
+            let _ = thread::Builder::new()
+                .name("tapconductor-midi-input-close".to_owned())
+                .spawn(move || drop(connection));
+        }
         self.selected_input_id = None;
         self.selected_input_name = None;
         let _ = self.input_action_sender.send(MidiInputAction::Panic);
@@ -139,12 +154,15 @@ impl MidiManager {
         let Some(device_id) = device_id.filter(|id| !id.is_empty()) else {
             return Ok(());
         };
-        let name = self
-            .backend
-            .input_devices()
-            .map_err(|error| error.to_string())?
+        let discovery_id = device_id.clone();
+        let devices = run_midi_operation("input discovery", move || {
+            MidirBackend
+                .input_devices()
+                .map_err(|error| error.to_string())
+        })?;
+        let name = devices
             .into_iter()
-            .find(|device| device.id == device_id)
+            .find(|device| device.id == discovery_id)
             .map(|device| device.name)
             .ok_or_else(|| "The selected MIDI input is unavailable.".to_owned())?;
         let sender = self.input_action_sender.clone();
@@ -154,37 +172,39 @@ impl MidiManager {
         // sustains the sounded score note (or direct MIDI note) without a
         // separate audio-only pedal path. Beat mode only consumes note-down
         // timing, so its tap behavior remains unchanged.
-        let mut mapper = MidiInputMapper::<256>::new(MidiInputConfig {
-            respect_sustain_pedal: true,
-            ..MidiInputConfig::default()
-        });
-        let connection = self
-            .backend
-            .connect_input(
-                &device_id,
-                Box::new(move |message| {
-                    mapper.process(message, |event| {
-                        let action = match event {
-                            MidiTapEvent::Down {
-                                token,
-                                source_note,
-                                velocity,
-                                ..
-                            } => MidiInputAction::Down {
-                                token: format!("midi:{}", token.0),
-                                midi_pitch: source_note.get(),
-                                velocity: velocity.to_midi1().max(1),
-                            },
-                            MidiTapEvent::Up { token, .. } => MidiInputAction::Up {
-                                token: format!("midi:{}", token.0),
-                            },
-                            MidiTapEvent::Panic { .. } => MidiInputAction::Panic,
-                        };
-                        let _ = sender.send(action);
-                    });
-                }),
-            )
-            .map_err(|error| error.to_string())?;
+        let connection_id = device_id.clone();
+        let connection = run_midi_operation("input connection", move || {
+            let mut mapper = MidiInputMapper::<256>::new(MidiInputConfig {
+                respect_sustain_pedal: true,
+                ..MidiInputConfig::default()
+            });
+            MidirBackend
+                .connect_input(
+                    &connection_id,
+                    Box::new(move |message| {
+                        mapper.process(message, |event| {
+                            let action = match event {
+                                MidiTapEvent::Down {
+                                    token,
+                                    source_note,
+                                    velocity,
+                                    ..
+                                } => MidiInputAction::Down {
+                                    token: format!("midi:{}", token.0),
+                                    midi_pitch: source_note.get(),
+                                    velocity: velocity.to_midi1().max(1),
+                                },
+                                MidiTapEvent::Up { token, .. } => MidiInputAction::Up {
+                                    token: format!("midi:{}", token.0),
+                                },
+                                MidiTapEvent::Panic { .. } => MidiInputAction::Panic,
+                            };
+                            let _ = sender.send(action);
+                        });
+                    }),
+                )
+                .map_err(|error| error.to_string())
+        })?;
         self.input_connection = Some(connection);
         self.selected_input_id = Some(device_id);
         self.selected_input_name = Some(name);
@@ -199,22 +219,44 @@ impl MidiManager {
         let Some(device_id) = device_id.filter(|id| !id.is_empty()) else {
             return Ok(());
         };
-        let name = self
-            .backend
-            .output_devices()
-            .map_err(|error| error.to_string())?
+        let discovery_id = device_id.clone();
+        let devices = run_midi_operation("output discovery", move || {
+            MidirBackend
+                .output_devices()
+                .map_err(|error| error.to_string())
+        })?;
+        let name = devices
             .into_iter()
-            .find(|device| device.id == device_id)
+            .find(|device| device.id == discovery_id)
             .map(|device| device.name)
             .ok_or_else(|| "The selected MIDI output is unavailable.".to_owned())?;
-        let connection = self
-            .backend
-            .connect_output(&device_id)
-            .map_err(|error| error.to_string())?;
+        let connection_id = device_id.clone();
+        let connection = run_midi_operation("output connection", move || {
+            MidirBackend
+                .connect_output(&connection_id)
+                .map_err(|error| error.to_string())
+        })?;
         self.output_worker = Some(spawn_output_worker(connection)?);
         self.selected_output_id = Some(device_id);
         self.selected_output_name = Some(name);
         Ok(())
+    }
+
+    pub fn reload(&mut self) -> Result<(), String> {
+        let input = self.selected_input_id.clone();
+        let output = self.selected_output_id.clone();
+        let mut errors = Vec::new();
+        if let Err(error) = self.set_input(input) {
+            errors.push(error);
+        }
+        if let Err(error) = self.set_output(output) {
+            errors.push(error);
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors.join(" "))
+        }
     }
 
     pub fn send_performance_command(
@@ -305,6 +347,44 @@ impl MidiManager {
         self.selected_output_name = None;
         self.last_output_error = Some(format!("{message}; MIDI OUT was disabled."));
     }
+}
+
+fn device_dto(device: tapconductor_midi::backend::MidiDeviceInfo) -> DeviceDto {
+    DeviceDto {
+        id: device.id,
+        name: device.name,
+        is_default: false,
+    }
+}
+
+fn receive_midi_result<T>(
+    receiver: mpsc::Receiver<Result<T, String>>,
+    deadline: Instant,
+    operation: &str,
+) -> Result<T, String> {
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    receiver.recv_timeout(remaining).map_err(|error| match error {
+        RecvTimeoutError::Timeout => {
+            format!("MIDI {operation} timed out after 5 seconds. Check the device connection, then reload devices.")
+        }
+        RecvTimeoutError::Disconnected => {
+            format!("MIDI {operation} stopped before it returned a result.")
+        }
+    })?
+}
+
+fn run_midi_operation<T: Send + 'static>(
+    operation: &'static str,
+    task: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    let (sender, receiver) = mpsc::sync_channel(1);
+    thread::Builder::new()
+        .name(format!("tapconductor-midi-{}", operation.replace(' ', "-")))
+        .spawn(move || {
+            let _ = sender.send(task());
+        })
+        .map_err(|error| format!("Unable to start MIDI {operation}: {error}"))?;
+    receive_midi_result(receiver, Instant::now() + MIDI_OPERATION_TIMEOUT, operation)
 }
 
 fn due_instant(

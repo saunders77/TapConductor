@@ -103,8 +103,9 @@ TapConductor lists every driver registered with the Windows ASIO host and valida
 format when selected. Wrapper drivers such as ASIO4ALL appear as one ASIO entry; choose the desired
 Realtek speakers or headphone endpoint in the wrapper's own control panel.
 
-To exercise MIDI, connect the device before opening its selector, choose it under **MIDI in** or
-**MIDI out**, and use **Panic** before disconnecting or changing a live routing setup.
+To exercise MIDI, choose the device under **MIDI in** or **MIDI out**, and use **Panic** before
+disconnecting or changing a live routing setup. After connecting or reconnecting hardware while the
+app is open, choose **Reload audio & MIDI devices** from **Audio out**.
 
 ## Build installers
 

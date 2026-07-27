@@ -137,6 +137,32 @@ impl AppCore {
         Ok(event)
     }
 
+    pub fn reload_audio_systems(&mut self) -> Result<Option<CoreEventDto>, String> {
+        let event = self.panic()?;
+        let mut errors = Vec::new();
+
+        match self.audio.reload() {
+            Ok(()) => {
+                if let Err(error) = self.apply_audio_sample_rate() {
+                    errors.push(error);
+                }
+            }
+            Err(error) => errors.push(error),
+        }
+        if let Err(error) = self.midi.reload() {
+            errors.push(error);
+        }
+
+        if errors.is_empty() {
+            Ok(event)
+        } else {
+            Err(format!(
+                "Some device systems could not be reloaded: {}",
+                errors.join(" ")
+            ))
+        }
+    }
+
     /// Silence all held voices and release the mobile output stream before the
     /// operating system suspends the application.
     #[cfg(mobile)]
@@ -659,19 +685,13 @@ fn sequence_from_events(events: &[tapconductor_score::TapEvent]) -> Result<Score
                 })
                 .collect::<Result<_, _>>()?;
             let chord = Chord::from_pitches(&pitches).map_err(|error| error.to_string())?;
-            let release_on = {
-                events
-                    .iter()
-                    .enumerate()
-                    .skip(index + 1)
-                    .find(|(_, candidate)| candidate.position.absolute >= end)
-                    .map(|(release_index, _)| EventId::new(release_index as u64 + 1))
-            };
-            staff_groups.push(StaffSlice::new(
-                staff,
-                chord,
-                tapconductor_performance::SliceReleaseBoundary::from_event(release_on),
-            ));
+            // At every tap, a sounding note may end once it no longer spans
+            // the *following* playable score location. Therefore its boundary
+            // is the last later tap strictly before its resolved written/tied
+            // end. If the immediately following tap is at or after the end,
+            // physical input release may begin the note-off immediately.
+            let release_boundary = rhythm_release_boundary(events, index, end);
+            staff_groups.push(StaffSlice::new(staff, chord, release_boundary));
         }
         slices.push(
             Slice::from_staff_groups(EventId::new(index as u64 + 1), &staff_groups)
@@ -681,10 +701,47 @@ fn sequence_from_events(events: &[tapconductor_score::TapEvent]) -> Result<Score
     ScoreSequence::new(slices).map_err(|error| error.to_string())
 }
 
+fn rhythm_release_boundary(
+    events: &[tapconductor_score::TapEvent],
+    index: usize,
+    end: tapconductor_score::Rational,
+) -> tapconductor_performance::SliceReleaseBoundary {
+    events
+        .iter()
+        .enumerate()
+        .skip(index + 1)
+        .take_while(|(_, candidate)| candidate.position.absolute < end)
+        .last()
+        .map(|(release_index, _)| {
+            tapconductor_performance::SliceReleaseBoundary::OnEvent(EventId::new(
+                release_index as u64 + 1,
+            ))
+        })
+        .unwrap_or(tapconductor_performance::SliceReleaseBoundary::InputRelease)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{MIN_TAP_INTERVAL, TapInputGate};
+    use super::{MIN_TAP_INTERVAL, TapInputGate, rhythm_release_boundary};
     use std::time::{Duration, Instant};
+    use tapconductor_performance::{EventId, SliceReleaseBoundary};
+    use tapconductor_score::{Rational, ScorePosition, TapEvent};
+
+    fn event_at(position: i64) -> TapEvent {
+        TapEvent {
+            id: format!("event-{position}"),
+            position: ScorePosition {
+                absolute: Rational::from_integer(position),
+                measure_index: 0,
+                measure_id: "1".to_owned(),
+                occurrence: 1,
+                offset: Rational::from_integer(position),
+            },
+            attacks: Vec::new(),
+            release_boundaries: Vec::new(),
+            display_anchors: Vec::new(),
+        }
+    }
 
     #[test]
     fn tap_input_gate_ignores_taps_inside_sixty_milliseconds_without_extending_window() {
@@ -707,5 +764,36 @@ mod tests {
         assert!(gate.accept(start + Duration::from_millis(60)));
         assert!(!gate.accept(start + Duration::from_millis(119)));
         assert!(gate.accept(start + Duration::from_millis(120)));
+    }
+
+    #[test]
+    fn short_note_can_release_before_the_following_note_point() {
+        let events = [event_at(0), event_at(2), event_at(4)];
+        assert_eq!(
+            rhythm_release_boundary(&events, 0, Rational::from_integer(1)),
+            SliceReleaseBoundary::InputRelease
+        );
+    }
+
+    #[test]
+    fn note_releases_at_the_last_note_point_strictly_inside_its_duration() {
+        let events = [event_at(0), event_at(2), event_at(4), event_at(6)];
+        assert_eq!(
+            rhythm_release_boundary(&events, 0, Rational::from_integer(5)),
+            SliceReleaseBoundary::OnEvent(EventId::new(3))
+        );
+        assert_eq!(
+            rhythm_release_boundary(&events, 0, Rational::from_integer(2)),
+            SliceReleaseBoundary::InputRelease
+        );
+    }
+
+    #[test]
+    fn note_extending_past_the_score_releases_at_the_final_note_point() {
+        let events = [event_at(0), event_at(2), event_at(4)];
+        assert_eq!(
+            rhythm_release_boundary(&events, 0, Rational::from_integer(8)),
+            SliceReleaseBoundary::OnEvent(EventId::new(3))
+        );
     }
 }

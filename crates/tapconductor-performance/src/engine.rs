@@ -585,29 +585,56 @@ impl<G: GatePolicy> PerformanceEngine<G> {
 
         let mut transition = Transition::none();
         if staff_scoped_tap {
-            let minimum_age = DefaultPianoGate::minimum_frames(self.sample_rate);
+            // Validate every newly reached score boundary before mutating any
+            // groups. A late gate overflow must leave this tap retryable.
+            for waiting in self.active_groups.iter().filter(|waiting| {
+                waiting.first_later_trigger_at.is_none()
+                    && match waiting.release_boundary {
+                        SliceReleaseBoundary::NextTrigger => true,
+                        SliceReleaseBoundary::OnEvent(event) => slice.id().get() >= event.get(),
+                        SliceReleaseBoundary::InputRelease | SliceReleaseBoundary::EndOfScore => {
+                            false
+                        }
+                    }
+            }) {
+                self.gate
+                    .note_off_at(self.sample_rate, waiting.input_released_at, Some(at))?;
+            }
             for index in 0..self.active_groups.len() {
                 let waiting = &mut self.active_groups[index];
                 let boundary_reached = match waiting.release_boundary {
+                    SliceReleaseBoundary::InputRelease => true,
                     SliceReleaseBoundary::NextTrigger => true,
                     SliceReleaseBoundary::OnEvent(event) => slice.id().get() >= event.get(),
                     SliceReleaseBoundary::EndOfScore => false,
                 };
-                let old_enough =
-                    at.frame().saturating_sub(waiting.attack_at.frame()) >= minimum_age;
-                if waiting.first_later_trigger_at.is_none() && boundary_reached && old_enough {
+                if waiting.first_later_trigger_at.is_none() && boundary_reached {
+                    let release_at = self.gate.note_off_at(
+                        self.sample_rate,
+                        waiting.input_released_at,
+                        Some(at),
+                    )?;
                     waiting.first_later_trigger_at = Some(at);
-                    waiting.release_scheduled_at = Some(at);
-                    transition.push_audio(AudioCommand::ReleaseGroup {
-                        at,
-                        group: waiting.id,
-                    });
+                    waiting.release_scheduled_at = release_at;
+                    if let Some(release_at) = release_at {
+                        // The input was released before the score allowed this
+                        // note to end. Begin its release envelope only now.
+                        transition.push_audio(AudioCommand::DampenGroup {
+                            at,
+                            group: waiting.id,
+                        });
+                        transition.push_audio(AudioCommand::ReleaseGroup {
+                            at: release_at,
+                            group: waiting.id,
+                        });
+                    }
                 }
             }
         } else if let Some(index) = self.active_groups.iter().position(|group| {
             group.first_later_trigger_at.is_none()
                 && (kind == TriggerKind::Audition
                     || match group.release_boundary {
+                        SliceReleaseBoundary::InputRelease => true,
                         SliceReleaseBoundary::NextTrigger => true,
                         SliceReleaseBoundary::OnEvent(event) => slice.id().get() >= event.get(),
                         SliceReleaseBoundary::EndOfScore => false,
@@ -643,7 +670,12 @@ impl<G: GatePolicy> PerformanceEngine<G> {
                 input,
                 attack_at: at,
                 input_released_at: None,
-                first_later_trigger_at: None,
+                first_later_trigger_at: (staff_scoped_tap
+                    && matches!(
+                        staff_group.release_boundary(),
+                        SliceReleaseBoundary::InputRelease
+                    ))
+                .then_some(at),
                 release_scheduled_at: None,
                 release_boundary: staff_group.release_boundary(),
                 staff: staff_group.staff(),
@@ -730,13 +762,18 @@ impl<G: GatePolicy> PerformanceEngine<G> {
             group.release_scheduled_at = release_at;
             scheduled_release = scheduled_release.or(release_at);
 
-            // A physical key-up changes the built-in piano's envelope now.
-            // The existing ReleaseGroup remains separately scheduled by the
-            // score gate, preserving note timing and MIDI output semantics.
-            transition.push_audio(AudioCommand::DampenGroup {
-                at,
-                group: group.id,
-            });
+            // Score-backed rhythm notes must satisfy both halves of the gate:
+            // the input is up and their written duration no longer crosses
+            // the next score onset. Auditions and legacy slices retain their
+            // ordinary physical key-up damping behavior.
+            let score_boundary_reached = group.first_later_trigger_at.is_some()
+                || matches!(group.release_boundary, SliceReleaseBoundary::NextTrigger);
+            if score_boundary_reached {
+                transition.push_audio(AudioCommand::DampenGroup {
+                    at,
+                    group: group.id,
+                });
+            }
             if let Some(release_at) = release_at {
                 transition.push_audio(AudioCommand::ReleaseGroup {
                     at: release_at,
@@ -1203,9 +1240,17 @@ mod tests {
             })
             .collect();
         assert_eq!(first_groups.len(), 2);
-        release(&mut engine, 1, 110);
+        let early_release = release(&mut engine, 1, 110);
+        assert!(commands(&early_release).is_empty());
 
         let second = tap(&mut engine, generation, 2, 100 + MINIMUM);
+        assert_eq!(
+            commands(&second)[0],
+            AudioCommand::DampenGroup {
+                at: time(100 + MINIMUM),
+                group: first_groups[0],
+            }
+        );
         let released: Vec<_> = commands(&second)
             .iter()
             .filter_map(|command| match command {
@@ -1217,6 +1262,101 @@ mod tests {
         assert!(engine
             .active_groups()
             .any(|group| group.id == first_groups[1] && group.release_scheduled_at.is_none()));
+    }
+
+    #[test]
+    fn written_duration_and_physical_release_are_both_required() {
+        let mut engine = engine();
+        let score = ScoreSequence::new(vec![
+            Slice::from_staff_groups(
+                event(10),
+                &[StaffSlice::new(
+                    1,
+                    chord(&[60]),
+                    SliceReleaseBoundary::OnEvent(event(20)),
+                )],
+            )
+            .unwrap(),
+            Slice::from_staff_groups(
+                event(20),
+                &[StaffSlice::new(
+                    1,
+                    chord(&[62]),
+                    SliceReleaseBoundary::InputRelease,
+                )],
+            )
+            .unwrap(),
+        ])
+        .unwrap();
+        engine.load_score(score, time(0)).unwrap();
+        let generation = engine.generation().unwrap();
+
+        let first = tap(&mut engine, generation, 1, 100);
+        let first_group = match commands(&first)[0] {
+            AudioCommand::PlaySlice { group, .. } => group,
+            _ => unreachable!(),
+        };
+
+        // Reaching the written boundary while the original key is still down
+        // must not dampen or release that note.
+        let boundary = tap(&mut engine, generation, 2, 200);
+        assert!(matches!(
+            commands(&boundary).as_slice(),
+            [AudioCommand::PlaySlice { .. }]
+        ));
+
+        // Once the original key is released, both gate conditions are true.
+        let released = release(&mut engine, 1, 300);
+        assert_eq!(
+            commands(&released),
+            vec![
+                AudioCommand::DampenGroup {
+                    at: time(300),
+                    group: first_group,
+                },
+                AudioCommand::ReleaseGroup {
+                    at: time(300 + MINIMUM),
+                    group: first_group,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn note_not_crossing_the_next_score_point_dampens_on_input_release() {
+        let mut engine = engine();
+        let score = ScoreSequence::new(vec![Slice::from_staff_groups(
+            event(10),
+            &[StaffSlice::new(
+                1,
+                chord(&[60]),
+                SliceReleaseBoundary::InputRelease,
+            )],
+        )
+        .unwrap()])
+        .unwrap();
+        engine.load_score(score, time(0)).unwrap();
+        let generation = engine.generation().unwrap();
+        let played = tap(&mut engine, generation, 1, 100);
+        let group = match commands(&played)[0] {
+            AudioCommand::PlaySlice { group, .. } => group,
+            _ => unreachable!(),
+        };
+
+        let released = release(&mut engine, 1, 200);
+        assert_eq!(
+            commands(&released),
+            vec![
+                AudioCommand::DampenGroup {
+                    at: time(200),
+                    group,
+                },
+                AudioCommand::ReleaseGroup {
+                    at: time(200 + MINIMUM),
+                    group,
+                },
+            ]
+        );
     }
 
     #[test]

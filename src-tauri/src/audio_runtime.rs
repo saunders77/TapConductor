@@ -114,7 +114,7 @@ impl AudioManager {
         match self.runtime.as_ref() {
             Some(runtime) if runtime.diagnostics.snapshot().backend_errors == 0 => Ok(()),
             Some(_) => Err(
-                "The audio backend reported an output-stream error; reselect the device before performing."
+                "The audio backend reported an output-stream error. Choose Reload audio & MIDI devices from Audio Out before performing."
                     .to_owned(),
             ),
             None => Err(self
@@ -148,6 +148,30 @@ impl AudioManager {
         result
     }
 
+    /// Recreate the platform host as well as the stream. This is deliberately
+    /// stronger than selecting the same endpoint again: native APIs and ASIO
+    /// drivers often cache the device list for the lifetime of their host.
+    pub fn reload(&mut self) -> Result<(), String> {
+        let selected_device = self.selected_device.clone();
+        let handoff_sample = self.now_sample();
+        self.runtime.take();
+        self.clock_epoch = handoff_sample;
+        self.backend = PlatformAudioBackend::default();
+
+        match self.restart(selected_device.clone()) {
+            Ok(()) => Ok(()),
+            Err(selected_error) if selected_device.is_some() => {
+                self.restart(None).map_err(|fallback_error| {
+                    format!(
+                        "The selected audio output could not be reloaded ({selected_error}). \
+                         The system default output also failed ({fallback_error})."
+                    )
+                })
+            }
+            Err(error) => Err(error),
+        }
+    }
+
     /// Release the platform stream while retaining the selected endpoint and
     /// a monotonic performance clock. Mobile operating systems can revoke the
     /// audio session while the application is inactive.
@@ -172,17 +196,12 @@ impl AudioManager {
     }
 
     fn try_restart(&mut self, selected_device: Option<String>) -> Result<(), String> {
-        let selected_name = self
-            .backend
-            .output_devices()
-            .ok()
-            .and_then(|devices| {
-                selected_device
-                    .as_deref()
-                    .and_then(|id| devices.iter().find(|device| device.id == id))
-                    .or_else(|| devices.iter().find(|device| device.is_default))
-                    .map(|device| device.name.clone())
-            })
+        // Device IDs include the display name. Avoid a second native device
+        // enumeration here: a wedged ASIO host should produce one bounded
+        // configuration error, not serial discovery and configuration waits.
+        let selected_name = selected_device
+            .as_deref()
+            .and_then(display_name_from_device_id)
             .unwrap_or_else(|| "System default".to_owned());
 
         let mut output_config = self
@@ -475,6 +494,23 @@ impl AudioManager {
     fn uses_asio_stream(&self) -> bool {
         false
     }
+}
+
+fn display_name_from_device_id(id: &str) -> Option<String> {
+    let (name, is_asio) = if let Some(name) = id.strip_prefix("asio:") {
+        (name, true)
+    } else {
+        let rest = id.strip_prefix("cpal:")?;
+        (rest.split_once(':')?.1, false)
+    };
+    if name.is_empty() {
+        return None;
+    }
+    Some(if is_asio {
+        format!("{name} (ASIO)")
+    } else {
+        name.to_owned()
+    })
 }
 
 impl Default for AudioManager {

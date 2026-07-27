@@ -156,7 +156,7 @@ impl AudioManager {
         let handoff_sample = self.now_sample();
         self.runtime.take();
         self.clock_epoch = handoff_sample;
-        self.backend = PlatformAudioBackend::default();
+        self.reload_platform_backend()?;
 
         match self.restart(selected_device.clone()) {
             Ok(()) => Ok(()),
@@ -170,6 +170,17 @@ impl AudioManager {
             }
             Err(error) => Err(error),
         }
+    }
+
+    #[cfg(windows)]
+    fn reload_platform_backend(&mut self) -> Result<(), String> {
+        self.backend.reload().map_err(|error| error.to_string())
+    }
+
+    #[cfg(not(windows))]
+    fn reload_platform_backend(&mut self) -> Result<(), String> {
+        self.backend = PlatformAudioBackend::default();
+        Ok(())
     }
 
     /// Release the platform stream while retaining the selected endpoint and

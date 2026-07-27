@@ -520,6 +520,10 @@ mod asio_impl {
                 )
             })
         }
+
+        pub fn reload(&self) -> Result<(), BackendError> {
+            request_owner(&self.control, OwnerRequest::Reload, "ASIO host reload")
+        }
     }
 
     impl AudioBackend for AsioBackend {
@@ -683,6 +687,7 @@ mod asio_impl {
         Pause(SyncSender<Result<(), BackendError>>),
         Resume(SyncSender<Result<(), BackendError>>),
         Close(SyncSender<()>),
+        Reload(SyncSender<Result<(), BackendError>>),
         Terminate,
     }
 
@@ -769,7 +774,7 @@ mod asio_impl {
     }
 
     fn run_owner_thread(receiver: Receiver<OwnerRequest>) {
-        let host = AsioBackend::host();
+        let mut host = AsioBackend::host();
         let mut cached_devices: Option<Vec<OutputDeviceInfo>> = None;
         let mut prepared_device: Option<(Option<String>, cpal::Device)> = None;
         let mut stream: Option<cpal::Stream> = None;
@@ -853,6 +858,27 @@ mod asio_impl {
                     stream.take();
                     prepared_device = None;
                     let _ = reply.send(());
+                }
+                OwnerRequest::Reload(reply) => {
+                    stream.take();
+                    prepared_device = None;
+                    cached_devices = None;
+
+                    // Drop the previous CPAL/ASIO host before constructing its
+                    // replacement. ASIO is process-global in several vendor
+                    // drivers, so creating the new host first can leave it
+                    // unable to enumerate or reconnect the same driver.
+                    let old_host = std::mem::replace(
+                        &mut host,
+                        Err(BackendError::new(
+                            "ASIO host reload",
+                            "host replacement is in progress",
+                        )),
+                    );
+                    drop(old_host);
+                    host = AsioBackend::host();
+                    let result = host.as_ref().map(|_| ()).map_err(Clone::clone);
+                    let _ = reply.send(result);
                 }
                 OwnerRequest::Terminate => break,
             }
@@ -958,6 +984,13 @@ mod wasapi_probe {
     }
 
     impl WindowsLowLatencyBackend {
+        pub fn reload(&self) -> Result<(), BackendError> {
+            self.active_backend.store(BACKEND_NONE, Ordering::Relaxed);
+            #[cfg(feature = "asio-backend")]
+            self.asio.reload()?;
+            Ok(())
+        }
+
         pub fn uses_direct_stream(&self) -> bool {
             matches!(
                 self.active_backend.load(Ordering::Relaxed),

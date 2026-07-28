@@ -79,7 +79,9 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .staff-control input { width: 14px; height: 14px; margin: 0; accent-color: #75ffb3; cursor: pointer; }
 #osmd { position: relative; z-index: 1; }.score-targets { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
 .slice-controls { position: absolute; display: flex; flex-direction: column; align-items: center; width: 24px; transform: translateX(-12px); pointer-events: auto; z-index: 3; }
-.slice-action { display: grid; place-items: center; width: 22px; height: 20px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #505248; cursor: pointer; line-height: 1; transition: background .1s, box-shadow .1s, transform .1s; }
+.slice-controls.has-highlight::before { content: ""; position: absolute; left: var(--highlight-left); top: var(--highlight-top); width: var(--highlight-width); height: var(--highlight-height); pointer-events: none; opacity: 0; background: #75ffb35c; transition: opacity .1s ease; z-index: 0; }
+.slice-controls.has-highlight.current::before { opacity: 1; }
+.slice-action { position: relative; z-index: 1; display: grid; place-items: center; width: 22px; height: 20px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #505248; cursor: pointer; line-height: 1; transition: background .1s, box-shadow .1s, transform .1s; }
 .slice-action:hover, .slice-action:focus-visible { background: #75ffb370; box-shadow: 0 0 0 3px #75ffb366; outline: none; transform: scale(1.12); }
 .play-chord { margin-top: -10px; margin-bottom: 6px; }
 .play-chord svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }

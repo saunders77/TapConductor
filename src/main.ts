@@ -304,6 +304,21 @@ let osmdCurrentStep = 0;
 let eventHorizontalPositions: number[] = [];
 let beatHorizontalPositions: number[] = [];
 let measureHorizontalPositions = new Map<number, number>();
+let orderedMeasureHorizontalPositions: number[] = [];
+let eventHighlightNodes: HTMLElement[][] = [];
+let activeHighlightNodes: HTMLElement[] = [];
+let beatHighlightNode: HTMLDivElement | null = null;
+let beatHighlightVisuals: Array<{ top: number; height: number } | undefined> = [];
+type ScorePerformance = {
+  coreLoadMs?: number;
+  osmdLoadMs?: number;
+  osmdRenderMs?: number;
+  targetBuildMs?: number;
+  displayTotalMs?: number;
+  visualSteps?: number;
+  targetNodes?: number;
+};
+let scorePerformance: ScorePerformance | null = null;
 let lastDiagnostics: DiagnosticsDto | null = null;
 let lastUiNativeRoundTripMs: number | null = null;
 let unlisteners: UnlistenFn[] = [];
@@ -323,11 +338,44 @@ function updateMidiFreePlayButton(): void {
 const pendingDowns = new Map<string, Promise<void>>();
 const DEFAULT_VELOCITY = 96;
 const MINIMUM_POINTER_NOTE_HOLD_MS = 250;
+const SCORE_MEASURE_PREFIX = "tapconductor:";
 type PointerHold = {
   token: string;
   releaseAt: Promise<number>;
   released: boolean;
 };
+
+function recordScorePhase(
+  phase: keyof Pick<ScorePerformance, "coreLoadMs" | "osmdLoadMs" | "osmdRenderMs" | "targetBuildMs" | "displayTotalMs">,
+  startedAt: number,
+): number {
+  const duration = performance.now() - startedAt;
+  scorePerformance ??= {};
+  scorePerformance[phase] = duration;
+  const measureName = `${SCORE_MEASURE_PREFIX}${phase}`;
+  try {
+    performance.clearMeasures(measureName);
+    performance.measure(measureName, { start: startedAt, duration });
+  } catch {
+    // The diagnostics values remain available on older WebViews that do not
+    // implement PerformanceMeasureOptions.
+  }
+  return duration;
+}
+
+function registerEventHighlight(node: HTMLElement, eventIndices: number[]): void {
+  for (const eventIndex of eventIndices) {
+    const nodes = eventHighlightNodes[eventIndex] ?? [];
+    nodes.push(node);
+    eventHighlightNodes[eventIndex] = nodes;
+  }
+}
+
+function clearActiveHighlights(): void {
+  for (const node of activeHighlightNodes) node.classList.remove("current");
+  activeHighlightNodes = [];
+  if (beatHighlightNode) beatHighlightNode.classList.remove("current");
+}
 
 function rolledFinalOnsetDelay(noteCount: number, rollMs: number): number {
   return Math.max(0, noteCount - 1) * Math.max(0, rollMs);
@@ -550,27 +598,34 @@ function updatePosition(): void {
     moveOsmdCursor(highlightIndex);
     autoFollowPosition(eventHorizontalPositions[highlightIndex]);
   }
-  document.querySelectorAll<HTMLElement>("[data-event-indices], [data-event-index], [data-beat-index]").forEach((node) => {
-    const eventIndices = (node.dataset.eventIndices ?? node.dataset.eventIndex ?? "")
-      .split(",")
-      .filter(Boolean)
-      .map(Number);
-    const nodeBeatIndex = node.dataset.beatIndex === undefined ? null : Number(node.dataset.beatIndex);
-    const isCurrent = displayedBeatIndex === null
-      ? eventIndices.includes(highlightIndex)
-      : nodeBeatIndex === displayedBeatIndex;
-    node.classList.toggle("current", isCurrent);
-  });
+  clearActiveHighlights();
+  if (displayedBeatIndex !== null && beatHighlightNode) {
+    const left = beatHorizontalPositions[displayedBeatIndex];
+    const visual = beatHighlightVisuals[displayedBeatIndex];
+    if (left !== undefined && visual) {
+      beatHighlightNode.style.left = `${left - 10}px`;
+      beatHighlightNode.style.top = `${visual.top}px`;
+      beatHighlightNode.style.height = `${visual.height}px`;
+      beatHighlightNode.classList.add("current");
+    }
+  } else {
+    activeHighlightNodes = eventHighlightNodes[highlightIndex] ?? [];
+    for (const node of activeHighlightNodes) node.classList.add("current");
+  }
 }
 
 function autoFollowPosition(sliceLeft: number | undefined): void {
   if (sliceLeft === undefined) return;
-  const orderedBars = [...new Set(measureHorizontalPositions.values())].sort((left, right) => left - right);
+  const orderedBars = orderedMeasureHorizontalPositions;
   let barWidth = 180 * zoom;
-  let barIndex = -1;
-  for (let index = 0; index < orderedBars.length; index += 1) {
-    if (orderedBars[index]! <= sliceLeft + 1) barIndex = index;
+  let low = 0;
+  let high = orderedBars.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (orderedBars[middle]! <= sliceLeft + 1) low = middle + 1;
+    else high = middle;
   }
+  const barIndex = low - 1;
   if (barIndex >= 0 && barIndex + 1 < orderedBars.length) {
     barWidth = orderedBars[barIndex + 1]! - orderedBars[barIndex]!;
   } else if (barIndex > 0) {
@@ -652,7 +707,10 @@ async function loadScore(
   });
   let loaded: LoadedScore | null = null;
   try {
+    scorePerformance = {};
+    const coreLoadStarted = performance.now();
     loaded = await loader();
+    recordScorePhase("coreLoadMs", coreLoadStarted);
     await displayScore(loaded);
   } catch (error) {
     // Native load failures are already surfaced by invokeSafe. Rendering is a
@@ -688,6 +746,12 @@ function indexForPreservedEvent(events: TapEventDto[], previous: TapEventDto | u
 }
 
 async function displayScore(loaded: LoadedScore, preserved?: ScoreViewState): Promise<void> {
+  const displayStarted = performance.now();
+  if (zoomRenderTimer !== null) {
+    window.clearTimeout(zoomRenderTimer);
+    zoomRenderTimer = null;
+  }
+  renderedZoom = null;
   ensureBottomControls();
   window.requestAnimationFrame(ensureBottomControls);
   const preserveView = preserved !== undefined;
@@ -700,6 +764,11 @@ async function displayScore(loaded: LoadedScore, preserved?: ScoreViewState): Pr
   eventHorizontalPositions = [];
   beatHorizontalPositions = [];
   measureHorizontalPositions = new Map();
+  orderedMeasureHorizontalPositions = [];
+  eventHighlightNodes = [];
+  activeHighlightNodes = [];
+  beatHighlightNode = null;
+  beatHighlightVisuals = [];
   cursorIndex = preserveView ? Math.min(preservedCursor, Math.max(0, loaded.events.length - 1)) : 0;
   highlightIndex = cursorIndex;
   mostRecentChordIndex = null;
@@ -730,8 +799,10 @@ async function displayScore(loaded: LoadedScore, preserved?: ScoreViewState): Pr
     // defensive limit for its canvas backend). We render SVG, where that cap
     // is unnecessary and causes very long scores to wrap onto another line.
     osmd.EngravingRules.SheetMaximumWidth = 1_000_000;
+    const osmdLoadStarted = performance.now();
     await osmd.load(loaded.musicXml);
-    renderOsmd();
+    recordScorePhase("osmdLoadMs", osmdLoadStarted);
+    await scheduleOsmdRender("score");
   } else {
     osmd = null;
     renderMidiRoll(loaded.events);
@@ -745,23 +816,98 @@ async function displayScore(loaded: LoadedScore, preserved?: ScoreViewState): Pr
       updatePosition();
     }, 0);
   }
+  recordScorePhase("displayTotalMs", displayStarted);
+  if (scorePerformance) {
+    console.info("TapConductor score display performance", { ...scorePerformance });
+  }
   setStatus("ready", "Ready");
   loaded.warnings.forEach((warning) => toast(warning, "warning"));
 }
 
-function renderOsmd(): void {
-  if (!osmd) return;
-  ensureBottomControls();
-  osmd.Zoom = zoom;
-  osmd.render();
-  osmd.cursor.show();
-  window.setTimeout(() => {
-    const contentWidth = Math.max(elements.osmd.scrollWidth, elements.osmd.getBoundingClientRect().width);
-    if (contentWidth > 0) {
-      elements.scoreStage.style.width = `${Math.ceil(contentWidth + 68)}px`;
+type RenderWaiter = {
+  resolve: () => void;
+  reject: (error: unknown) => void;
+};
+let renderRequested = false;
+let renderRunning = false;
+let renderFrame: number | null = null;
+let renderRequestVersion = 0;
+let renderWaiters: RenderWaiter[] = [];
+let renderReason = "score";
+let renderedZoom: number | null = null;
+
+function scheduleOsmdRender(reason: "score" | "zoom"): Promise<void> {
+  if (!osmd) return Promise.resolve();
+  renderRequested = true;
+  renderReason = reason;
+  renderRequestVersion += 1;
+  const promise = new Promise<void>((resolve, reject) => {
+    renderWaiters.push({ resolve, reject });
+  });
+  if (!renderRunning && renderFrame === null) {
+    renderFrame = window.requestAnimationFrame(() => {
+      renderFrame = null;
+      void drainOsmdRenders();
+    });
+  }
+  return promise;
+}
+
+async function drainOsmdRenders(): Promise<void> {
+  if (renderRunning) return;
+  renderRunning = true;
+  try {
+    while (renderRequested) {
+      renderRequested = false;
+      const version = renderRequestVersion;
+      const reason = renderReason;
+      await renderOsmdNow(version);
+      if (version === renderRequestVersion && reason === "zoom") {
+        updatePosition();
+      }
     }
-    buildScoreTargets();
-  }, 0);
+    const completed = renderWaiters;
+    renderWaiters = [];
+    completed.forEach((waiter) => waiter.resolve());
+  } catch (error) {
+    const failed = renderWaiters;
+    renderWaiters = [];
+    failed.forEach((waiter) => waiter.reject(error));
+  } finally {
+    renderRunning = false;
+    if (renderRequested && renderFrame === null) {
+      renderFrame = window.requestAnimationFrame(() => {
+        renderFrame = null;
+        void drainOsmdRenders();
+      });
+    }
+  }
+}
+
+async function renderOsmdNow(version: number): Promise<void> {
+  const activeOsmd = osmd;
+  if (!activeOsmd) return;
+  ensureBottomControls();
+  const renderZoom = zoom;
+  activeOsmd.Zoom = renderZoom;
+  const renderStarted = performance.now();
+  activeOsmd.render();
+  renderedZoom = renderZoom;
+  recordScorePhase("osmdRenderMs", renderStarted);
+  activeOsmd.cursor.show();
+  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+  if (version !== renderRequestVersion || activeOsmd !== osmd) return;
+
+  const contentWidth = Math.max(elements.osmd.scrollWidth, elements.osmd.getBoundingClientRect().width);
+  if (contentWidth > 0) {
+    elements.scoreStage.style.width = `${Math.ceil(contentWidth + 68)}px`;
+  }
+  const targetsStarted = performance.now();
+  const targetStats = buildScoreTargets();
+  recordScorePhase("targetBuildMs", targetsStarted);
+  scorePerformance ??= {};
+  scorePerformance.visualSteps = targetStats.visualSteps;
+  scorePerformance.targetNodes = targetStats.targetNodes;
 }
 
 function renderMidiRoll(events: TapEventDto[]): void {
@@ -772,6 +918,7 @@ function renderMidiRoll(events: TapEventDto[]): void {
     eventCard.className = "midi-event";
     eventCard.dataset.eventIndex = String(event.index);
     eventCard.dataset.eventIndices = String(event.index);
+    registerEventHighlight(eventCard, [event.index]);
     eventCard.style.setProperty("--event-height", String(Math.max(1, event.notes.length)));
     const measure = document.createElement("b");
     measure.textContent = event.measureNumber;
@@ -797,13 +944,23 @@ function renderMidiRoll(events: TapEventDto[]): void {
         measureHorizontalPositions.set(measureIndex, eventCard.offsetLeft);
       }
     });
+    orderedMeasureHorizontalPositions = [...new Set(measureHorizontalPositions.values())]
+      .sort((left, right) => left - right);
   });
 }
 
-function buildScoreTargets(): void {
-  if (!osmd || !score) return;
+function buildScoreTargets(): { visualSteps: number; targetNodes: number } {
+  if (!osmd || !score) return { visualSteps: 0, targetNodes: 0 };
   const activeScore = score;
-  elements.scoreTargets.replaceChildren();
+  const targetFragment = document.createDocumentFragment();
+  eventHorizontalPositions = [];
+  beatHorizontalPositions = [];
+  measureHorizontalPositions = new Map();
+  orderedMeasureHorizontalPositions = [];
+  eventHighlightNodes = [];
+  activeHighlightNodes = [];
+  beatHighlightNode = null;
+  beatHighlightVisuals = [];
   const hostRect = elements.scoreStage.getBoundingClientRect();
   const cursor = osmd.cursor;
   cursor.reset();
@@ -893,51 +1050,75 @@ function buildScoreTargets(): void {
     osmdCurrentStep += 1;
   }
 
-  const rationalMatches = (
+  const rationalKey = (measureIndex: number, numerator: number, denominator: number): string => {
+    if (denominator === 0) return "";
+    let left = BigInt(numerator);
+    let right = BigInt(denominator);
+    if (right < 0n) {
+      left = -left;
+      right = -right;
+    }
+    let a = left < 0n ? -left : left;
+    let b = right;
+    while (b !== 0n) {
+      const remainder = a % b;
+      a = b;
+      b = remainder;
+    }
+    const divisor = a === 0n ? 1n : a;
+    return `${measureIndex}:${left / divisor}/${right / divisor}`;
+  };
+  const stepsByPosition = new Map<string, VisualStep[]>();
+  for (const visual of visualSteps) {
+    const key = rationalKey(visual.measureIndex, visual.numerator, visual.denominator);
+    const matches = stepsByPosition.get(key) ?? [];
+    matches.push(visual);
+    stepsByPosition.set(key, matches);
+  }
+  const matchingVisualSteps = (
     measureIndex: number,
     numerator: number,
     denominator: number,
-    step: VisualStep,
-  ): boolean => {
-    if (measureIndex !== step.measureIndex || denominator === 0 || step.denominator === 0) return false;
-    const eventNumerator = BigInt(numerator);
-    const eventDenominator = BigInt(denominator);
-    const visualNumerator = BigInt(step.numerator);
-    const visualDenominator = BigInt(step.denominator);
-    const left = eventNumerator * visualDenominator;
-    const right = visualNumerator * eventDenominator;
-    // The normalized core uses MusicXML division units (quarter note = 1),
-    // while OSMD versions commonly expose whole-note fractions. Accept the
-    // direct representation too so this remains robust across OSMD changes.
-    return left === right || left === right * 4n;
+  ): VisualStep[] => {
+    // The normalized core uses quarter-note units while OSMD commonly exposes
+    // whole-note fractions. Index both accepted representations.
+    const directKey = rationalKey(measureIndex, numerator, denominator);
+    const quarterKey = rationalKey(measureIndex, numerator, denominator * 4);
+    const direct = stepsByPosition.get(directKey) ?? [];
+    if (quarterKey === directKey) return direct;
+    const scaled = stepsByPosition.get(quarterKey) ?? [];
+    if (direct.length === 0) return scaled;
+    if (scaled.length === 0) return direct;
+    return [...new Map([...direct, ...scaled].map((step) => [step.step, step])).values()]
+      .sort((left, right) => left.step - right.step);
   };
 
   osmdBeatSteps = [];
   beatHorizontalPositions = [];
+  beatHighlightVisuals = [];
   activeScore.beats.forEach((beat, index) => {
     const beatOffsetNumerator = beat.beatIndex * 4;
-    const visual = visualSteps.find((step) =>
-      rationalMatches(beat.measureIndex, beatOffsetNumerator, beat.beatType, step),
-    );
+    const visual = matchingVisualSteps(beat.measureIndex, beatOffsetNumerator, beat.beatType)[0];
     if (!visual) return;
     osmdBeatSteps[index] = visual.step;
     beatHorizontalPositions[index] = visual.anchorLeft;
-    const ghost = document.createElement("div");
-    ghost.className = "slice-ghost beat-ghost";
-    ghost.dataset.beatIndex = String(index);
-    ghost.style.left = `${visual.anchorLeft - 10}px`;
-    ghost.style.top = `${visual.top}px`;
-    ghost.style.width = "20px";
-    ghost.style.height = `${visual.height}px`;
-    elements.scoreTargets.append(ghost);
+    beatHighlightVisuals[index] = { top: visual.top, height: visual.height };
   });
+  if (beatHighlightVisuals.some(Boolean)) {
+    beatHighlightNode = document.createElement("div");
+    beatHighlightNode.className = "slice-ghost beat-ghost";
+    beatHighlightNode.style.width = "20px";
+    targetFragment.append(beatHighlightNode);
+  }
 
   const groupedTargets = new Map<string, { eventIndices: number[]; visual: VisualStep; measureNumber: string }>();
   const eventIndicesByStep = new Map<number, number[]>();
   osmdEventSteps = [];
   for (const event of activeScore.events) {
-    const candidates = visualSteps.filter((step) =>
-      rationalMatches(event.measureIndex, event.offset.numerator, event.offset.denominator, step),
+    const candidates = matchingVisualSteps(
+      event.measureIndex,
+      event.offset.numerator,
+      event.offset.denominator,
     );
     const visual = candidates[Math.max(0, event.occurrence - 1)] ?? candidates[0] ?? visualSteps[event.index];
     if (!visual) continue;
@@ -966,25 +1147,24 @@ function buildScoreTargets(): void {
   for (const target of groupedTargets.values()) {
     const resolveIndex = (): number =>
       target.eventIndices.find((index) => index >= cursorIndex) ?? target.eventIndices[0]!;
+    const controls = createSliceControls(resolveIndex, target.measureNumber);
+    controls.dataset.eventIndices = target.eventIndices.join(",");
+    controls.style.left = `${target.visual.anchorLeft}px`;
+    const controlTop = Math.max(4, target.visual.top - 70);
+    controls.style.top = `${controlTop}px`;
     if (target.visual.notes.length > 0) {
       const noteLeft = Math.min(...target.visual.notes.map((note) => note.left));
       const noteRight = Math.max(...target.visual.notes.map((note) => note.left + note.width));
       const noteTop = Math.min(...target.visual.notes.map((note) => note.top));
       const noteBottom = Math.max(...target.visual.notes.map((note) => note.top + note.height));
-      const ghost = document.createElement("div");
-      ghost.className = "slice-ghost";
-      ghost.dataset.eventIndices = target.eventIndices.join(",");
-      ghost.style.left = `${noteLeft - 10}px`;
-      ghost.style.top = `${target.visual.top}px`;
-      ghost.style.width = `${Math.max(28, noteRight - noteLeft + 20)}px`;
-      ghost.style.height = `${Math.max(noteBottom - noteTop + 28, target.visual.height)}px`;
-      elements.scoreTargets.append(ghost);
+      controls.classList.add("has-highlight");
+      controls.style.setProperty("--highlight-left", `${noteLeft - target.visual.anchorLeft + 2}px`);
+      controls.style.setProperty("--highlight-top", `${target.visual.top - controlTop}px`);
+      controls.style.setProperty("--highlight-width", `${Math.max(28, noteRight - noteLeft + 20)}px`);
+      controls.style.setProperty("--highlight-height", `${Math.max(noteBottom - noteTop + 28, target.visual.height)}px`);
     }
-    const controls = createSliceControls(resolveIndex, target.measureNumber);
-    controls.dataset.eventIndices = target.eventIndices.join(",");
-    controls.style.left = `${target.visual.anchorLeft}px`;
-    controls.style.top = `${Math.max(4, target.visual.top - 70)}px`;
-    elements.scoreTargets.append(controls);
+    registerEventHighlight(controls, target.eventIndices);
+    targetFragment.append(controls);
   }
 
   type StaffNoteGroup = {
@@ -996,15 +1176,28 @@ function buildScoreTargets(): void {
     resolveIndex: () => number;
   };
   const staffNoteGroups = new Map<string, StaffNoteGroup>();
+  const positionedEvents = activeScore.events
+    .map((event) => ({ index: event.index, left: eventHorizontalPositions[event.index] }))
+    .filter((position): position is { index: number; left: number } => position.left !== undefined)
+    .sort((left, right) => left.left - right.left);
+  const nearestEventIndex = (left: number): number => {
+    if (positionedEvents.length === 0) return 0;
+    let low = 0;
+    let high = positionedEvents.length;
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      if (positionedEvents[middle]!.left < left) low = middle + 1;
+      else high = middle;
+    }
+    const following = positionedEvents[Math.min(low, positionedEvents.length - 1)]!;
+    const previous = positionedEvents[Math.max(0, low - 1)]!;
+    return Math.abs(previous.left - left) <= Math.abs(following.left - left)
+      ? previous.index
+      : following.index;
+  };
   for (const visual of visualSteps) {
     const exactIndices = eventIndicesByStep.get(visual.step) ?? [];
-    const nearestIndex = activeScore.events.reduce(
-      (best, event) => {
-        const distance = Math.abs((eventHorizontalPositions[event.index] ?? visual.left) - visual.left);
-        return distance < best.distance ? { index: event.index, distance } : best;
-      },
-      { index: 0, distance: Number.POSITIVE_INFINITY },
-    ).index;
+    const nearestIndex = nearestEventIndex(visual.left);
     const resolveIndex = (): number =>
       exactIndices.find((index) => index >= cursorIndex) ?? exactIndices[0] ?? nearestIndex;
     const expectedNotes = exactIndices.flatMap((index) => activeScore.events[index]?.notes ?? []);
@@ -1058,10 +1251,18 @@ function buildScoreTargets(): void {
     noteButton.title = midiPitches.length > 1 ? "Play this staff chord" : `Play single note ${noteName(midiPitches[0]!)}`;
     noteButton.setAttribute("aria-label", noteButton.title);
     installAuditionHandlers(noteButton, group.resolveIndex, midiPitches);
-    elements.scoreTargets.append(noteButton);
+    targetFragment.append(noteButton);
   }
+  orderedMeasureHorizontalPositions = [...new Set(measureHorizontalPositions.values())]
+    .sort((left, right) => left - right);
+  const targetNodes = targetFragment.childElementCount;
+  elements.scoreTargets.replaceChildren(targetFragment);
   moveOsmdCursor(highlightIndex);
   osmd.cursor.hide();
+  return {
+    visualSteps: visualSteps.length,
+    targetNodes,
+  };
 }
 
 type OsmdPitch = {
@@ -1159,33 +1360,60 @@ function installAuditionHandlers(
   resolveIndex: () => number,
   midiPitches?: number[],
 ): void {
-  const pointerHolds = new Map<number, PointerHold>();
-  button.addEventListener("pointerdown", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const token = `audition:${event.pointerId}:${crypto.randomUUID()}`;
-    const index = resolveIndex();
-    const noteCount = midiPitches?.length ?? score?.events[index]?.notes.length ?? 1;
-    const finalOnsetDelayMs = rolledFinalOnsetDelay(noteCount, Number(elements.auditionRoll.value));
-    button.setPointerCapture(event.pointerId);
-    const down = auditionDown(token, index, midiPitches);
-    pointerHolds.set(event.pointerId, createPointerHold(token, down, finalOnsetDelayMs));
-  });
-  const release = (event: PointerEvent): void => {
-    const hold = pointerHolds.get(event.pointerId);
-    if (!hold) return;
-    pointerHolds.delete(event.pointerId);
-    void releasePointerHold(hold);
-  };
-  button.addEventListener("pointerup", release);
-  button.addEventListener("pointercancel", release);
-  button.addEventListener("lostpointercapture", release);
-  button.addEventListener("click", (event) => {
-    if (event.detail !== 0) return;
-    const keyboardToken = `audition-keyboard:${crypto.randomUUID()}`;
-    void auditionDown(keyboardToken, resolveIndex(), midiPitches).then(() => performUp(keyboardToken));
-  });
+  auditionTargets.set(button, { resolveIndex, midiPitches });
 }
+
+type AuditionTarget = {
+  resolveIndex: () => number;
+  midiPitches?: number[];
+};
+const auditionTargets = new WeakMap<HTMLButtonElement, AuditionTarget>();
+const auditionPointerHolds = new Map<number, PointerHold>();
+
+function auditionTargetFromEvent(event: Event): { button: HTMLButtonElement; target: AuditionTarget } | null {
+  const origin = event.target;
+  if (!(origin instanceof Element)) return null;
+  const button = origin.closest("button");
+  if (!(button instanceof HTMLButtonElement)) return null;
+  const target = auditionTargets.get(button);
+  return target ? { button, target } : null;
+}
+
+app.addEventListener("pointerdown", (event) => {
+  const match = auditionTargetFromEvent(event);
+  if (!match) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const { button, target } = match;
+  const token = `audition:${event.pointerId}:${crypto.randomUUID()}`;
+  const index = target.resolveIndex();
+  const noteCount = target.midiPitches?.length ?? score?.events[index]?.notes.length ?? 1;
+  const finalOnsetDelayMs = rolledFinalOnsetDelay(noteCount, Number(elements.auditionRoll.value));
+  button.setPointerCapture(event.pointerId);
+  const down = auditionDown(token, index, target.midiPitches);
+  auditionPointerHolds.set(event.pointerId, createPointerHold(token, down, finalOnsetDelayMs));
+});
+
+const releaseAuditionPointer = (event: PointerEvent): void => {
+  const hold = auditionPointerHolds.get(event.pointerId);
+  if (!hold) return;
+  auditionPointerHolds.delete(event.pointerId);
+  void releasePointerHold(hold);
+};
+app.addEventListener("pointerup", releaseAuditionPointer);
+app.addEventListener("pointercancel", releaseAuditionPointer);
+app.addEventListener("lostpointercapture", releaseAuditionPointer);
+app.addEventListener("click", (event) => {
+  if (event.detail !== 0) return;
+  const match = auditionTargetFromEvent(event);
+  if (!match) return;
+  const keyboardToken = `audition-keyboard:${crypto.randomUUID()}`;
+  void auditionDown(
+    keyboardToken,
+    match.target.resolveIndex(),
+    match.target.midiPitches,
+  ).then(() => performUp(keyboardToken));
+});
 
 async function auditionDown(token: string, index: number, midiPitches?: number[]): Promise<void> {
   if (!score || heldTokens.has(token)) return;
@@ -1404,6 +1632,21 @@ function showDiagnostics(diagnostics: DiagnosticsDto): void {
     rows.splice(5, 0,
       ["Last UI → native reply", `${lastUiNativeRoundTripMs.toFixed(2)} ms (enqueue is earlier)`],
       ["UI → endpoint bound", `< ${(lastUiNativeRoundTripMs + callbackPeriodMs + diagnostics.estimatedLatencyMs).toFixed(1)} ms`],
+    );
+  }
+  if (scorePerformance) {
+    const formatMs = (value: number | undefined): string =>
+      value === undefined ? "â€”" : `${value.toFixed(1)} ms`;
+    rows.push(
+      ["Score core load", formatMs(scorePerformance.coreLoadMs)],
+      ["OSMD parse", formatMs(scorePerformance.osmdLoadMs)],
+      ["OSMD engraving", formatMs(scorePerformance.osmdRenderMs)],
+      ["Interaction targets", formatMs(scorePerformance.targetBuildMs)],
+      ["Score ready total", formatMs(scorePerformance.displayTotalMs)],
+      [
+        "Score UI size",
+        `${scorePerformance.visualSteps?.toLocaleString() ?? "â€”"} steps Â· ${scorePerformance.targetNodes?.toLocaleString() ?? "â€”"} targets`,
+      ],
     );
   }
   if (diagnostics.outputDevice.toUpperCase().includes("QUAD-CAPTURE")) {
@@ -1758,29 +2001,51 @@ elements.diagnosticsButton.addEventListener("click", () => {
   if (lastDiagnostics) showDiagnostics(lastDiagnostics);
   togglePopover(elements.diagnosticsButton, elements.diagnostics);
 });
-function setZoomPercent(percent: number): void {
+let zoomRenderTimer: number | null = null;
+
+function requestZoomRender(immediate: boolean): void {
+  if (!osmd) return;
+  if (zoomRenderTimer !== null) window.clearTimeout(zoomRenderTimer);
+  if (immediate && zoom === renderedZoom) {
+    zoomRenderTimer = null;
+    return;
+  }
+  const render = (): void => {
+    zoomRenderTimer = null;
+    void scheduleOsmdRender("zoom").catch((error: unknown) => {
+      toast(`The score could not be resized: ${String(error)}`, "error");
+    });
+  };
+  if (immediate) render();
+  else zoomRenderTimer = window.setTimeout(render, 140);
+}
+
+function setZoomPercent(percent: number, immediate = false): void {
   const snapped = ZOOM_STEPS.reduce((nearest, candidate) =>
     Math.abs(candidate - percent) < Math.abs(nearest - percent) ? candidate : nearest,
   );
-  zoom = snapped / 100;
+  const nextZoom = snapped / 100;
   elements.zoomRange.value = String(snapped);
   elements.zoomValue.value = `${snapped}%`;
-  renderOsmd();
+  if (nextZoom === zoom) return;
+  zoom = nextZoom;
+  requestZoomRender(immediate);
 }
 
 function moveZoom(direction: -1 | 1): void {
   const current = Math.round(zoom * 100);
   const index = ZOOM_STEPS.findIndex((step) => step >= current);
   const currentIndex = index >= 0 && ZOOM_STEPS[index] === current ? index : Math.max(0, index - 1);
-  setZoomPercent(ZOOM_STEPS[Math.max(0, Math.min(ZOOM_STEPS.length - 1, currentIndex + direction))]!);
+  setZoomPercent(
+    ZOOM_STEPS[Math.max(0, Math.min(ZOOM_STEPS.length - 1, currentIndex + direction))]!,
+    true,
+  );
 }
 
 elements.zoomOut.addEventListener("click", () => moveZoom(-1));
 elements.zoomIn.addEventListener("click", () => moveZoom(1));
 elements.zoomRange.addEventListener("input", () => setZoomPercent(Number(elements.zoomRange.value)));
-window.addEventListener("resize", () => {
-  if (osmd) window.requestAnimationFrame(renderOsmd);
-});
+elements.zoomRange.addEventListener("change", () => requestZoomRender(true));
 
 void installListeners().then(refreshDevices).catch((error: unknown) => {
   setStatus("fault", "Core unavailable");

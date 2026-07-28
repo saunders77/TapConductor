@@ -3,6 +3,9 @@ import { defineConfig } from "vite";
 const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig({
+  // Relative URLs let the static browser bundle work at a domain root or in
+  // any uploaded subdirectory.
+  base: "./",
   clearScreen: false,
   server: {
     port: 1420,
@@ -18,4 +21,3 @@ export default defineConfig({
     sourcemap: Boolean(process.env.TAURI_ENV_DEBUG),
   },
 });
-

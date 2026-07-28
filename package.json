@@ -6,9 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:web": "node tools/build-web.mjs",
     "test:auto-follow": "node --experimental-strip-types --test src/auto-follow.test.ts",
     "test:beat": "node --experimental-strip-types --test src/beat-scheduler.test.ts",
+    "test:web-runtime": "node tools/smoke-web.mjs",
+    "test:web-gate": "node --experimental-strip-types --test src/web-note-gate.test.ts",
     "preview": "vite preview",
+    "preview:web": "vite preview --host 127.0.0.1",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",

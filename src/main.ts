@@ -1,10 +1,14 @@
 import "./styles.css";
-import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { open } from "@tauri-apps/plugin-dialog";
 import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import { autoFollowTarget } from "./auto-follow";
 import { planBeatInterval, rationalValue } from "./beat-scheduler";
+import {
+  appInvoke as invoke,
+  appListen as listen,
+  isWebBuild,
+  openScoreDialog,
+  type UnlistenFn,
+} from "./platform";
 import type {
   BeatMidiInput,
   CoreEvent,
@@ -17,7 +21,11 @@ import type {
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing #app");
-const fingerIconUrl = new URL("../assets/finger transparent-background.png", import.meta.url).href;
+const standaloneFingerUrl = (
+  globalThis as typeof globalThis & { __TAPCONDUCTOR_FINGER_URL__?: string }
+).__TAPCONDUCTOR_FINGER_URL__;
+const fingerIconUrl = standaloneFingerUrl
+  ?? new URL("../assets/finger transparent-background.png", import.meta.url).href;
 
 app.innerHTML = `
   <div class="shell">
@@ -33,6 +41,7 @@ app.innerHTML = `
         Help
       </button>
       <div class="status-pill loading" id="status-pill"><span></span><b>Starting audio…</b></div>
+      <div class="web-edition-badge hidden" id="web-edition-badge">Browser edition</div>
     </header>
 
     <section class="control-deck" aria-label="Performance controls">
@@ -109,7 +118,7 @@ app.innerHTML = `
           <section id="help-instructions" tabindex="-1"><h3>1. Open a score</h3><p>Select a MusicXML, compressed MusicXML, or MIDI file (file extensions .musicxml, .xml, .mxl, .mid, or .midi). If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read. If you only have a PDF, you can use a converter program to create a file TapConductor can read (such as Audiveris or MuseScore).</p></section>
           <section><h3>2. Configure audio settings</h3>
             <p>Use the Audio Out control to select the speakers or sound card to use. On Windows, an option marked (ASIO) is an installed ASIO driver and may provide lower latency on supported hardware. A driver such as ASIO4ALL can route to built-in Realtek speakers or headphones after that endpoint is enabled in the driver's control panel. ASIO is not automatically the best choice for every device or configuration; choose the output that is stable and responsive with your hardware.</p>
-            <p>Choose an instrument, either the grand piano or a synthesizer.</p>
+            <p id="instrument-help">Choose an instrument, either the grand piano or a synthesizer.</p>
             <p>If you want to control TapConductor with a piano or another MIDI instrument, then plug in the instrument and select it from the MIDI In menu. You'll still be able to tap using normal mouse and keyboard controls too. When you use a piano, TapConductor will use the dynamics you play for each note. If you connect or reconnect a device while TapConductor is open, choose <b>Reload audio &amp; MIDI devices</b> from Audio Out.</p>
             <p>The MIDI OUT setting is only needed if you want to route your performance to another program for recording or further manipulation. For normal playing, it's not necessary.</p>
             <p>By default, all staves (parts) will play during tapping, but you can select specific staves in the PARTS menu.</p>
@@ -617,13 +626,7 @@ async function invokeSafe<T>(command: string, args?: Record<string, unknown>): P
 }
 
 async function chooseScore(): Promise<void> {
-  const path = await open({
-    multiple: false,
-    directory: false,
-    pickerMode: "document",
-    fileAccessMode: "copy",
-    filters: [{ name: "Musical scores", extensions: ["musicxml", "xml", "mxl", "mid", "midi"] }],
-  });
+  const path = await openScoreDialog();
   if (!path) return;
   await loadScore(
     () => invokeSafe<LoadedScore>("load_score", { path }),
@@ -1343,6 +1346,12 @@ async function refreshDevices(): Promise<void> {
   if (diagnosticsResult.status === "fulfilled") {
     showDiagnostics(diagnosticsResult.value);
     elements.diagnosticsButton.classList.toggle("not-ready", !diagnosticsResult.value.ready);
+    if (isWebBuild()) {
+      setStatus(
+        diagnosticsResult.value.ready ? "ready" : "fault",
+        diagnosticsResult.value.ready ? "Browser audio ready" : "Audio needs attention",
+      );
+    }
   } else {
     errors.push(`Diagnostics failed: ${String(diagnosticsResult.reason)}`);
   }
@@ -1372,7 +1381,7 @@ function showDiagnostics(diagnostics: DiagnosticsDto): void {
   const rows: Array<[string, string]> = [
     ["State", diagnostics.ready ? "Ready" : diagnostics.message ?? "Unavailable"],
     ["Backend", diagnostics.audioBackend],
-    ["Mode", diagnostics.asioStream ? "ASIO low latency" : "Shared low latency"],
+    ["Mode", isWebBuild() ? "Browser Web Audio" : diagnostics.asioStream ? "ASIO low latency" : "Shared low latency"],
     ["Output", diagnostics.outputDevice],
     ["Format", `${diagnostics.sampleRate.toLocaleString()} Hz · ${diagnostics.bufferFrames} frames`],
     ["Est. buffer", `${diagnostics.estimatedLatencyMs.toFixed(1)} ms`],
@@ -1383,8 +1392,8 @@ function showDiagnostics(diagnostics: DiagnosticsDto): void {
     ["Invalid buffers", String(diagnostics.invalidAudioBuffers)],
     ["Voice steals", String(diagnostics.voiceSteals)],
     ["Queue overflow", String(diagnostics.queueOverflows)],
-    ["Direct WASAPI", diagnostics.directWasapiStream ? "Yes" : "No (CPAL fallback)"],
-    ["Native ASIO", diagnostics.asioStream ? "Yes" : "No"],
+    ["Direct WASAPI", isWebBuild() ? "Not available in browser" : diagnostics.directWasapiStream ? "Yes" : "No (CPAL fallback)"],
+    ["Native ASIO", isWebBuild() ? "Not available in browser" : diagnostics.asioStream ? "Yes" : "No"],
     ["MIDI in", diagnostics.midiInput ?? "Off"],
     ["MIDI out", diagnostics.midiOutput ?? "Off"],
   ];
@@ -1719,8 +1728,20 @@ elements.instrument.addEventListener("change", () => {
   fitSelect(elements.instrument);
   void invokeSafe("set_instrument", { instrument: elements.instrument.value });
 });
-elements.midiInput.addEventListener("change", () => { fitSelect(elements.midiInput); void invokeSafe("set_midi_input", { id: elements.midiInput.value || null }); });
-elements.midiOutput.addEventListener("change", () => { fitSelect(elements.midiOutput); void invokeSafe("set_midi_output", { id: elements.midiOutput.value || null }); });
+elements.midiInput.addEventListener("change", () => {
+  fitSelect(elements.midiInput);
+  void invokeSafe("set_midi_input", { id: elements.midiInput.value || null })
+    .then(() => {
+      if (isWebBuild()) return refreshDevices();
+    });
+});
+elements.midiOutput.addEventListener("change", () => {
+  fitSelect(elements.midiOutput);
+  void invokeSafe("set_midi_output", { id: elements.midiOutput.value || null })
+    .then(() => {
+      if (isWebBuild()) return refreshDevices();
+    });
+});
 elements.tapMode.addEventListener("change", () => {
   tapMode = elements.tapMode.value === "beat" ? "beat" : "rhythm";
   clearBeatTimers();
@@ -1766,3 +1787,25 @@ void installListeners().then(refreshDevices).catch((error: unknown) => {
   toast(String(error), "error");
 });
 window.setInterval(() => void refreshDiagnostics(), 1_000);
+
+if (isWebBuild()) {
+  document.documentElement.classList.add("web-build");
+  document.getElementById("web-edition-badge")?.classList.remove("hidden");
+  elements.instrument.replaceChildren(
+    new Option("Web piano", "piano", true, true),
+    new Option("Synthesizer", "synth"),
+  );
+  fitSelect(elements.instrument);
+  void invokeSafe("set_instrument", { instrument: "piano" });
+  document.getElementById("instrument-help")!.textContent =
+    "The browser edition includes a lightweight Web piano and synthesizer.";
+  document.querySelector(".brand")?.setAttribute(
+    "title",
+    "Browser edition: scores and performances remain on this device",
+  );
+  if (import.meta.env.PROD && location.protocol !== "file:" && "serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`);
+    });
+  }
+}

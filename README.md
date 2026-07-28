@@ -114,6 +114,24 @@ npm ci
 npm run tauri:build
 ```
 
+### Browser build
+
+TapConductor can also be built as a static browser application. The web edition keeps score
+processing on the user's device, compiles the shared Rust importer to WebAssembly, uses Web Audio
+for playback, and uses Web MIDI where the browser supports it.
+
+```powershell
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.126 --locked
+npm run build:web
+```
+
+Upload the contents of `dist/` to an HTTPS web server. The generated URLs are relative, so the
+bundle works at a domain root or in a subdirectory. See
+[`docs/WEB_BROWSER.md`](docs/WEB_BROWSER.md) for browser limitations, headers, and local preview
+instructions. The generated `dist/index.html` is also self-contained and can be opened directly;
+the repository-root `index.html` remains the Vite development entry point.
+
 Release artifacts are written beneath `target\release\bundle\`, including NSIS and MSI packages.
 Rust and JavaScript dependencies are pinned by `Cargo.lock` and `package-lock.json`; use `npm ci`
 and Cargo's `--locked` flag in automated builds. The `asio-sys` build currently downloads

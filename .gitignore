@@ -1,6 +1,7 @@
 /target/
 /node_modules/
 /dist/
+/public/wasm/
 /.vite/
 /rustup-init.exe
 *.pdb

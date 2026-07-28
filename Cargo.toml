@@ -6,6 +6,7 @@ members = [
   "crates/tapconductor-audio",
   "crates/tauri-plugin-apple-audio-session",
   "crates/tapconductor-midi",
+  "crates/tapconductor-web",
   "tools/latency-probe",
   "src-tauri",
 ]

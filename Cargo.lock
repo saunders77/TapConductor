@@ -3407,6 +3407,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tapconductor-web"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tapconductor-score",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "target-lexicon"
 version = "0.12.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"

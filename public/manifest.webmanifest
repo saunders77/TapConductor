@@ -1,0 +1,18 @@
+{
+  "name": "TapConductor",
+  "short_name": "TapConductor",
+  "description": "Play MusicXML and MIDI scores by conducting each note or beat.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#171813",
+  "theme_color": "#171813",
+  "icons": [
+    {
+      "src": "./app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

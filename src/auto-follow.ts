@@ -1,6 +1,8 @@
 /**
- * Returns the scroll position needed to keep a slice from running off the
- * right edge of the score viewport. `undefined` means the current view is
+ * Returns the scroll position needed to keep a slice visible with one measure
+ * of context to its left. Forward playback follows before entering the final
+ * measure-width of the viewport; backward jumps (such as repeats) follow once
+ * the slice is off the left edge. `undefined` means the current view is
  * already suitable.
  */
 export function autoFollowTarget(
@@ -10,6 +12,8 @@ export function autoFollowTarget(
   measureWidth: number,
 ): number | undefined {
   const sliceInViewport = sliceInScrollContent - scrollLeft;
-  if (sliceInViewport < viewportWidth - measureWidth) return undefined;
-  return Math.max(0, sliceInScrollContent - measureWidth);
+  if (sliceInViewport < 0 || sliceInViewport >= viewportWidth - measureWidth) {
+    return Math.max(0, sliceInScrollContent - measureWidth);
+  }
+  return undefined;
 }

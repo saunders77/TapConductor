@@ -1,7 +1,14 @@
 import "./styles.css";
-import { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
+import {
+  OpenSheetMusicDisplay,
+  type IRenderNextResult,
+} from "opensheetmusicdisplay";
 import { autoFollowTarget } from "./auto-follow";
 import { planBeatInterval, rationalValue } from "./beat-scheduler";
+import {
+  semanticRenderTarget,
+  shouldAdvanceRenderFrontier,
+} from "./incremental-score-render";
 import {
   appInvoke as invoke,
   appListen as listen,
@@ -587,16 +594,59 @@ function updatePosition(): void {
   elements.nextDetail.textContent = next.detail;
   elements.back.disabled = cursorIndex <= 0;
   elements.forward.disabled = cursorIndex >= score.events.length - 1;
+  const activeGeneration = score.generation;
+  const activeCursorIndex = cursorIndex;
+  const activeHighlightIndex = highlightIndex;
+  const activeBeatIndex = activeBeatVisualIndex;
+  const displayedBeatIndex = activeBeatIndex !== null
+    && osmdBeatSteps[activeBeatIndex] !== undefined
+    ? activeBeatIndex
+    : null;
+  const visualIsReady = displayedBeatIndex !== null
+    ? beatHorizontalPositions[displayedBeatIndex] !== undefined
+    : eventHorizontalPositions[highlightIndex] !== undefined;
+  if (visualIsReady) updateVisualPosition();
+  else clearActiveHighlights();
+
+  const renderAhead = ensureSemanticRenderAhead(
+    Math.max(cursorIndex, highlightIndex),
+    activeBeatIndex,
+  );
+  if (!visualIsReady) {
+    void renderAhead.then(() => {
+      if (
+        score?.generation === activeGeneration
+        && cursorIndex === activeCursorIndex
+        && highlightIndex === activeHighlightIndex
+        && activeBeatVisualIndex === activeBeatIndex
+      ) {
+        updateVisualPosition();
+      }
+    }).catch(reportIncrementalRenderError);
+  } else {
+    void renderAhead.catch(reportIncrementalRenderError);
+  }
+}
+
+function reportIncrementalRenderError(error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message === incrementalRenderError) return;
+  incrementalRenderError = message;
+  toast(`More notation could not be rendered: ${message}`, "error");
+}
+
+function updateVisualPosition(follow = true): void {
+  if (!score) return;
   const displayedBeatIndex = activeBeatVisualIndex !== null
     && osmdBeatSteps[activeBeatVisualIndex] !== undefined
     ? activeBeatVisualIndex
     : null;
   if (displayedBeatIndex !== null) {
     moveOsmdCursorToStep(osmdBeatSteps[displayedBeatIndex]!);
-    autoFollowPosition(beatHorizontalPositions[displayedBeatIndex]);
+    if (follow) autoFollowPosition(beatHorizontalPositions[displayedBeatIndex]);
   } else {
     moveOsmdCursor(highlightIndex);
-    autoFollowPosition(eventHorizontalPositions[highlightIndex]);
+    if (follow) autoFollowPosition(eventHorizontalPositions[highlightIndex]);
   }
   clearActiveHighlights();
   if (displayedBeatIndex !== null && beatHighlightNode) {
@@ -747,11 +797,12 @@ function indexForPreservedEvent(events: TapEventDto[], previous: TapEventDto | u
 
 async function displayScore(loaded: LoadedScore, preserved?: ScoreViewState): Promise<void> {
   const displayStarted = performance.now();
-  if (zoomRenderTimer !== null) {
-    window.clearTimeout(zoomRenderTimer);
-    zoomRenderTimer = null;
-  }
-  renderedZoom = null;
+  osmdRenderGeneration += 1;
+  incrementalProgress = null;
+  renderedThroughSourceMeasure = -1;
+  desiredSourceMeasure = -1;
+  ensureRenderTask = null;
+  incrementalRenderError = null;
   ensureBottomControls();
   window.requestAnimationFrame(ensureBottomControls);
   const preserveView = preserved !== undefined;
@@ -802,7 +853,12 @@ async function displayScore(loaded: LoadedScore, preserved?: ScoreViewState): Pr
     const osmdLoadStarted = performance.now();
     await osmd.load(loaded.musicXml);
     recordScorePhase("osmdLoadMs", osmdLoadStarted);
-    await scheduleOsmdRender("score");
+    const initialTarget = semanticRenderTarget(
+      loaded.events,
+      cursorIndex,
+      INCREMENTAL_LOCAL_AHEAD_MEASURES,
+    );
+    await restartIncrementalRendering(initialTarget);
   } else {
     osmd = null;
     renderMidiRoll(loaded.events);
@@ -824,91 +880,166 @@ async function displayScore(loaded: LoadedScore, preserved?: ScoreViewState): Pr
   loaded.warnings.forEach((warning) => toast(warning, "warning"));
 }
 
-type RenderWaiter = {
-  resolve: () => void;
-  reject: (error: unknown) => void;
-};
-let renderRequested = false;
-let renderRunning = false;
-let renderFrame: number | null = null;
-let renderRequestVersion = 0;
-let renderWaiters: RenderWaiter[] = [];
-let renderReason = "score";
-let renderedZoom: number | null = null;
+const INCREMENTAL_BATCH_MEASURES = 12;
+const INCREMENTAL_LOCAL_AHEAD_MEASURES = 12;
+const INCREMENTAL_SCROLL_AHEAD_VIEWPORTS = 1.5;
+let osmdRenderGeneration = 0;
+let osmdWorkQueue: Promise<void> = Promise.resolve();
+let incrementalProgress: IRenderNextResult | null = null;
+let renderedThroughSourceMeasure = -1;
+let desiredSourceMeasure = -1;
+let ensureRenderTask: { generation: number; promise: Promise<void> } | null = null;
+let incrementalRenderError: string | null = null;
 
-function scheduleOsmdRender(reason: "score" | "zoom"): Promise<void> {
-  if (!osmd) return Promise.resolve();
-  renderRequested = true;
-  renderReason = reason;
-  renderRequestVersion += 1;
-  const promise = new Promise<void>((resolve, reject) => {
-    renderWaiters.push({ resolve, reject });
-  });
-  if (!renderRunning && renderFrame === null) {
-    renderFrame = window.requestAnimationFrame(() => {
-      renderFrame = null;
-      void drainOsmdRenders();
-    });
-  }
-  return promise;
+function queueOsmdWork(work: () => Promise<void>): Promise<void> {
+  const pending = osmdWorkQueue.then(work);
+  osmdWorkQueue = pending.catch(() => undefined);
+  return pending;
 }
 
-async function drainOsmdRenders(): Promise<void> {
-  if (renderRunning) return;
-  renderRunning = true;
-  try {
-    while (renderRequested) {
-      renderRequested = false;
-      const version = renderRequestVersion;
-      const reason = renderReason;
-      await renderOsmdNow(version);
-      if (version === renderRequestVersion && reason === "zoom") {
-        updatePosition();
-      }
-    }
-    const completed = renderWaiters;
-    renderWaiters = [];
-    completed.forEach((waiter) => waiter.resolve());
-  } catch (error) {
-    const failed = renderWaiters;
-    renderWaiters = [];
-    failed.forEach((waiter) => waiter.reject(error));
-  } finally {
-    renderRunning = false;
-    if (renderRequested && renderFrame === null) {
-      renderFrame = window.requestAnimationFrame(() => {
-        renderFrame = null;
-        void drainOsmdRenders();
-      });
-    }
-  }
+function renderedSourceMeasure(progress: IRenderNextResult): number {
+  return progress.lastRenderedMeasure[0]?.parentSourceMeasure.measureListIndex ?? -1;
 }
 
-async function renderOsmdNow(version: number): Promise<void> {
-  const activeOsmd = osmd;
-  if (!activeOsmd) return;
-  ensureBottomControls();
-  const renderZoom = zoom;
-  activeOsmd.Zoom = renderZoom;
-  const renderStarted = performance.now();
-  activeOsmd.render();
-  renderedZoom = renderZoom;
-  recordScorePhase("osmdRenderMs", renderStarted);
-  activeOsmd.cursor.show();
+async function refreshIncrementalGeometry(
+  activeOsmd: OpenSheetMusicDisplay,
+  generation: number,
+): Promise<void> {
   await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
-  if (version !== renderRequestVersion || activeOsmd !== osmd) return;
+  if (generation !== osmdRenderGeneration || activeOsmd !== osmd) return;
 
   const contentWidth = Math.max(elements.osmd.scrollWidth, elements.osmd.getBoundingClientRect().width);
   if (contentWidth > 0) {
     elements.scoreStage.style.width = `${Math.ceil(contentWidth + 68)}px`;
   }
   const targetsStarted = performance.now();
-  const targetStats = buildScoreTargets();
+  const targetStats = buildScoreTargets(renderedThroughSourceMeasure);
   recordScorePhase("targetBuildMs", targetsStarted);
   scorePerformance ??= {};
   scorePerformance.visualSteps = targetStats.visualSteps;
   scorePerformance.targetNodes = targetStats.targetNodes;
+  updateVisualPosition(false);
+  scheduleIncrementalScrollAheadCheck();
 }
+
+async function renderBatchesThrough(
+  activeOsmd: OpenSheetMusicDisplay,
+  generation: number,
+  targetMeasure: number,
+): Promise<void> {
+  const renderStarted = performance.now();
+  do {
+    if (generation !== osmdRenderGeneration || activeOsmd !== osmd) return;
+    const previousFrontier = renderedThroughSourceMeasure;
+    incrementalProgress = activeOsmd.renderNext({ measures: INCREMENTAL_BATCH_MEASURES });
+    renderedThroughSourceMeasure = renderedSourceMeasure(incrementalProgress);
+    if (
+      !incrementalProgress.done
+      && renderedThroughSourceMeasure <= previousFrontier
+    ) {
+      throw new Error("OSMD incremental rendering did not advance its measure frontier.");
+    }
+    if (
+      incrementalProgress.done
+      || !shouldAdvanceRenderFrontier(renderedThroughSourceMeasure, targetMeasure)
+    ) {
+      break;
+    }
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+  } while (generation === osmdRenderGeneration && activeOsmd === osmd);
+  recordScorePhase("osmdRenderMs", renderStarted);
+  await refreshIncrementalGeometry(activeOsmd, generation);
+}
+
+function restartIncrementalRendering(targetMeasure: number): Promise<void> {
+  const activeOsmd = osmd;
+  if (!activeOsmd) return Promise.resolve();
+  const generation = osmdRenderGeneration;
+  desiredSourceMeasure = Math.max(desiredSourceMeasure, targetMeasure);
+  return queueOsmdWork(async () => {
+    if (generation !== osmdRenderGeneration || activeOsmd !== osmd) return;
+    const restartTarget = Math.max(
+      targetMeasure,
+      desiredSourceMeasure,
+      renderedThroughSourceMeasure,
+    );
+    ensureBottomControls();
+    activeOsmd.resetIncrementalRendering();
+    activeOsmd.Zoom = zoom;
+    incrementalProgress = null;
+    renderedThroughSourceMeasure = -1;
+    await renderBatchesThrough(activeOsmd, generation, restartTarget);
+  });
+}
+
+function ensureMeasureRendered(targetMeasure: number): Promise<void> {
+  const activeOsmd = osmd;
+  if (!activeOsmd || targetMeasure < 0) return Promise.resolve();
+  desiredSourceMeasure = Math.max(desiredSourceMeasure, targetMeasure);
+  if (
+    incrementalProgress?.done
+    || !shouldAdvanceRenderFrontier(renderedThroughSourceMeasure, desiredSourceMeasure)
+  ) {
+    return Promise.resolve();
+  }
+  const generation = osmdRenderGeneration;
+  if (ensureRenderTask?.generation === generation) return ensureRenderTask.promise;
+  const task = {
+    generation,
+    promise: Promise.resolve(),
+  };
+  task.promise = queueOsmdWork(async () => {
+    if (generation !== osmdRenderGeneration || activeOsmd !== osmd) return;
+    while (
+      generation === osmdRenderGeneration
+      && activeOsmd === osmd
+      && !incrementalProgress?.done
+      && shouldAdvanceRenderFrontier(renderedThroughSourceMeasure, desiredSourceMeasure)
+    ) {
+      const target = desiredSourceMeasure;
+      await renderBatchesThrough(activeOsmd, generation, target);
+    }
+  }).finally(() => {
+    if (ensureRenderTask === task) ensureRenderTask = null;
+  });
+  ensureRenderTask = task;
+  return task.promise;
+}
+
+function ensureSemanticRenderAhead(
+  playbackIndex: number,
+  activeBeatIndex: number | null = null,
+): Promise<void> {
+  if (!score || score.format !== "music_xml") return Promise.resolve();
+  const semanticTarget = semanticRenderTarget(
+    score.events,
+    playbackIndex,
+    INCREMENTAL_LOCAL_AHEAD_MEASURES,
+  );
+  const beatTarget = activeBeatIndex === null
+    ? -1
+    : (score.beats[activeBeatIndex]?.measureIndex ?? -1) + INCREMENTAL_LOCAL_AHEAD_MEASURES;
+  return ensureMeasureRendered(Math.max(semanticTarget, beatTarget));
+}
+
+let incrementalScrollFrame: number | null = null;
+
+function scheduleIncrementalScrollAheadCheck(): void {
+  if (incrementalScrollFrame !== null) return;
+  incrementalScrollFrame = window.requestAnimationFrame(() => {
+    incrementalScrollFrame = null;
+    if (!osmd || !incrementalProgress || incrementalProgress.done) return;
+    const renderedEdge = elements.scoreScroll.scrollWidth;
+    const viewportEdge = elements.scoreScroll.scrollLeft + elements.scoreScroll.clientWidth;
+    const aheadDistance = renderedEdge - viewportEdge;
+    if (aheadDistance > elements.scoreScroll.clientWidth * INCREMENTAL_SCROLL_AHEAD_VIEWPORTS) return;
+    void ensureMeasureRendered(
+      renderedThroughSourceMeasure + INCREMENTAL_BATCH_MEASURES,
+    ).catch(reportIncrementalRenderError);
+  });
+}
+
+elements.scoreScroll.addEventListener("scroll", scheduleIncrementalScrollAheadCheck, { passive: true });
 
 function renderMidiRoll(events: TapEventDto[]): void {
   const wrapper = document.createElement("div");
@@ -949,7 +1080,7 @@ function renderMidiRoll(events: TapEventDto[]): void {
   });
 }
 
-function buildScoreTargets(): { visualSteps: number; targetNodes: number } {
+function buildScoreTargets(renderedThroughMeasure: number): { visualSteps: number; targetNodes: number } {
   if (!osmd || !score) return { visualSteps: 0, targetNodes: 0 };
   const activeScore = score;
   const targetFragment = document.createDocumentFragment();
@@ -990,6 +1121,8 @@ function buildScoreTargets(): { visualSteps: number; targetNodes: number } {
   const visualSteps: VisualStep[] = [];
   const maximumSteps = Math.max(10_000, activeScore.events.length * 8 + 100);
   for (let step = 0; step < maximumSteps && !cursor.Iterator.EndReached; step += 1) {
+    const cursorMeasureIndex = cursor.Iterator.CurrentMeasureIndex;
+    if (cursorMeasureIndex > renderedThroughMeasure) break;
     const timestamp = cursor.Iterator.CurrentRelativeInMeasureTimestamp;
     const rect = cursor.cursorElement?.getBoundingClientRect();
     if (timestamp && rect) {
@@ -1024,9 +1157,9 @@ function buildScoreTargets(): { visualSteps: number; targetNodes: number } {
         }
       }
       const stepLeft = rect.left - hostRect.left - 5;
-      const measureLeft = measureHorizontalPositions.get(cursor.Iterator.CurrentMeasureIndex);
+      const measureLeft = measureHorizontalPositions.get(cursorMeasureIndex);
       if (measureLeft === undefined || stepLeft < measureLeft) {
-        measureHorizontalPositions.set(cursor.Iterator.CurrentMeasureIndex, stepLeft);
+        measureHorizontalPositions.set(cursorMeasureIndex, stepLeft);
       }
       const noteCenters = noteVisuals
         .map((note) => note.left + note.width / 2)
@@ -1036,7 +1169,7 @@ function buildScoreTargets(): { visualSteps: number; targetNodes: number } {
         : stepLeft;
       visualSteps.push({
         step,
-        measureIndex: cursor.Iterator.CurrentMeasureIndex,
+        measureIndex: cursorMeasureIndex,
         numerator: timestamp.GetExpandedNumerator(),
         denominator: timestamp.Denominator,
         left: stepLeft,
@@ -1097,6 +1230,7 @@ function buildScoreTargets(): { visualSteps: number; targetNodes: number } {
   beatHorizontalPositions = [];
   beatHighlightVisuals = [];
   activeScore.beats.forEach((beat, index) => {
+    if (beat.measureIndex > renderedThroughMeasure) return;
     const beatOffsetNumerator = beat.beatIndex * 4;
     const visual = matchingVisualSteps(beat.measureIndex, beatOffsetNumerator, beat.beatType)[0];
     if (!visual) return;
@@ -1115,6 +1249,7 @@ function buildScoreTargets(): { visualSteps: number; targetNodes: number } {
   const eventIndicesByStep = new Map<number, number[]>();
   osmdEventSteps = [];
   for (const event of activeScore.events) {
+    if (event.measureIndex > renderedThroughMeasure) continue;
     const candidates = matchingVisualSteps(
       event.measureIndex,
       event.offset.numerator,
@@ -1649,6 +1784,13 @@ function showDiagnostics(diagnostics: DiagnosticsDto): void {
       ],
     );
   }
+  if (incrementalProgress) {
+    rows.push([
+      "Notation rendered",
+      `${incrementalProgress.renderedMeasures.toLocaleString()} / ${incrementalProgress.totalMeasures.toLocaleString()} measures`
+        + ` Â· source ${renderedThroughSourceMeasure + 1}`,
+    ]);
+  }
   if (diagnostics.outputDevice.toUpperCase().includes("QUAD-CAPTURE")) {
     rows.push([
       "Driver buffer",
@@ -2001,51 +2143,55 @@ elements.diagnosticsButton.addEventListener("click", () => {
   if (lastDiagnostics) showDiagnostics(lastDiagnostics);
   togglePopover(elements.diagnosticsButton, elements.diagnostics);
 });
-let zoomRenderTimer: number | null = null;
 
-function requestZoomRender(immediate: boolean): void {
-  if (!osmd) return;
-  if (zoomRenderTimer !== null) window.clearTimeout(zoomRenderTimer);
-  if (immediate && zoom === renderedZoom) {
-    zoomRenderTimer = null;
-    return;
-  }
-  const render = (): void => {
-    zoomRenderTimer = null;
-    void scheduleOsmdRender("zoom").catch((error: unknown) => {
-      toast(`The score could not be resized: ${String(error)}`, "error");
-    });
-  };
-  if (immediate) render();
-  else zoomRenderTimer = window.setTimeout(render, 140);
+function showZoomPercent(percent: number): number {
+  const normalized = Math.max(50, Math.min(175, Math.round(percent)));
+  elements.zoomValue.value = `${normalized}%`;
+  return normalized;
 }
 
-function setZoomPercent(percent: number, immediate = false): void {
-  const snapped = ZOOM_STEPS.reduce((nearest, candidate) =>
-    Math.abs(candidate - percent) < Math.abs(nearest - percent) ? candidate : nearest,
-  );
-  const nextZoom = snapped / 100;
-  elements.zoomRange.value = String(snapped);
-  elements.zoomValue.value = `${snapped}%`;
+function commitZoomPercent(percent: number): void {
+  const normalized = showZoomPercent(percent);
+  elements.zoomRange.value = String(normalized);
+  const nextZoom = normalized / 100;
   if (nextZoom === zoom) return;
   zoom = nextZoom;
-  requestZoomRender(immediate);
+  if (!osmd) return;
+  const currentTarget = Math.max(
+    renderedThroughSourceMeasure,
+    score
+      ? semanticRenderTarget(score.events, cursorIndex, INCREMENTAL_LOCAL_AHEAD_MEASURES)
+      : -1,
+  );
+  void restartIncrementalRendering(currentTarget).then(() => {
+    updateVisualPosition();
+  }).catch((error: unknown) => {
+    toast(`The score could not be resized: ${String(error)}`, "error");
+  });
 }
 
 function moveZoom(direction: -1 | 1): void {
   const current = Math.round(zoom * 100);
-  const index = ZOOM_STEPS.findIndex((step) => step >= current);
-  const currentIndex = index >= 0 && ZOOM_STEPS[index] === current ? index : Math.max(0, index - 1);
-  setZoomPercent(
-    ZOOM_STEPS[Math.max(0, Math.min(ZOOM_STEPS.length - 1, currentIndex + direction))]!,
-    true,
+  const exactIndex = ZOOM_STEPS.indexOf(current);
+  const upperIndex = ZOOM_STEPS.findIndex((step) => step > current);
+  const targetIndex = exactIndex >= 0
+    ? exactIndex + direction
+    : direction > 0
+      ? (upperIndex >= 0 ? upperIndex : ZOOM_STEPS.length - 1)
+      : (upperIndex >= 0 ? upperIndex - 1 : ZOOM_STEPS.length - 1);
+  commitZoomPercent(
+    ZOOM_STEPS[Math.max(0, Math.min(ZOOM_STEPS.length - 1, targetIndex))]!,
   );
 }
 
 elements.zoomOut.addEventListener("click", () => moveZoom(-1));
 elements.zoomIn.addEventListener("click", () => moveZoom(1));
-elements.zoomRange.addEventListener("input", () => setZoomPercent(Number(elements.zoomRange.value)));
-elements.zoomRange.addEventListener("change", () => requestZoomRender(true));
+elements.zoomRange.addEventListener("input", () => {
+  showZoomPercent(Number(elements.zoomRange.value));
+});
+elements.zoomRange.addEventListener("change", () => {
+  commitZoomPercent(Number(elements.zoomRange.value));
+});
 
 void installListeners().then(refreshDevices).catch((error: unknown) => {
   setStatus("fault", "Core unavailable");

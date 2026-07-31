@@ -9,6 +9,7 @@
     "build:web": "node tools/build-web.mjs",
     "test:auto-follow": "node --experimental-strip-types --test src/auto-follow.test.ts",
     "test:beat": "node --experimental-strip-types --test src/beat-scheduler.test.ts",
+    "test:incremental-render": "node --experimental-strip-types --test src/incremental-score-render.test.ts",
     "test:web-runtime": "node tools/smoke-web.mjs",
     "test:web-gate": "node --experimental-strip-types --test src/web-note-gate.test.ts",
     "preview": "vite preview",
@@ -31,7 +32,7 @@
   "dependencies": {
     "@tauri-apps/api": "^2.8.0",
     "@tauri-apps/plugin-dialog": "^2.4.0",
-    "opensheetmusicdisplay": "^1.9.9"
+    "opensheetmusicdisplay": "^2.1.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.8.4",

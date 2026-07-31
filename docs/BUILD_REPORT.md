@@ -1,5 +1,39 @@
 # Cross-platform build report
 
+## 2026-07-30 macOS and iPad completion
+
+The checked-in Apple implementation was built and exercised on macOS 26.6 with Xcode 26.6 and the
+iOS 26.5 Simulator SDK.
+
+| Artifact | Size | SHA-256 | Signing |
+| --- | ---: | --- | --- |
+| `target/apple-artifacts/macos-ad-hoc/TapConductor_0.1.0_universal.dmg` | 164,687,400 bytes | `0D9BDA8109CF9173B674395A450104C920EF91981A314DC0DAED3E46A7A02987` | Ad hoc; local testing |
+| `target/apple-artifacts/macos-ad-hoc/TapConductor.app` | 250 MiB on disk | See staged `SHA256SUMS.txt` | Ad hoc; local testing |
+| `src-tauri/gen/apple/build/arm64-sim/TapConductor.app` | 345 MiB on disk | Generated simulator bundle | Ad hoc; simulator only |
+
+Verification completed from the current source:
+
+- The macOS release command produced a universal `x86_64`/`arm64` app and DMG. Strict deep
+  `codesign` verification and the DMG container checksum passed, and all 265 files in the staged
+  checksum manifest verified.
+- The packaged macOS app remained running through a ten-second launch smoke interval.
+- The iPad command produced an arm64 simulator app with a 16.0 deployment floor, iPad device-family
+  support, the privacy manifest, demo score, and all 251 WAV samples plus four SFZ definitions.
+- The iPad binary contains the native Swift `AVAudioSession` plugin and its activate/deactivate
+  bridge. The fresh bundle installed on an iPad (A16) simulator, rendered the full interface, and
+  remained running through a twelve-second launch smoke interval.
+- The TypeScript production build and all three frontend suites passed: 11 tests total.
+- Locked Rust workspace tests passed: 91 tests, with the 238 MB full-bank load test intentionally
+  ignored in the normal pass.
+- `cargo fmt --all -- --check` and
+  `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings` passed.
+- Repeated Mac and iPad packaging passes now replace their prior generated outputs cleanly.
+
+No Apple code-signing identity is installed on this machine. Developer ID notarization, Mac App
+Store packaging, physical-iPad installation, TestFlight, and App Store export therefore remain
+release-owner operations requiring the Apple team credentials, certificates, and provisioning
+profiles described in `CROSS_PLATFORM_IMPLEMENTATION.md`.
+
 ## 2026-07-24 cross-platform implementation
 
 The Windows Store test lane now produces an offline, current-user NSIS installer containing the
@@ -29,12 +63,12 @@ Verification completed from the current source:
   score.
 - The installed executable remained running through the five-second launch smoke interval.
 
-The Apple source, privacy manifest, platform configuration, native iOS audio-session bridge,
-packaging script, and macOS CI workflow are present. Apple `.app`, `.dmg`, `.pkg`, simulator `.app`,
-and device `.ipa` outputs cannot be compiled on this Windows host. They must be produced on macOS
-with Xcode; device/App Store outputs additionally require the project's Apple team, certificates,
-and provisioning profiles. See `CROSS_PLATFORM_IMPLEMENTATION.md` for the exact commands and
-qualification matrix.
+At the time of this Windows-hosted pass, the Apple source, privacy manifest, platform configuration,
+native iOS audio-session bridge, packaging script, and macOS CI workflow were present but could not
+be compiled there. The macOS and simulator build gap has since been closed by the July 30
+verification above. Device and App Store outputs still require the project's Apple team,
+certificates, and provisioning profiles. See `CROSS_PLATFORM_IMPLEMENTATION.md` for the exact
+commands and qualification matrix.
 
 ## 2026-07-21 Windows MVP
 

@@ -1,13 +1,19 @@
+use std::time::Instant;
+#[cfg(windows)]
 use std::{
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
 use tapconductor_audio::{
-    AudioCommand, AudioDiagnosticSnapshot, AudioDiagnostics, AudioRenderCallback, Chord, Note,
-    PianoConfig, PianoSynth, RenderCallbackInfo, RenderStatus, VoiceGroupId, audio_engine,
+    AudioCommand, Chord, Note, PianoConfig, PianoSynth, RenderCallbackInfo, VoiceGroupId,
+    audio_engine,
+};
+#[cfg(windows)]
+use tapconductor_audio::{
+    AudioDiagnosticSnapshot, AudioDiagnostics, AudioRenderCallback, RenderStatus,
 };
 
 const SAMPLE_RATE: u32 = 48_000;
@@ -102,6 +108,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[cfg(windows)]
 struct OnsetProbe<R> {
     renderer: R,
     epoch: Instant,
@@ -109,6 +116,7 @@ struct OnsetProbe<R> {
     first_render_nanoseconds: Arc<AtomicU64>,
 }
 
+#[cfg(windows)]
 impl<R: AudioRenderCallback> AudioRenderCallback for OnsetProbe<R> {
     fn render_audio(&mut self, output: &mut [f32], info: RenderCallbackInfo) -> RenderStatus {
         let result = self.renderer.render_audio(output, info);

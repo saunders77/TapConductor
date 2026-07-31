@@ -47,6 +47,7 @@ quality_checks() {
   npm run build
   npm run test:auto-follow
   npm run test:beat
+  npm run test:web-gate
   cargo test --locked --workspace
   cargo fmt --all -- --check
   cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
@@ -58,14 +59,50 @@ initialize_ios() {
   fi
 }
 
+clean_ios_output() {
+  # cargo-mobile2 currently renames the Xcode archive into this directory and
+  # does not replace an existing app/IPA from an earlier run.
+  local output="${ROOT}/src-tauri/gen/apple/build/${1}"
+  rm -rf "${output}"
+}
+
+write_checksum_manifest() {
+  local output="$1"
+  (
+    cd "${output}"
+    find . -type f ! -name "SHA256SUMS.txt" -print0 |
+      sort -z |
+      xargs -0 shasum -a 256
+  ) > "${output}/SHA256SUMS.txt"
+}
+
 stage_mac_artifacts() {
   local source_root="${ROOT}/target/universal-apple-darwin/release/bundle"
   local output="${ROOT}/target/apple-artifacts/${1}"
-  mkdir -p "${output}"
+  local staging
+  local artifact_count=0
+
+  mkdir -p "$(dirname "${output}")"
+  staging="$(mktemp -d "$(dirname "${output}")/.${1}.XXXXXX")"
   while IFS= read -r -d '' artifact; do
-    ditto "${artifact}" "${output}/$(basename "${artifact}")"
-  done < <(find "${source_root}" -maxdepth 2 \( -name "*.app" -o -name "*.dmg" -o -name "*.pkg" \) -print0)
-  find "${output}" -type f -exec shasum -a 256 {} \; > "${output}/SHA256SUMS.txt"
+    ditto "${artifact}" "${staging}/$(basename "${artifact}")"
+    artifact_count=$((artifact_count + 1))
+  done < <(
+    find "${source_root}" -maxdepth 2 \
+      \( -name "*.app" -o -name "*.dmg" -o -name "*.pkg" \) \
+      ! -name "rw.*.dmg" \
+      -print0
+  )
+
+  if [[ "${artifact_count}" -eq 0 ]]; then
+    rm -rf "${staging}"
+    echo "No Apple artifacts found beneath ${source_root}" >&2
+    exit 1
+  fi
+
+  write_checksum_manifest "${staging}"
+  rm -rf "${output}"
+  mv "${staging}" "${output}"
   echo "Apple artifacts staged in ${output}"
 }
 
@@ -84,7 +121,11 @@ case "${MODE}" in
     validate_apple_files
     quality_checks
     rustup target add aarch64-apple-darwin x86_64-apple-darwin
-    APPLE_SIGNING_IDENTITY="-" npm run tauri -- build \
+    # Tauri's DMG helper uses Finder automation unless the CI environment
+    # flag is present. Keep this release command non-interactive; callers can
+    # set TAURI_BUNDLER_DMG_IGNORE_CI=1 when they explicitly want Finder to
+    # arrange the cosmetic DMG layout.
+    CI=true APPLE_SIGNING_IDENTITY="-" npm run tauri -- build \
       --target universal-apple-darwin \
       --bundles app dmg \
       --ci
@@ -104,7 +145,7 @@ case "${MODE}" in
     validate_apple_files
     quality_checks
     rustup target add aarch64-apple-darwin x86_64-apple-darwin
-    npm run tauri -- build \
+    CI=true npm run tauri -- build \
       --target universal-apple-darwin \
       --bundles app dmg \
       --ci
@@ -142,19 +183,21 @@ case "${MODE}" in
 
     app_path="${ROOT}/target/universal-apple-darwin/release/bundle/macos/${PRODUCT}.app"
     output="${ROOT}/target/apple-artifacts/macos-app-store"
+    rm -rf "${output}"
     mkdir -p "${output}"
     xcrun productbuild \
       --sign "${APPLE_MAS_INSTALLER_IDENTITY}" \
       --component "${app_path}" /Applications \
       "${output}/${PRODUCT}_${VERSION}_universal.pkg"
     ditto "${app_path}" "${output}/${PRODUCT}.app"
-    find "${output}" -type f -exec shasum -a 256 {} \; > "${output}/SHA256SUMS.txt"
+    write_checksum_manifest "${output}"
     ;;
 
   ios-simulator)
     validate_apple_files
     quality_checks
     initialize_ios
+    clean_ios_output "arm64-sim"
     npm run tauri -- ios build \
       --target aarch64-sim \
       --debug \
@@ -167,6 +210,7 @@ case "${MODE}" in
     validate_apple_files
     quality_checks
     initialize_ios
+    clean_ios_output "arm64"
     npm run tauri -- ios build \
       --target aarch64 \
       --export-method debugging \
@@ -179,6 +223,7 @@ case "${MODE}" in
     validate_apple_files
     quality_checks
     initialize_ios
+    clean_ios_output "arm64"
     npm run tauri -- ios build \
       --target aarch64 \
       --export-method app-store-connect \

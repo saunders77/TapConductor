@@ -551,18 +551,18 @@ impl AppCore {
                     command,
                     tapconductor_performance::AudioCommand::DampenGroup { .. }
                 );
-            if !suppress_audio_damping {
-                if let Err(error) = self.audio.send_performance_command(command) {
-                    self.recover_audio_delivery_failure(retry_target);
-                    return Err(format!(
-                        "{error} Playback was stopped{} so the failed gesture can be retried safely.",
-                        if retry_target.is_some() {
-                            " and the score cursor was restored"
-                        } else {
-                            ""
-                        }
-                    ));
-                }
+            if !suppress_audio_damping
+                && let Err(error) = self.audio.send_performance_command(command)
+            {
+                self.recover_audio_delivery_failure(retry_target);
+                return Err(format!(
+                    "{error} Playback was stopped{} so the failed gesture can be retried safely.",
+                    if retry_target.is_some() {
+                        " and the score cursor was restored"
+                    } else {
+                        ""
+                    }
+                ));
             }
             self.midi
                 .send_performance_command(command, midi_clock_sample, midi_clock_instant);

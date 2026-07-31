@@ -18,6 +18,16 @@ const COMMAND_QUEUE: usize = 2_048;
 const SCHEDULE_CAPACITY: usize = 2_048;
 const VOICES: usize = 256;
 
+#[cfg(not(windows))]
+fn new_platform_audio_backend() -> PlatformAudioBackend {
+    PlatformAudioBackend
+}
+
+#[cfg(windows)]
+fn new_platform_audio_backend() -> PlatformAudioBackend {
+    PlatformAudioBackend::default()
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 enum Instrument {
     #[default]
@@ -76,7 +86,7 @@ impl AudioManager {
             ),
         };
         let mut manager = Self {
-            backend: PlatformAudioBackend::default(),
+            backend: new_platform_audio_backend(),
             runtime: None,
             selected_device: None,
             selected_device_name: "System default".to_owned(),
@@ -179,7 +189,7 @@ impl AudioManager {
 
     #[cfg(not(windows))]
     fn reload_platform_backend(&mut self) -> Result<(), String> {
-        self.backend = PlatformAudioBackend::default();
+        self.backend = new_platform_audio_backend();
         Ok(())
     }
 

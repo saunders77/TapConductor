@@ -1,6 +1,6 @@
 # TapConductor cross-platform implementation and release plan
 
-Status date: July 24, 2026
+Status date: July 30, 2026
 
 This document is both the implementation plan and the release runbook. The shared-source engineering
 and build definitions described below are present in the repository. Production signatures,
@@ -26,9 +26,9 @@ and MIDI crates are the product source for every platform.
 | Registered iPad testing | development/ad-hoc `.ipa`, `.xcarchive`, and dSYMs | Apple team |
 | TestFlight/App Store | App Store Connect `.ipa`, archive, dSYMs, and thinning report | Apple team |
 
-Apple artifacts cannot be produced on Windows. Tauri's iOS commands are macOS-only, and Apple
-requires Xcode signing for device packages. The checked-in Apple workflow uses a macOS 26 runner and
-Xcode 26 to cross that boundary.
+The universal macOS test packages and iPad simulator application have now been compiled and
+smoke-tested on macOS 26 with Xcode 26. Apple requires Xcode signing for device and production
+packages. The checked-in Apple workflow uses the same macOS 26/Xcode 26 combination.
 
 ## Additive architecture
 
@@ -105,6 +105,7 @@ remain outside the realtime callback.
 - `src-tauri/tauri.ios.conf.json`: iPad layout, resources, icons, OS floor, and Info.plist.
 - `src-tauri/tauri.appstore.conf.json`: Mac App Store flavor.
 - `src-tauri/apple/`: document types, privacy manifest, and sandbox-entitlement template.
+- `src-tauri/gen/schemas/`: generated Windows, macOS, desktop, iOS, and mobile capability schemas.
 - `crates/tauri-plugin-apple-audio-session/`: native Swift AVAudioSession integration.
 - `tools/windows-store.ps1`: Store validation, unsigned test build, signing, and hashes.
 - `tools/apple-release.sh`: Apple validation and package channels.
@@ -145,6 +146,10 @@ npm run apple:mac:test
 
 The second command builds universal Intel/Apple-Silicon `.app` and `.dmg` bundles with an ad-hoc
 signature under `target/apple-artifacts/macos-ad-hoc`.
+
+The host needs Node.js 22, the stable Rust toolchain, the Xcode command-line tools, and XcodeGen.
+The first iOS initialization also checks for CocoaPods and `libimobiledevice`; Homebrew is the
+recommended way to install those three Apple build helpers.
 
 For Developer ID distribution, install the identity and provide Tauri notarization credentials:
 

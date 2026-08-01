@@ -114,6 +114,26 @@ remain outside the realtime callback.
 
 ## Build and sideload runbook
 
+### Rebuild both Apple test packages
+
+After making source changes on a configured Mac, run:
+
+```bash
+cd /path/to/TapConductor
+bash tools/rebuild-apple.sh
+```
+
+This runs the shared quality checks once, builds the universal macOS app and DMG, and then builds
+the iPad Simulator app. Use `mac` or `ipad` to build only one platform:
+
+```bash
+bash tools/rebuild-apple.sh mac
+bash tools/rebuild-apple.sh ipad
+```
+
+For a quick packaging iteration after the checks have already passed, append `--fast`. The normal
+pre-commit or handoff build should omit `--fast`.
+
 ### Windows and Microsoft Store
 
 ```powershell

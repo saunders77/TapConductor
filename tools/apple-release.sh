@@ -47,6 +47,7 @@ quality_checks() {
   npm run build
   npm run test:auto-follow
   npm run test:beat
+  npm run test:incremental-render
   npm run test:web-gate
   cargo test --locked --workspace
   cargo fmt --all -- --check

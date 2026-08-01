@@ -16,6 +16,7 @@ import {
   openScoreDialog,
   type UnlistenFn,
 } from "./platform";
+import { detectAppleUiPlatform } from "./ui-platform";
 import type {
   BeatMidiInput,
   CoreEvent,
@@ -28,6 +29,8 @@ import type {
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing #app");
+const appleUiPlatform = detectAppleUiPlatform();
+if (appleUiPlatform) document.documentElement.classList.add(`platform-${appleUiPlatform}`);
 const standaloneFingerUrl = (
   globalThis as typeof globalThis & { __TAPCONDUCTOR_FINGER_URL__?: string }
 ).__TAPCONDUCTOR_FINGER_URL__;

@@ -13,6 +13,7 @@ use tapconductor_audio::backend::CpalBackend as PlatformAudioBackend;
 use tapconductor_audio::backend::WindowsLowLatencyBackend as PlatformAudioBackend;
 
 const DEFAULT_SAMPLE_RATE: u32 = 48_000;
+#[cfg(not(target_os = "ios"))]
 const REQUESTED_BUFFER_FRAMES: u32 = 128;
 const COMMAND_QUEUE: usize = 2_048;
 const SCHEDULE_CAPACITY: usize = 2_048;
@@ -230,6 +231,11 @@ impl AudioManager {
             .preferred_output_config(selected_device.as_deref())
             .map_err(|error| error.to_string())?;
         let sample_rate = output_config.sample_rate;
+        // CPAL's iOS backend deliberately leaves this unset because
+        // AVAudioSession negotiates the physical I/O duration. In particular,
+        // the simulator advertises a placeholder 0..=0 fixed-buffer range.
+        // Preserve `None` so CPAL uses BufferSize::Default on iOS.
+        #[cfg(not(target_os = "ios"))]
         if output_config.buffer_frames.is_none() {
             output_config.buffer_frames = Some(REQUESTED_BUFFER_FRAMES);
         }

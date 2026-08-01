@@ -74,6 +74,16 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .zoom-controls { display: flex; align-items: center; gap: 7px; }.zoom-controls button { width: 27px; height: 27px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); cursor: pointer; }.zoom-controls output { min-width: 42px; text-align: center; font-size: 11px; font-weight: 700; }
 .score-scroll { position: relative; width: 100%; max-width: 100%; min-width: 0; flex: 1 1 auto; min-height: 0; overflow-x: auto; overflow-y: auto; scrollbar-gutter: auto; contain: size layout; background: #fff; }
 .score-stage { position: relative; width: max-content; min-width: 100%; min-height: 100%; margin: 0; padding: 58px max(34px, env(safe-area-inset-right, 0px)) 70px max(34px, env(safe-area-inset-left, 0px)); background: #fff; }
+/* Keep the first interaction row clear of the header on macOS. */
+.platform-macos .score-stage { padding-top: 80px; }
+/*
+ * iPad's larger touch targets need more headroom above the first staff for
+ * dynamics and other expressions. Counter-shift the controls so their
+ * already-correct screen position stays unchanged while the notation moves.
+ */
+.platform-ipados .score-stage { padding-top: 82px; }
+.platform-ipados .score-stage .slice-controls { margin-top: -24px; }
+.platform-ipados .score-stage .slice-controls.has-highlight::before { transform: translateY(24px); }
 .staff-controls { position: absolute; top: 0; left: 6px; width: 22px; z-index: 8; pointer-events: none; }
 .staff-control { position: absolute; left: 0; display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid #b7b8ad; border-radius: 5px; background: #fffef9; box-shadow: 0 1px 3px #504f4525; pointer-events: auto; cursor: pointer; }
 .staff-control input { width: 14px; height: 14px; margin: 0; accent-color: #75ffb3; cursor: pointer; }

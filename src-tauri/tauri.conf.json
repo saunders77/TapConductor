@@ -21,6 +21,7 @@
         "resizable": true,
         "fullscreen": false,
         "center": true,
+        "theme": "Light",
         "backgroundColor": "#e9e8df"
       }
     ],

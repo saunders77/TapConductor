@@ -9,6 +9,7 @@
         "height": 768,
         "resizable": true,
         "fullscreen": false,
+        "theme": "Light",
         "backgroundColor": "#e9e8df"
       }
     ]

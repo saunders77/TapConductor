@@ -11,6 +11,18 @@ export function isWebBuild(): boolean {
   return !isTauri;
 }
 
+export function setAppWindowTitle(fileName?: string): void {
+  const title = fileName ? `TapConductor: ${fileName}` : "TapConductor";
+  document.title = title;
+  if (webRuntime) return;
+
+  void import("@tauri-apps/api/window")
+    .then(({ getCurrentWindow }) => getCurrentWindow().setTitle(title))
+    .catch((error: unknown) => {
+      console.warn("The native window title could not be updated.", error);
+    });
+}
+
 export async function appInvoke<T>(
   command: string,
   args?: Record<string, unknown>,

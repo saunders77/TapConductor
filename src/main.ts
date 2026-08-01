@@ -14,6 +14,7 @@ import {
   appListen as listen,
   isWebBuild,
   openScoreDialog,
+  setAppWindowTitle,
   type UnlistenFn,
 } from "./platform";
 import { detectAppleUiPlatform } from "./ui-platform";
@@ -40,6 +41,9 @@ const fingerIconUrl = standaloneFingerUrl
 app.innerHTML = `
   <div class="shell">
     <header class="topbar">
+      <button id="chrome-toggle" class="chrome-toggle" type="button" aria-label="Hide header and footer" aria-expanded="true" title="Hide header and footer">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 12 6-6 6 6" /></svg>
+      </button>
       <div class="brand" aria-label="TapConductor">
         <img class="brand-mark" src="${fingerIconUrl}" alt="" aria-hidden="true" />
         <span><strong>Tap</strong>Conductor</span>
@@ -233,6 +237,7 @@ const byId = <T extends HTMLElement>(id: string): T => {
 
 const elements = {
   open: byId<HTMLButtonElement>("open-score"),
+  chromeToggle: byId<HTMLButtonElement>("chrome-toggle"),
   helpButton: byId<HTMLButtonElement>("help-button"),
   helpOverlay: byId("help-overlay"),
   helpClose: byId<HTMLButtonElement>("help-close"),
@@ -765,6 +770,8 @@ async function loadScore(
     loaded = await loader();
     recordScorePhase("coreLoadMs", coreLoadStarted);
     await displayScore(loaded);
+    const fileName = loaded.path.split(/[\\/]/).pop() || loaded.displayName;
+    setAppWindowTitle(fileName);
   } catch (error) {
     // Native load failures are already surfaced by invokeSafe. Rendering is a
     // separate step, so make OSMD failures visible instead of looking like an
@@ -1685,7 +1692,8 @@ function populateAudioSelect(devices: DeviceDto[]): void {
 
 function fitSelect(select: HTMLSelectElement): void {
   const text = select.selectedOptions[0]?.textContent ?? "";
-  select.style.width = `${Math.max(38, Math.min(190, text.length * 7 + 22))}px`;
+  const nativeControlAllowance = appleUiPlatform === "macos" ? 38 : 22;
+  select.style.width = `${Math.max(38, Math.min(206, text.length * 7 + nativeControlAllowance))}px`;
 }
 
 async function refreshDevices(): Promise<void> {
@@ -2063,6 +2071,16 @@ const updateRollDelays = (): void => {
 };
 elements.regularRoll.addEventListener("input", updateRollDelays);
 elements.auditionRoll.addEventListener("input", updateRollDelays);
+elements.chromeToggle.addEventListener("click", () => {
+  const shell = elements.chromeToggle.closest<HTMLElement>(".shell");
+  if (!shell) return;
+  const hidden = shell.classList.toggle("chrome-hidden");
+  elements.chromeToggle.setAttribute("aria-expanded", String(!hidden));
+  elements.chromeToggle.setAttribute("aria-label", hidden ? "Show header and footer" : "Hide header and footer");
+  elements.chromeToggle.title = hidden ? "Show header and footer" : "Hide header and footer";
+  elements.partsPopover.classList.add("hidden");
+  elements.diagnostics.classList.add("hidden");
+});
 function togglePopover(button: HTMLElement, popover: HTMLElement): void {
   const wasHidden = popover.classList.contains("hidden");
   popover.classList.toggle("hidden", !wasHidden);

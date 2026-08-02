@@ -103,6 +103,9 @@ pub struct NoteAttack {
     /// Optional zero-based source MIDI channel.
     pub midi_channel: Option<u8>,
     pub onset: Rational,
+    /// Orders this attack among playable moments at the same notated onset.
+    /// `u32::MAX` denotes the principal rhythmic event after any grace notes.
+    pub position_order: u32,
     pub end: Rational,
     pub tie: TieInfo,
     pub velocity_hint: Option<u8>,
@@ -112,6 +115,9 @@ pub struct NoteAttack {
 #[serde(rename_all = "camelCase")]
 pub struct ScorePosition {
     pub absolute: Rational,
+    /// Orders distinct playable moments that share the same notated timestamp.
+    /// Grace-note groups use ascending values; the principal rhythmic event is last.
+    pub position_order: u32,
     pub measure_index: usize,
     pub measure_id: String,
     pub occurrence: u32,
@@ -220,6 +226,7 @@ fn sort_attacks(attacks: &mut [NoteAttack]) {
     attacks.sort_by(|left, right| {
         left.onset
             .cmp(&right.onset)
+            .then(left.position_order.cmp(&right.position_order))
             .then(left.part_index.cmp(&right.part_index))
             .then(left.staff.cmp(&right.staff))
             .then(left.voice.cmp(&right.voice))
@@ -229,21 +236,22 @@ fn sort_attacks(attacks: &mut [NoteAttack]) {
 }
 
 fn group_attacks<'a>(attacks: impl Iterator<Item = &'a NoteAttack>) -> Vec<TapEvent> {
-    let mut positions: BTreeMap<Rational, Vec<NoteAttack>> = BTreeMap::new();
+    let mut positions: BTreeMap<(Rational, u32), Vec<NoteAttack>> = BTreeMap::new();
     for attack in attacks {
         positions
-            .entry(attack.onset)
+            .entry((attack.onset, attack.position_order))
             .or_default()
             .push(attack.clone());
     }
 
     positions
         .into_iter()
-        .map(|(onset, mut attacks)| {
+        .map(|((onset, position_order), mut attacks)| {
             sort_attacks(&mut attacks);
             let representative = &attacks[0].source_anchor;
             let position = ScorePosition {
                 absolute: onset,
+                position_order,
                 measure_index: representative.measure_index,
                 measure_id: representative.measure_id.clone(),
                 occurrence: representative.occurrence,
@@ -264,7 +272,12 @@ fn group_attacks<'a>(attacks: impl Iterator<Item = &'a NoteAttack>) -> Vec<TapEv
             display_anchors.dedup_by(|left, right| left.source_id == right.source_id);
 
             TapEvent {
-                id: format!("at:{}:{}", onset.numerator(), onset.denominator()),
+                id: format!(
+                    "at:{}:{}:{}",
+                    onset.numerator(),
+                    onset.denominator(),
+                    position_order
+                ),
                 position,
                 attacks,
                 release_boundaries,
@@ -300,6 +313,7 @@ mod tests {
             midi_pitch: pitch,
             midi_channel: None,
             onset,
+            position_order: u32::MAX,
             end: onset.checked_add(Rational::ONE).unwrap(),
             tie: TieInfo::default(),
             velocity_hint: None,

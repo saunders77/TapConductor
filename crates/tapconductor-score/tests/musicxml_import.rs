@@ -128,12 +128,13 @@ fn transposes_to_concert_pitch_and_reports_policy_skips() {
         &ImportOptions::default(),
     )
     .unwrap();
-    assert_eq!(score.attacks.len(), 1);
+    assert_eq!(score.attacks.len(), 2);
     assert_eq!(score.attacks[0].midi_pitch, 58);
+    assert_eq!(score.attacks[1].midi_pitch, 63);
     let codes: BTreeSet<_> = score.warnings.iter().map(|warning| warning.code).collect();
     assert!(codes.contains(&WarningCode::CueNoteSkipped));
     assert!(codes.contains(&WarningCode::HiddenNoteSkipped));
-    assert!(codes.contains(&WarningCode::GraceNoteSkipped));
+    assert!(!codes.contains(&WarningCode::GraceNoteSkipped));
     assert!(codes.contains(&WarningCode::UnpitchedNoteSkipped));
 
     let options = ImportOptions {
@@ -148,8 +149,51 @@ fn transposes_to_concert_pitch_and_reports_policy_skips() {
             .iter()
             .map(|attack| attack.midi_pitch)
             .collect::<Vec<_>>(),
-        vec![58, 60, 62]
+        vec![58, 60, 62, 63]
     );
+}
+
+#[test]
+fn grace_note_groups_are_distinct_tap_moments_before_the_principal_note() {
+    let xml = br#"
+        <score-partwise>
+          <part-list><score-part id="P"><part-name>Piano</part-name></score-part></part-list>
+          <part id="P"><measure number="1">
+            <attributes><divisions>1</divisions></attributes>
+            <note id="grace-c"><grace/><pitch><step>C</step><octave>4</octave></pitch></note>
+            <note id="grace-d"><grace/><pitch><step>D</step><octave>4</octave></pitch></note>
+            <note id="grace-e"><chord/><grace/><pitch><step>E</step><octave>4</octave></pitch></note>
+            <note id="principal"><pitch><step>F</step><octave>4</octave></pitch><duration>1</duration></note>
+          </measure></part>
+        </score-partwise>"#;
+    let score = import_musicxml(xml, &ImportOptions::default()).unwrap();
+
+    assert_eq!(score.tap_events.len(), 3);
+    assert!(score
+        .tap_events
+        .iter()
+        .all(|event| event.position.absolute == Rational::ZERO));
+    assert_eq!(
+        score
+            .tap_events
+            .iter()
+            .map(|event| event.position.position_order)
+            .collect::<Vec<_>>(),
+        vec![0, 1, u32::MAX],
+    );
+    assert_eq!(
+        score
+            .tap_events
+            .iter()
+            .map(|event| event
+                .attacks
+                .iter()
+                .map(|attack| attack.midi_pitch)
+                .collect::<Vec<_>>())
+            .collect::<Vec<_>>(),
+        vec![vec![60], vec![62, 64], vec![65]],
+    );
+    assert_eq!(score.playback_measures[0].duration, Rational::ONE);
 }
 
 #[test]

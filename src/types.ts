@@ -10,6 +10,7 @@ export interface NoteDto {
   staff: number;
   voice: string;
   midiPitch: number;
+  isGrace: boolean;
   end: RationalDto;
 }
 
@@ -21,6 +22,7 @@ export interface TapEventDto {
   occurrence: number;
   absolute: RationalDto;
   offset: RationalDto;
+  positionOrder: number;
   notes: NoteDto[];
 }
 

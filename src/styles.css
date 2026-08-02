@@ -93,17 +93,18 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
  */
 .platform-ipados .score-stage { padding-top: 82px; }
 .platform-ipados .score-stage .slice-controls { margin-top: -24px; }
-.platform-ipados .score-stage .slice-controls.has-highlight::before { transform: translateY(24px); }
 .platform-ipados .score-stage .play-chord { transform: translateY(16px); }
 .platform-ipados .score-stage .play-chord:hover,
 .platform-ipados .score-stage .play-chord:focus-visible { transform: translateY(16px) scale(1.12); }
 .staff-controls { position: absolute; top: 0; left: 6px; width: 22px; z-index: 8; pointer-events: none; }
 .staff-control { position: absolute; left: 0; display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid #b7b8ad; border-radius: 5px; background: #fffef9; box-shadow: 0 1px 3px #504f4525; pointer-events: auto; cursor: pointer; }
 .staff-control input { width: 14px; height: 14px; margin: 0; accent-color: #75ffb3; cursor: pointer; }
-#osmd { position: relative; z-index: 1; }.score-targets { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+#osmd { position: relative; z-index: 1; }
+.score-highlights { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.score-targets { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
 .slice-controls { position: absolute; display: flex; flex-direction: column; align-items: center; width: 24px; transform: translateX(-12px); pointer-events: auto; z-index: 3; }
-.slice-controls.has-highlight::before { content: ""; position: absolute; left: var(--highlight-left); top: var(--highlight-top); width: var(--highlight-width); height: var(--highlight-height); pointer-events: none; opacity: 0; background: #75ffb35c; transition: opacity .1s ease; z-index: 0; }
-.slice-controls.has-highlight.current::before { opacity: 1; }
+.score-position-highlight { position: absolute; pointer-events: none; opacity: 0; background: #75ffb3; transition: opacity .1s ease; }
+.score-position-highlight.current { opacity: 1; }
 .slice-action { position: relative; z-index: 1; display: grid; place-items: center; width: 22px; height: 20px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #505248; cursor: pointer; line-height: 1; transition: background .1s, box-shadow .1s, transform .1s; }
 .slice-action:hover, .slice-action:focus-visible { background: #75ffb370; box-shadow: 0 0 0 3px #75ffb366; outline: none; transform: scale(1.12); }
 .play-chord { margin-top: -10px; margin-bottom: 6px; }
@@ -111,7 +112,7 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .start-here { margin-top: 2px; }
 .start-here svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 .slice-controls.current .slice-action { color: #75ffb3; }
-.slice-ghost { position: absolute; z-index: 1; pointer-events: none; opacity: 0; background: #75ffb35c; transition: opacity .1s ease; }
+.slice-ghost { position: absolute; pointer-events: none; opacity: 0; background: #75ffb3; transition: opacity .1s ease; }
 .slice-ghost.current { opacity: 1; }
 .note-target { position: absolute; padding: 0; border: 1px solid transparent; border-radius: 50%; background: transparent; cursor: pointer; pointer-events: auto; z-index: 2; }
 .note-target:hover, .note-target:focus-visible { border-color: #75ffb3; outline: 2px solid #75ffb3aa; background: #75ffb32e; }

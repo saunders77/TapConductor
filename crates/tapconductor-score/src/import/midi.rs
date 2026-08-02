@@ -194,6 +194,7 @@ pub(super) fn parse_midi(
             midi_pitch: note.pitch,
             midi_channel: Some(note.channel),
             onset,
+            position_order: u32::MAX,
             end,
             tie: TieInfo::default(),
             velocity_hint: Some(note.velocity),

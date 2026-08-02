@@ -732,6 +732,7 @@ mod tests {
             id: format!("event-{position}"),
             position: ScorePosition {
                 absolute: Rational::from_integer(position),
+                position_order: u32::MAX,
                 measure_index: 0,
                 measure_id: "1".to_owned(),
                 occurrence: 1,

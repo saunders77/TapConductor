@@ -40,6 +40,24 @@ test("does not consume the chord on the following beat", () => {
   assert.equal(plan.nextEventIndex, 2);
 });
 
+test("keeps grace and principal events as separate moments at one written position", () => {
+  const events = [at(2), at(2), at(2), at(3)];
+  const plan = planBeatInterval(
+    events,
+    0,
+    { ...at(2), beatType: 4 },
+    { ...at(3), beatType: 4 },
+    500,
+  );
+
+  assert.deepEqual(plan.events, [
+    { eventIndex: 0, delayMs: 0 },
+    { eventIndex: 1, delayMs: 0 },
+    { eventIndex: 2, delayMs: 0 },
+  ]);
+  assert.equal(plan.nextEventIndex, 3);
+});
+
 test("uses the written beat length for subdivisions after the final beat marker", () => {
   const events = [at(7), at(15, 2), at(8)];
   const plan = planBeatInterval(

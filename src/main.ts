@@ -191,6 +191,7 @@ app.innerHTML = `
             <small>Use any keyboard keys, mouse, tapping the touchscreen, or MIDI</small>
           </div>
           <div id="score-stage" class="score-stage hidden">
+            <div id="score-highlights" class="score-highlights"></div>
             <div id="score-targets" class="score-targets"></div>
             <div id="osmd"></div>
           </div>
@@ -267,6 +268,7 @@ const elements = {
   empty: byId("empty-state"),
   scoreStage: byId("score-stage"),
   scoreScroll: byId("score-scroll"),
+  scoreHighlights: byId("score-highlights"),
   scoreTargets: byId("score-targets"),
   osmd: byId("osmd"),
   zoomOut: byId<HTMLButtonElement>("zoom-out"),
@@ -661,7 +663,7 @@ function updateVisualPosition(follow = true): void {
     const left = beatHorizontalPositions[displayedBeatIndex];
     const visual = beatHighlightVisuals[displayedBeatIndex];
     if (left !== undefined && visual) {
-      beatHighlightNode.style.left = `${left - 10}px`;
+      beatHighlightNode.style.left = `${left - 8}px`;
       beatHighlightNode.style.top = `${visual.top}px`;
       beatHighlightNode.style.height = `${visual.height}px`;
       beatHighlightNode.classList.add("current");
@@ -798,10 +800,18 @@ function indexForPreservedEvent(events: TapEventDto[], previous: TapEventDto | u
   const exact = events.findIndex((event) =>
     event.measureIndex === previous.measureIndex
     && event.offset.numerator === previous.offset.numerator
-    && event.offset.denominator === previous.offset.denominator,
+    && event.offset.denominator === previous.offset.denominator
+    && event.positionOrder === previous.positionOrder,
   );
   if (exact >= 0) return exact;
-  const following = events.findIndex((event) => event.measureIndex > previous.measureIndex);
+  const previousOffset = rationalValue(previous.offset);
+  const following = events.findIndex((event) =>
+    event.measureIndex > previous.measureIndex
+    || (event.measureIndex === previous.measureIndex
+      && (rationalValue(event.offset) > previousOffset + 1e-9
+        || (Math.abs(rationalValue(event.offset) - previousOffset) <= 1e-9
+          && event.positionOrder > previous.positionOrder))),
+  );
   return following >= 0 ? following : Math.max(0, events.length - 1);
 }
 
@@ -839,6 +849,7 @@ async function displayScore(loaded: LoadedScore, preserved?: ScoreViewState): Pr
   renderParts();
 
   elements.osmd.replaceChildren();
+  elements.scoreHighlights.replaceChildren();
   elements.scoreTargets.replaceChildren();
   elements.scoreStage.style.removeProperty("width");
   if (!preserveView) elements.scoreScroll.scrollLeft = 0;
@@ -1094,6 +1105,7 @@ function buildScoreTargets(renderedThroughMeasure: number): { visualSteps: numbe
   if (!osmd || !score) return { visualSteps: 0, targetNodes: 0 };
   const activeScore = score;
   const targetFragment = document.createDocumentFragment();
+  const highlightFragment = document.createDocumentFragment();
   eventHorizontalPositions = [];
   beatHorizontalPositions = [];
   measureHorizontalPositions = new Map();
@@ -1116,6 +1128,7 @@ function buildScoreTargets(renderedThroughMeasure: number): { visualSteps: numbe
     candidates: number[];
     partIndex?: number;
     staffId?: number;
+    isGrace: boolean;
   };
   type VisualStep = {
     step: number;
@@ -1160,6 +1173,7 @@ function buildScoreTargets(renderedThroughMeasure: number): { visualSteps: numbe
             candidates: osmdMidiCandidates(rendered.sourceNote),
             partIndex: rendered.sourceNote?.ParentStaff?.ParentInstrument?.Id,
             staffId: rendered.sourceNote?.ParentStaff?.Id,
+            isGrace: rendered.sourceNote?.IsGraceNote === true,
           });
         } catch {
           // A note without SVG geometry remains visible and playable as part
@@ -1251,8 +1265,8 @@ function buildScoreTargets(renderedThroughMeasure: number): { visualSteps: numbe
   if (beatHighlightVisuals.some(Boolean)) {
     beatHighlightNode = document.createElement("div");
     beatHighlightNode.className = "slice-ghost beat-ghost";
-    beatHighlightNode.style.width = "20px";
-    targetFragment.append(beatHighlightNode);
+    beatHighlightNode.style.width = "16px";
+    highlightFragment.append(beatHighlightNode);
   }
 
   const groupedTargets = new Map<string, { eventIndices: number[]; visual: VisualStep; measureNumber: string }>();
@@ -1265,25 +1279,77 @@ function buildScoreTargets(renderedThroughMeasure: number): { visualSteps: numbe
       event.offset.numerator,
       event.offset.denominator,
     );
-    const visual = candidates[Math.max(0, event.occurrence - 1)] ?? candidates[0] ?? visualSteps[event.index];
+    const eventIsGrace = event.notes.length > 0 && event.notes.every((note) => note.isGrace);
+    const gracePositionOrders = eventIsGrace
+      ? [...new Set(
+          activeScore.events
+            .filter((candidate) =>
+              candidate.measureIndex === event.measureIndex
+              && candidate.offset.numerator * event.offset.denominator
+                === event.offset.numerator * candidate.offset.denominator
+              && candidate.notes.some((note) => note.isGrace),
+            )
+            .map((candidate) => candidate.positionOrder),
+        )].sort((left, right) => left - right)
+      : [];
+    const eventGraceOrdinal = Math.max(0, gracePositionOrders.indexOf(event.positionOrder));
+    const typedCandidates = candidates.filter((candidate) =>
+      candidate.notes.some((note) => note.isGrace === eventIsGrace),
+    );
+    const occurrenceIndex = Math.max(0, event.occurrence - 1);
+    const graceMomentCount = Math.max(1, gracePositionOrders.length);
+    const expandedGraceIndex = occurrenceIndex * graceMomentCount + eventGraceOrdinal;
+    const visual = eventIsGrace && typedCandidates.length >= (occurrenceIndex + 1) * graceMomentCount
+      ? typedCandidates[expandedGraceIndex]
+      : typedCandidates[occurrenceIndex] ?? candidates[occurrenceIndex] ?? candidates[0] ?? visualSteps[event.index];
     if (!visual) continue;
-    osmdEventSteps[event.index] = visual.step;
-    const indicesAtStep = eventIndicesByStep.get(visual.step) ?? [];
-    indicesAtStep.push(event.index);
-    eventIndicesByStep.set(visual.step, indicesAtStep);
-    eventHorizontalPositions[event.index] = visual.anchorLeft;
-    const measureLeft = measureHorizontalPositions.get(event.measureIndex);
-    if (measureLeft === undefined || visual.left < measureLeft) {
-      measureHorizontalPositions.set(event.measureIndex, visual.left);
+    let eventNotes = visual.notes.filter((note) => note.isGrace === eventIsGrace);
+    if (eventIsGrace && eventNotes.length > 0) {
+      const clusters: NoteVisual[][] = [];
+      for (const note of [...eventNotes].sort((left, right) => left.left - right.left)) {
+        const cluster = clusters.at(-1);
+        if (!cluster || Math.abs(cluster[0]!.left - note.left) > Math.max(4, note.width)) {
+          clusters.push([note]);
+        } else {
+          cluster.push(note);
+        }
+      }
+      eventNotes = clusters[eventGraceOrdinal] ?? eventNotes;
     }
-    const targetKey = `${event.measureIndex}:${event.offset.numerator}/${event.offset.denominator}`;
+    const expectedPitches = new Set(event.notes.map((note) => note.midiPitch));
+    const matchingNotes = eventNotes.filter((note) =>
+      note.candidates.some((candidate) =>
+        expectedPitches.has(candidate)
+        || [...expectedPitches].some((pitch) => pitch % 12 === candidate % 12),
+      ),
+    );
+    if (matchingNotes.length > 0) eventNotes = matchingNotes;
+    const eventVisual = eventNotes.length > 0
+      ? {
+          ...visual,
+          notes: eventNotes,
+          anchorLeft: eventNotes
+            .map((note) => note.left + note.width / 2)
+            .sort((left, right) => left - right)[Math.floor(eventNotes.length / 2)]!,
+        }
+      : visual;
+    osmdEventSteps[event.index] = eventVisual.step;
+    const indicesAtStep = eventIndicesByStep.get(eventVisual.step) ?? [];
+    indicesAtStep.push(event.index);
+    eventIndicesByStep.set(eventVisual.step, indicesAtStep);
+    eventHorizontalPositions[event.index] = eventVisual.anchorLeft;
+    const measureLeft = measureHorizontalPositions.get(event.measureIndex);
+    if (measureLeft === undefined || eventVisual.left < measureLeft) {
+      measureHorizontalPositions.set(event.measureIndex, eventVisual.left);
+    }
+    const targetKey = `${event.measureIndex}:${event.offset.numerator}/${event.offset.denominator}:${event.positionOrder}`;
     const existing = groupedTargets.get(targetKey);
     if (existing) {
       existing.eventIndices.push(event.index);
     } else {
       groupedTargets.set(targetKey, {
         eventIndices: [event.index],
-        visual,
+        visual: eventVisual,
         measureNumber: event.measureNumber,
       });
     }
@@ -1302,13 +1368,17 @@ function buildScoreTargets(renderedThroughMeasure: number): { visualSteps: numbe
       const noteRight = Math.max(...target.visual.notes.map((note) => note.left + note.width));
       const noteTop = Math.min(...target.visual.notes.map((note) => note.top));
       const noteBottom = Math.max(...target.visual.notes.map((note) => note.top + note.height));
-      controls.classList.add("has-highlight");
-      controls.style.setProperty("--highlight-left", `${noteLeft - target.visual.anchorLeft + 2}px`);
-      controls.style.setProperty("--highlight-top", `${target.visual.top - controlTop}px`);
-      controls.style.setProperty("--highlight-width", `${Math.max(28, noteRight - noteLeft + 20)}px`);
-      controls.style.setProperty("--highlight-height", `${Math.max(noteBottom - noteTop + 28, target.visual.height)}px`);
+      const originalWidth = Math.max(28, noteRight - noteLeft + 20);
+      const highlightWidth = originalWidth * 0.8;
+      const highlight = document.createElement("div");
+      highlight.className = "score-position-highlight";
+      highlight.style.left = `${target.visual.anchorLeft - highlightWidth / 2}px`;
+      highlight.style.top = `${target.visual.top}px`;
+      highlight.style.width = `${highlightWidth}px`;
+      highlight.style.height = `${Math.max(noteBottom - noteTop + 28, target.visual.height)}px`;
+      registerEventHighlight(highlight, target.eventIndices);
+      highlightFragment.append(highlight);
     }
-    registerEventHighlight(controls, target.eventIndices);
     targetFragment.append(controls);
   }
 
@@ -1401,6 +1471,7 @@ function buildScoreTargets(renderedThroughMeasure: number): { visualSteps: numbe
   orderedMeasureHorizontalPositions = [...new Set(measureHorizontalPositions.values())]
     .sort((left, right) => left - right);
   const targetNodes = targetFragment.childElementCount;
+  elements.scoreHighlights.replaceChildren(highlightFragment);
   elements.scoreTargets.replaceChildren(targetFragment);
   moveOsmdCursor(highlightIndex);
   osmd.cursor.hide();
@@ -1420,6 +1491,7 @@ type OsmdSourceNote = {
   halfTone?: number;
   Pitch?: OsmdPitch;
   TransposedPitch?: OsmdPitch;
+  IsGraceNote?: boolean;
   ParentStaff?: {
     Id?: number;
     ParentInstrument?: { Id?: number };

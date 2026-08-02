@@ -395,6 +395,8 @@ struct MeasureBuilder {
     notes: Vec<RawNote>,
     note_ordinal: usize,
     last_onset_by_voice: BTreeMap<String, Rational>,
+    last_position_order_by_voice: BTreeMap<String, u32>,
+    grace_count_by_voice_and_onset: BTreeMap<(String, Rational), u32>,
     inherited_endings: BTreeSet<u32>,
     ending_starts: BTreeSet<u32>,
     ending_stops: BTreeSet<u32>,
@@ -448,6 +450,7 @@ struct RawNote {
     measure_index: usize,
     order: usize,
     onset: Rational,
+    position_order: u32,
     duration: Rational,
     staff: u16,
     voice: String,
@@ -529,6 +532,8 @@ impl<'a> XmlState<'a> {
                     notes: Vec::new(),
                     note_ordinal: 0,
                     last_onset_by_voice: BTreeMap::new(),
+                    last_position_order_by_voice: BTreeMap::new(),
+                    grace_count_by_voice_and_onset: BTreeMap::new(),
                     inherited_endings: part.active_endings.clone(),
                     ending_starts: BTreeSet::new(),
                     ending_stops: BTreeSet::new(),
@@ -990,12 +995,42 @@ impl<'a> XmlState<'a> {
             measure
                 .last_onset_by_voice
                 .insert(note.voice.clone(), onset);
-            measure.cursor = measure.cursor.checked_add(duration)?;
+            if !note.grace {
+                measure.cursor = measure.cursor.checked_add(duration)?;
+            }
             measure.max_cursor = measure.max_cursor.max(measure.cursor);
             onset
         };
+        let position_order = if note.chord {
+            measure
+                .last_position_order_by_voice
+                .get(&note.voice)
+                .copied()
+                .ok_or_else(|| ImportError::InvalidTiming {
+                    context: format!("part {part_id}, measure {}", measure.id),
+                    message: format!("chord note in voice {} has no preceding note", note.voice),
+                })?
+        } else if note.grace {
+            let next_order = measure
+                .grace_count_by_voice_and_onset
+                .entry((note.voice.clone(), onset))
+                .or_default();
+            let position_order = *next_order;
+            *next_order = next_order.saturating_add(1);
+            measure
+                .last_position_order_by_voice
+                .insert(note.voice.clone(), position_order);
+            position_order
+        } else {
+            measure
+                .last_position_order_by_voice
+                .insert(note.voice.clone(), u32::MAX);
+            u32::MAX
+        };
         let note_end = onset.checked_add(duration)?;
-        measure.max_cursor = measure.max_cursor.max(note_end);
+        if !note.grace {
+            measure.max_cursor = measure.max_cursor.max(note_end);
+        }
 
         let generated_id = if let Some(xml_id) = &note.xml_id {
             format!("{part_id}:{xml_id}")
@@ -1015,14 +1050,6 @@ impl<'a> XmlState<'a> {
         };
 
         if note.rest {
-            return Ok(());
-        }
-        if note.grace {
-            self.warnings.push(ImportWarning::info(
-                WarningCode::GraceNoteSkipped,
-                "grace note is displayed but does not consume a tap in the MVP",
-                context,
-            ));
             return Ok(());
         }
         if note.cue && !self.options.include_cue_notes {
@@ -1103,6 +1130,7 @@ impl<'a> XmlState<'a> {
             measure_index: measure.index,
             order: measure.note_ordinal,
             onset,
+            position_order,
             duration,
             staff: note.staff,
             voice: note.voice,
@@ -1492,6 +1520,7 @@ struct ExpandedNote {
     written_pitch: SpelledPitch,
     midi_pitch: u8,
     onset: Rational,
+    position_order: u32,
     end: Rational,
     tie_start: bool,
     tie_stop: bool,
@@ -1539,6 +1568,7 @@ fn expand_notes(
                     written_pitch: note.written_pitch.clone(),
                     midi_pitch: note.midi_pitch,
                     onset,
+                    position_order: note.position_order,
                     end: onset.checked_add(note.duration)?,
                     tie_start: note.tie_start,
                     tie_stop: note.tie_stop,
@@ -1552,6 +1582,7 @@ fn expand_notes(
         left.playback_order
             .cmp(&right.playback_order)
             .then(left.onset.cmp(&right.onset))
+            .then(left.position_order.cmp(&right.position_order))
             .then(left.part_index.cmp(&right.part_index))
             .then(left.source_order.cmp(&right.source_order))
     });
@@ -1607,6 +1638,7 @@ fn resolve_ties(notes: Vec<ExpandedNote>, warnings: &mut Vec<ImportWarning>) -> 
             midi_pitch: note.midi_pitch,
             midi_channel: None,
             onset: note.onset,
+            position_order: note.position_order,
             end: note.end,
             tie: TieInfo {
                 starts_tie: note.tie_start,

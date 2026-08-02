@@ -27,6 +27,7 @@ pub struct NoteDto {
     staff: u16,
     voice: String,
     midi_pitch: u8,
+    is_grace: bool,
     end: RationalDto,
 }
 
@@ -40,6 +41,7 @@ pub struct TapEventDto {
     occurrence: u32,
     absolute: RationalDto,
     offset: RationalDto,
+    position_order: u32,
     notes: Vec<NoteDto>,
 }
 
@@ -63,6 +65,7 @@ impl TapEventDto {
             occurrence: event.position.occurrence,
             absolute: event.position.absolute.into(),
             offset: event.position.offset.into(),
+            position_order: event.position.position_order,
             notes: event
                 .attacks
                 .iter()
@@ -73,6 +76,7 @@ impl TapEventDto {
                     staff: attack.staff,
                     voice: attack.voice.clone(),
                     midi_pitch: attack.midi_pitch,
+                    is_grace: attack.position_order != u32::MAX,
                     end: attack.end.into(),
                 })
                 .collect(),

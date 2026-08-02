@@ -58,7 +58,7 @@ type StandaloneGlobals = typeof globalThis & {
 
 const standaloneGlobals = globalThis as StandaloneGlobals;
 const PIANO_DEMO_SCORE_URL = standaloneGlobals.__TAPCONDUCTOR_PIANO_DEMO_URL__ ?? new URL(
-  "../assets/demo/TapConductor-Demo.musicxml",
+  "../assets/demo/Prelude in C Minor - Chopin 1839.mxl",
   import.meta.url,
 ).href;
 const CHOIR_DEMO_SCORE_URL = standaloneGlobals.__TAPCONDUCTOR_CHOIR_DEMO_URL__ ?? new URL(
@@ -366,7 +366,7 @@ export class WebRuntime {
         const isChoir = kind === "choir";
         if (!isChoir && kind !== "piano") throw new Error(`Unknown demo score: ${kind}`);
         const url = isChoir ? CHOIR_DEMO_SCORE_URL : PIANO_DEMO_SCORE_URL;
-        const fileName = isChoir ? "All-Night Vigil - Rachmaninoff 1915.mxl" : "TapConductor-Demo.musicxml";
+        const fileName = isChoir ? "All-Night Vigil - Rachmaninoff 1915.mxl" : "Prelude in C Minor - Chopin 1839.mxl";
         const response = await fetch(url);
         if (!response.ok) throw new Error(`Unable to load the demo score (${response.status}).`);
         return this.loadBytes(new Uint8Array(await response.arrayBuffer()), fileName);

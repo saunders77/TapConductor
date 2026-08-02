@@ -44,7 +44,7 @@ pub fn load_demo_score(
 ) -> Result<LoadedScoreDto, String> {
     let file_name = match kind.as_str() {
         "choir" => "All-Night Vigil - Rachmaninoff 1915.mxl",
-        "piano" => "TapConductor-Demo.musicxml",
+        "piano" => "Prelude in C Minor - Chopin 1839.mxl",
         _ => return Err(format!("Unknown demo score: {kind}")),
     };
     let path = app

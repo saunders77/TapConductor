@@ -128,7 +128,7 @@ mod tests {
     #[test]
     fn bundled_demo_scores_are_importable() {
         for file_name in [
-            "TapConductor-Demo.musicxml",
+            "Prelude in C Minor - Chopin 1839.mxl",
             "All-Night Vigil - Rachmaninoff 1915.mxl",
         ] {
             let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

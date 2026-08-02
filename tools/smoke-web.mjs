@@ -9,10 +9,10 @@ bindings.initSync({
   module: readFileSync(resolve(wasmDirectory, "tapconductor_web_bg.wasm")),
 });
 
-const demoPath = resolve(root, "assets", "demo", "TapConductor-Demo.musicxml");
+const demoPath = resolve(root, "assets", "demo", "Prelude in C Minor - Chopin 1839.mxl");
 const score = new bindings.WebScore(
   new Uint8Array(readFileSync(demoPath)),
-  "TapConductor-Demo.musicxml",
+  "Prelude in C Minor - Chopin 1839.mxl",
 );
 const dto = JSON.parse(score.dto_json());
 if (dto.format !== "music_xml" || dto.events.length < 10 || dto.parts.length === 0) {

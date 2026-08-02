@@ -40,7 +40,7 @@ const wasmBinaryUrl = dataUrl(
 
 const pianoDemoUrl = dataUrl(
   "application/vnd.recordare.musicxml+xml",
-  resolve(root, "assets", "demo", "TapConductor-Demo.musicxml"),
+  resolve(root, "assets", "demo", "Prelude in C Minor - Chopin 1839.mxl"),
 );
 const choirDemoUrl = dataUrl(
   "application/vnd.recordare.musicxml",

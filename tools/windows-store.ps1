@@ -109,7 +109,7 @@ function Assert-StoreOverlay {
 
     $requiredResources = [ordered]@{
         "../assets/SlenderSalamander44khz16bit" = "instruments/salamander"
-        "../assets/demo/TapConductor-Demo.musicxml" = "demo/TapConductor-Demo.musicxml"
+        "../assets/demo/Prelude in C Minor - Chopin 1839.mxl" = "demo/Prelude in C Minor - Chopin 1839.mxl"
         "../assets/demo/All-Night Vigil - Rachmaninoff 1915.mxl" = "demo/All-Night Vigil - Rachmaninoff 1915.mxl"
         "../LICENSE" = "LICENSE"
         "../PRIVACY.md" = "PRIVACY.md"

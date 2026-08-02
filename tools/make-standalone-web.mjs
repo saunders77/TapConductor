@@ -38,9 +38,13 @@ const wasmBinaryUrl = dataUrl(
   resolve(wasmDirectory, "tapconductor_web_bg.wasm"),
 );
 
-const demoUrl = dataUrl(
+const pianoDemoUrl = dataUrl(
   "application/vnd.recordare.musicxml+xml",
   resolve(root, "assets", "demo", "TapConductor-Demo.musicxml"),
+);
+const choirDemoUrl = dataUrl(
+  "application/vnd.recordare.musicxml",
+  resolve(root, "assets", "demo", "All-Night Vigil - Rachmaninoff 1915.mxl"),
 );
 const fingerUrl = dataUrl(
   "image/png",
@@ -50,7 +54,8 @@ const fingerUrl = dataUrl(
 const bootstrap = [
   `globalThis.__TAPCONDUCTOR_WASM_JS__=${JSON.stringify(wasmBindingsUrl)};`,
   `globalThis.__TAPCONDUCTOR_WASM_BINARY__=${JSON.stringify(wasmBinaryUrl)};`,
-  `globalThis.__TAPCONDUCTOR_DEMO_URL__=${JSON.stringify(demoUrl)};`,
+  `globalThis.__TAPCONDUCTOR_PIANO_DEMO_URL__=${JSON.stringify(pianoDemoUrl)};`,
+  `globalThis.__TAPCONDUCTOR_CHOIR_DEMO_URL__=${JSON.stringify(choirDemoUrl)};`,
   `globalThis.__TAPCONDUCTOR_FINGER_URL__=${JSON.stringify(fingerUrl)};`,
 ].join("\n");
 

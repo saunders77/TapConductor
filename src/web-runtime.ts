@@ -50,14 +50,19 @@ const ENABLE_WEB_MIDI_ID = "__enable_web_midi__";
 // key-up tail to remain clearly audible instead of sounding abruptly muted.
 const WEB_RELEASE_SECONDS = 0.4;
 type StandaloneGlobals = typeof globalThis & {
-  __TAPCONDUCTOR_DEMO_URL__?: string;
+  __TAPCONDUCTOR_CHOIR_DEMO_URL__?: string;
+  __TAPCONDUCTOR_PIANO_DEMO_URL__?: string;
   __TAPCONDUCTOR_WASM_JS__?: string;
   __TAPCONDUCTOR_WASM_BINARY__?: string;
 };
 
 const standaloneGlobals = globalThis as StandaloneGlobals;
-const DEMO_SCORE_URL = standaloneGlobals.__TAPCONDUCTOR_DEMO_URL__ ?? new URL(
+const PIANO_DEMO_SCORE_URL = standaloneGlobals.__TAPCONDUCTOR_PIANO_DEMO_URL__ ?? new URL(
   "../assets/demo/TapConductor-Demo.musicxml",
+  import.meta.url,
+).href;
+const CHOIR_DEMO_SCORE_URL = standaloneGlobals.__TAPCONDUCTOR_CHOIR_DEMO_URL__ ?? new URL(
+  "../assets/demo/All-Night Vigil - Rachmaninoff 1915.mxl",
   import.meta.url,
 ).href;
 
@@ -357,9 +362,14 @@ export class WebRuntime {
       case "load_score":
         return this.loadFile(this.requireFile(args.path));
       case "load_demo_score": {
-        const response = await fetch(DEMO_SCORE_URL);
+        const kind = String(args.kind);
+        const isChoir = kind === "choir";
+        if (!isChoir && kind !== "piano") throw new Error(`Unknown demo score: ${kind}`);
+        const url = isChoir ? CHOIR_DEMO_SCORE_URL : PIANO_DEMO_SCORE_URL;
+        const fileName = isChoir ? "All-Night Vigil - Rachmaninoff 1915.mxl" : "TapConductor-Demo.musicxml";
+        const response = await fetch(url);
         if (!response.ok) throw new Error(`Unable to load the demo score (${response.status}).`);
-        return this.loadBytes(new Uint8Array(await response.arrayBuffer()), "TapConductor-Demo.musicxml");
+        return this.loadBytes(new Uint8Array(await response.arrayBuffer()), fileName);
       }
       case "set_part_enabled":
         return this.setPartEnabled(String(args.partId), Boolean(args.enabled));

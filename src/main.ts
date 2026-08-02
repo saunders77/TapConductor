@@ -185,7 +185,8 @@ app.innerHTML = `
             <p>If you only have a PDF, you can use a converter program to create a file TapConductor can read (such as Audiveris or MuseScore).</p>
             <div class="empty-actions" aria-label="Choose a score">
               <button id="empty-open" class="primary-button large" type="button">Open a score</button>
-              <button id="demo-open" class="secondary-button large" type="button">Open demo score</button>
+              <button id="demo-choir-open" class="secondary-button large" type="button">Demo choir score</button>
+              <button id="demo-piano-open" class="secondary-button large" type="button">Demo piano score</button>
             </div>
             <small>Every tap plays the next written note or chord. You can also connect a piano or other MIDI instruments and control dynamics.</small>
             <small>Use any keyboard keys, mouse, tapping the touchscreen, or MIDI</small>
@@ -244,7 +245,8 @@ const elements = {
   helpClose: byId<HTMLButtonElement>("help-close"),
   helpDone: byId<HTMLButtonElement>("help-done"),
   emptyOpen: byId<HTMLButtonElement>("empty-open"),
-  demoOpen: byId<HTMLButtonElement>("demo-open"),
+  demoChoirOpen: byId<HTMLButtonElement>("demo-choir-open"),
+  demoPianoOpen: byId<HTMLButtonElement>("demo-piano-open"),
   status: byId("status-pill"),
   audioOutput: byId<HTMLSelectElement>("audio-output"),
   instrument: byId<HTMLSelectElement>("instrument"),
@@ -749,10 +751,10 @@ async function chooseScore(): Promise<void> {
   );
 }
 
-async function loadDemoScore(): Promise<void> {
+async function loadDemoScore(kind: "choir" | "piano"): Promise<void> {
   await loadScore(
-    () => invokeSafe<LoadedScore>("load_demo_score"),
-    "Loading demo score…",
+    () => invokeSafe<LoadedScore>("load_demo_score", { kind }),
+    `Loading demo ${kind} score…`,
   );
 }
 
@@ -761,7 +763,7 @@ async function loadScore(
   loadingMessage: string,
 ): Promise<void> {
   setStatus("loading", loadingMessage);
-  const loadButtons = [elements.open, elements.emptyOpen, elements.demoOpen];
+  const loadButtons = [elements.open, elements.emptyOpen, elements.demoChoirOpen, elements.demoPianoOpen];
   loadButtons.forEach((button) => {
     button.disabled = true;
   });
@@ -1961,7 +1963,8 @@ async function installListeners(): Promise<void> {
 
 elements.open.addEventListener("click", () => void chooseScore());
 elements.emptyOpen.addEventListener("click", () => void chooseScore());
-elements.demoOpen.addEventListener("click", () => void loadDemoScore());
+elements.demoChoirOpen.addEventListener("click", () => void loadDemoScore("choir"));
+elements.demoPianoOpen.addEventListener("click", () => void loadDemoScore("piano"));
 let helpPreviousFocus: HTMLElement | null = null;
 function closeHelp(): void {
   elements.helpOverlay.classList.add("hidden");

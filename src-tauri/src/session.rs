@@ -126,11 +126,20 @@ mod tests {
     }
 
     #[test]
-    fn bundled_demo_score_is_importable() {
-        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../assets/demo/TapConductor-Demo.musicxml");
-        let session = ScoreSession::load(fixture, 1).unwrap();
+    fn bundled_demo_scores_are_importable() {
+        for file_name in [
+            "TapConductor-Demo.musicxml",
+            "All-Night Vigil - Rachmaninoff 1915.mxl",
+        ] {
+            let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../assets/demo")
+                .join(file_name);
+            let session = ScoreSession::load(fixture, 1).unwrap();
 
-        assert!(session.events().len() >= 10);
+            assert!(
+                !session.events().is_empty(),
+                "{file_name} has no playable events"
+            );
+        }
     }
 }

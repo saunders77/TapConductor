@@ -40,13 +40,19 @@ pub fn load_score(
 pub fn load_demo_score(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,
+    kind: String,
 ) -> Result<LoadedScoreDto, String> {
+    let file_name = match kind.as_str() {
+        "choir" => "All-Night Vigil - Rachmaninoff 1915.mxl",
+        "piano" => "TapConductor-Demo.musicxml",
+        _ => return Err(format!("Unknown demo score: {kind}")),
+    };
     let path = app
         .path()
         .resource_dir()
         .map_err(|error| error.to_string())?
         .join("demo")
-        .join("TapConductor-Demo.musicxml");
+        .join(file_name);
     let (score, event) = lock_core(&state)?.load_score(path)?;
     emit_event(&app, event)?;
     Ok(score)

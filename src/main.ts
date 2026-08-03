@@ -582,12 +582,22 @@ function setStatus(kind: "ready" | "loading" | "fault", label: string): void {
   elements.status.querySelector("b")!.textContent = label;
 }
 
+const displayedErrorMessages = new Set<string>();
+
 function toast(message: string, kind: "info" | "warning" | "error" = "info"): void {
+  if (kind === "error") {
+    if (displayedErrorMessages.has(message)) return;
+    displayedErrorMessages.add(message);
+  }
+
   const item = document.createElement("div");
   item.className = `toast ${kind}`;
   item.textContent = message;
   elements.toasts.append(item);
-  window.setTimeout(() => item.remove(), 5500);
+  window.setTimeout(() => {
+    item.remove();
+    if (kind === "error") displayedErrorMessages.delete(message);
+  }, 5500);
 }
 
 function noteName(midi: number): string {

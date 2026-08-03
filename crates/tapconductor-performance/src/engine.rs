@@ -217,6 +217,7 @@ pub struct PerformanceEngine<G = DefaultPianoGate> {
     regular_roll_ms: u16,
     audition_roll_ms: u16,
     legato_mode: bool,
+    auditions_release_on_next_note: bool,
 }
 
 impl PerformanceEngine<DefaultPianoGate> {
@@ -253,6 +254,7 @@ impl<G: GatePolicy> PerformanceEngine<G> {
             regular_roll_ms: 0,
             audition_roll_ms: 120,
             legato_mode: false,
+            auditions_release_on_next_note: true,
         })
     }
 
@@ -274,6 +276,10 @@ impl<G: GatePolicy> PerformanceEngine<G> {
     #[must_use]
     pub const fn legato_mode(&self) -> bool {
         self.legato_mode
+    }
+
+    pub fn set_auditions_release_on_next_note(&mut self, enabled: bool) {
+        self.auditions_release_on_next_note = enabled;
     }
 
     /// Updates the device clock rate after a safety stop. The score and cursor
@@ -575,7 +581,11 @@ impl<G: GatePolicy> PerformanceEngine<G> {
                         .expect("a slice has one legacy group")
                         .release_boundary()
                 } else {
-                    SliceReleaseBoundary::NextTrigger
+                    if self.auditions_release_on_next_note {
+                        SliceReleaseBoundary::NextNoteOrInputRelease
+                    } else {
+                        SliceReleaseBoundary::NextTrigger
+                    }
                 },
             ));
             1
@@ -596,6 +606,50 @@ impl<G: GatePolicy> PerformanceEngine<G> {
             .ok_or(EngineError::VoiceGroupIdExhausted)?;
 
         let mut transition = Transition::none();
+        // Auditions are transient overlays: playing any subsequent score note
+        // or audition releases every still-sounding audition, even if its
+        // pointer or key remains held.
+        for waiting in self.active_groups.iter().filter(|waiting| {
+            waiting.release_scheduled_at.is_none()
+                && matches!(
+                    waiting.release_boundary,
+                    SliceReleaseBoundary::NextNoteOrInputRelease
+                )
+        }) {
+            self.gate.note_off_at(
+                self.sample_rate,
+                Some(waiting.input_released_at.unwrap_or(at)),
+                Some(at),
+            )?;
+        }
+        for waiting in &mut self.active_groups {
+            if waiting.release_scheduled_at.is_some()
+                || !matches!(
+                    waiting.release_boundary,
+                    SliceReleaseBoundary::NextNoteOrInputRelease
+                )
+            {
+                continue;
+            }
+            let release_at = self
+                .gate
+                .note_off_at(
+                    self.sample_rate,
+                    Some(waiting.input_released_at.unwrap_or(at)),
+                    Some(at),
+                )?
+                .expect("a release and trigger always produce a gate deadline");
+            waiting.first_later_trigger_at = Some(at);
+            waiting.release_scheduled_at = Some(release_at);
+            transition.push_audio(AudioCommand::DampenGroup {
+                at,
+                group: waiting.id,
+            });
+            transition.push_audio(AudioCommand::ReleaseGroup {
+                at: release_at,
+                group: waiting.id,
+            });
+        }
         if staff_scoped_tap && self.legato_mode {
             // A qualifying future note attack releases every matching held
             // score note, regardless of which physical key originally struck
@@ -645,6 +699,8 @@ impl<G: GatePolicy> PerformanceEngine<G> {
                     && (kind == TriggerKind::Audition
                         || match group.release_boundary {
                             SliceReleaseBoundary::InputRelease => true,
+                            SliceReleaseBoundary::OwnInputRelease
+                            | SliceReleaseBoundary::NextNoteOrInputRelease => false,
                             SliceReleaseBoundary::NextTrigger => true,
                             SliceReleaseBoundary::OnEvent(event) => slice.id().get() >= event.get(),
                             SliceReleaseBoundary::EndOfScore => false,
@@ -751,7 +807,12 @@ impl<G: GatePolicy> PerformanceEngine<G> {
                 && if self.legato_mode {
                     matches!(group.release_boundary, SliceReleaseBoundary::InputRelease)
                         || (group.input == input
-                            && matches!(group.release_boundary, SliceReleaseBoundary::NextTrigger))
+                            && matches!(
+                                group.release_boundary,
+                                SliceReleaseBoundary::OwnInputRelease
+                                    | SliceReleaseBoundary::NextNoteOrInputRelease
+                                    | SliceReleaseBoundary::NextTrigger
+                            ))
                 } else {
                     group.input == input
                 }
@@ -778,7 +839,12 @@ impl<G: GatePolicy> PerformanceEngine<G> {
                 || if self.legato_mode {
                     !matches!(group.release_boundary, SliceReleaseBoundary::InputRelease)
                         && !(group.input == input
-                            && matches!(group.release_boundary, SliceReleaseBoundary::NextTrigger))
+                            && matches!(
+                                group.release_boundary,
+                                SliceReleaseBoundary::OwnInputRelease
+                                    | SliceReleaseBoundary::NextNoteOrInputRelease
+                                    | SliceReleaseBoundary::NextTrigger
+                            ))
                 } else {
                     group.input != input
                 }
@@ -1464,6 +1530,53 @@ mod tests {
     }
 
     #[test]
+    fn legato_staccato_note_waits_for_its_originating_key_up() {
+        let mut engine = engine();
+        engine.set_legato_mode(true);
+        let score = ScoreSequence::new(vec![
+            Slice::from_staff_groups(
+                event(10),
+                &[StaffSlice::new(
+                    1,
+                    chord(&[60]),
+                    SliceReleaseBoundary::OwnInputRelease,
+                )],
+            )
+            .unwrap(),
+            Slice::from_staff_groups(
+                event(20),
+                &[StaffSlice::new(
+                    1,
+                    chord(&[62]),
+                    SliceReleaseBoundary::InputRelease,
+                )],
+            )
+            .unwrap(),
+        ])
+        .unwrap();
+        engine.load_score(score, time(0)).unwrap();
+        let generation = engine.generation().unwrap();
+        let first = tap(&mut engine, generation, 1, 100);
+        let staccato_group = match commands(&first)[0] {
+            AudioCommand::PlaySlice { group, .. } => group,
+            _ => unreachable!(),
+        };
+        tap(&mut engine, generation, 2, 200);
+
+        let other_up = release(&mut engine, 2, 300);
+        assert!(!commands(&other_up).iter().any(|command| matches!(
+            command,
+            AudioCommand::DampenGroup { group, .. }
+                | AudioCommand::ReleaseGroup { group, .. } if *group == staccato_group
+        )));
+        let original_up = release(&mut engine, 1, 400);
+        assert!(commands(&original_up).iter().any(|command| matches!(
+            command,
+            AudioCommand::DampenGroup { group, .. } if *group == staccato_group
+        )));
+    }
+
+    #[test]
     fn notes_on_one_staff_release_independently_by_written_duration() {
         let mut engine = engine();
         engine.set_legato_mode(true);
@@ -1701,6 +1814,36 @@ mod tests {
                 kind: TriggerKind::Audition,
                 ..
             }) if *id == event(10)
+        ));
+    }
+
+    #[test]
+    fn held_audition_releases_when_any_later_note_is_played() {
+        let mut engine = engine();
+        let generation = load(&mut engine, 0);
+        let audition = engine
+            .handle(PerformanceCommand::AuditionNote {
+                generation,
+                event: event(10),
+                pitch: MidiPitch::new(64).unwrap(),
+                input: input(4),
+                at: time(50),
+                velocity: Velocity::DEFAULT,
+            })
+            .unwrap();
+        let audition_group = match commands(&audition)[0] {
+            AudioCommand::PlaySlice { group, .. } => group,
+            _ => unreachable!(),
+        };
+
+        let next = tap(&mut engine, generation, 5, 100);
+        assert!(matches!(
+            commands(&next).as_slice(),
+            [
+                AudioCommand::DampenGroup { group, .. },
+                AudioCommand::ReleaseGroup { group: released, .. },
+                AudioCommand::PlaySlice { .. }
+            ] if *group == audition_group && *released == audition_group
         ));
     }
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { releaseBoundaryIndex } from "./web-note-gate.ts";
+import { releaseBoundaryIndex, releasesOnInput } from "./web-note-gate.ts";
 
 const at = (numerator: number, denominator = 1, ends: number[] = [numerator + 1]) => ({
   absolute: { numerator, denominator },
@@ -31,6 +31,16 @@ test("an intervening note boundary prevents an overlapping release", () => {
 
 test("staccato notes release on key-up", () => {
   assert.equal(releaseBoundaryIndex(events, 0, { numerator: 3, denominator: 1 }, true), null);
+});
+
+test("staccato release accepts only the originating key-up", () => {
+  const staccato = { boundaryIndex: null, originalInputOnly: true };
+  assert.equal(releasesOnInput(staccato, false), false);
+  assert.equal(releasesOnInput(staccato, true), true);
+  assert.equal(
+    releasesOnInput({ boundaryIndex: null, originalInputOnly: false }, false),
+    true,
+  );
 });
 
 test("exact rational comparisons do not round triplets", () => {

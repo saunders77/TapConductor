@@ -7,7 +7,11 @@ import type {
   MidiPortsDto,
   RationalDto,
 } from "./types";
-import { releaseBoundaryIndex } from "./web-note-gate";
+import {
+  releaseBoundaryIndex,
+  releasesOnInput,
+  type ScoreReleasePlan,
+} from "./web-note-gate";
 
 type EventHandler<T> = (event: { payload: T }) => void;
 type Listener = EventHandler<unknown>;
@@ -28,6 +32,7 @@ type VoiceNote = {
   gain: GainNode;
   midiPitch: number;
   releaseBoundaryIndex: number | null;
+  releaseOnOriginalInputOnly: boolean;
   boundaryReached: boolean;
   releasing: boolean;
 };
@@ -35,6 +40,7 @@ type VoiceNote = {
 type Voice = {
   notes: VoiceNote[];
   releaseOnInput: boolean;
+  releaseOnNextPlay: boolean;
   stopAt: number;
 };
 
@@ -130,11 +136,17 @@ class BrowserAudio {
     velocity: number,
     rollMs: number,
     output?: MIDIOutput,
-    releaseBoundaries?: readonly (number | null)[],
+    releasePlans?: readonly ScoreReleasePlan[],
+    releaseOnNextPlay = false,
   ): Promise<void> {
     if (pitches.length === 0) return;
     const context = await this.ensureReady();
     this.releaseCompleted(context.currentTime, output);
+    for (const [voiceToken, voice] of this.voices) {
+      if (!voice.releaseOnNextPlay) continue;
+      for (const note of voice.notes) this.releaseNote(note, context.currentTime, output);
+      this.pruneVoice(voiceToken);
+    }
     if (this.voices.size >= 64) {
       const oldest = this.voices.keys().next().value as string | undefined;
       if (oldest) {
@@ -146,7 +158,8 @@ class BrowserAudio {
     const sorted = pitches
       .map((pitch, index) => ({
         pitch,
-        releaseBoundaryIndex: releaseBoundaries?.[index] ?? null,
+        releaseBoundaryIndex: releasePlans?.[index]?.boundaryIndex ?? null,
+        releaseOnOriginalInputOnly: releasePlans?.[index]?.originalInputOnly ?? false,
       }))
       .sort((left, right) => left.pitch - right.pitch);
     const baseStart = context.currentTime + 0.005;
@@ -160,7 +173,7 @@ class BrowserAudio {
     const peakGain = velocityGain
       * chordScale
       * (this.instrument === "piano" ? 0.2 : 0.16);
-    sorted.forEach(({ pitch, releaseBoundaryIndex }, index) => {
+    sorted.forEach(({ pitch, releaseBoundaryIndex, releaseOnOriginalInputOnly }, index) => {
       const start = baseStart + index * rollMs / 1_000;
       const oscillator = context.createOscillator();
       const noteGain = context.createGain();
@@ -192,6 +205,7 @@ class BrowserAudio {
         gain: noteGain,
         midiPitch: pitch,
         releaseBoundaryIndex,
+        releaseOnOriginalInputOnly,
         boundaryReached: false,
         releasing: false,
       });
@@ -203,7 +217,8 @@ class BrowserAudio {
 
     this.voices.set(token, {
       notes,
-      releaseOnInput: releaseBoundaries === undefined,
+      releaseOnInput: releasePlans === undefined,
+      releaseOnNextPlay,
       stopAt: naturalStop,
     });
     this.starts += 1;
@@ -216,7 +231,16 @@ class BrowserAudio {
       for (const note of voice.notes) {
         if (
           (voice.releaseOnInput && voiceToken === token)
-          || (!voice.releaseOnInput && note.releaseBoundaryIndex === null)
+          || (
+            !voice.releaseOnInput
+            && releasesOnInput(
+              {
+                boundaryIndex: note.releaseBoundaryIndex,
+                originalInputOnly: note.releaseOnOriginalInputOnly,
+              },
+              voiceToken === token,
+            )
+          )
         ) {
           this.releaseNote(note, now, output);
         }
@@ -545,7 +569,15 @@ export class WebRuntime {
     this.validIndex(index);
     if (this.heldTokens.has(token)) return;
     this.heldTokens.add(token);
-    await this.audio.play(token, pitches, velocity, this.rollAuditionMs, this.midiOutput());
+    await this.audio.play(
+      token,
+      pitches,
+      velocity,
+      this.rollAuditionMs,
+      this.midiOutput(),
+      undefined,
+      true,
+    );
   }
 
   private release(token: string): void {
@@ -577,14 +609,17 @@ export class WebRuntime {
   private releaseBoundaries(
     notes: LoadedScore["events"][number]["notes"],
     playedIndex: number,
-  ): Array<number | null> {
+  ): ScoreReleasePlan[] {
     if (!this.score) throw new Error("No score is loaded.");
-    return notes.map((note) => releaseBoundaryIndex(
-      this.score!.events,
-      playedIndex,
-      note.end,
-      note.isStaccato,
-    ));
+    return notes.map((note) => ({
+      boundaryIndex: releaseBoundaryIndex(
+        this.score!.events,
+        playedIndex,
+        note.end,
+        note.isStaccato,
+      ),
+      originalInputOnly: note.isStaccato,
+    }));
   }
 
   private async audioDevices(): Promise<DeviceDto[]> {

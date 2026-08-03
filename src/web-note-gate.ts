@@ -1,5 +1,14 @@
 import type { RationalDto, TapEventDto } from "./types";
 
+export type ScoreReleasePlan = {
+  boundaryIndex: number | null;
+  originalInputOnly: boolean;
+};
+
+export function releasesOnInput(plan: ScoreReleasePlan, isOriginalInput: boolean): boolean {
+  return plan.boundaryIndex === null && (!plan.originalInputOnly || isOriginalInput);
+}
+
 /** Mirrors the native legato boundary calculation. Null means that any
  * physical release may end the note; Infinity means that no qualifying
  * score gesture occurs before the end of this performance sequence. */

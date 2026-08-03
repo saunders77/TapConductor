@@ -63,6 +63,7 @@ impl AppCore {
         let mut direct_midi_performance =
             PerformanceEngine::with_default_gate(rate, EngineConfig::default())
                 .map_err(|error| error.to_string())?;
+        direct_midi_performance.set_auditions_release_on_next_note(false);
         direct_midi_performance
             .load_score(direct_midi_sequence(), SampleTime::ZERO)
             .map_err(|error| error.to_string())?;
@@ -714,7 +715,7 @@ fn rhythm_release_boundary(
     use tapconductor_performance::SliceReleaseBoundary;
 
     if staccato {
-        return SliceReleaseBoundary::InputRelease;
+        return SliceReleaseBoundary::OwnInputRelease;
     }
     let Some(next) = events.get(index + 1) else {
         return SliceReleaseBoundary::InputRelease;
@@ -832,11 +833,11 @@ mod tests {
     }
 
     #[test]
-    fn staccato_note_releases_on_input_even_when_it_reaches_the_next_slice() {
+    fn staccato_note_waits_for_its_own_input_release() {
         let events = [event_at(0), event_at(2), event_at(4)];
         assert_eq!(
             rhythm_release_boundary(&events, 0, Rational::from_integer(2), true),
-            SliceReleaseBoundary::InputRelease
+            SliceReleaseBoundary::OwnInputRelease
         );
     }
 

@@ -399,9 +399,13 @@ impl StaffSlice {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SliceReleaseBoundary {
-    /// No later score onset lies within this note's written duration, so the
-    /// physical input release is sufficient to begin its note-off.
+    /// No later score onset lies within this note's written duration, so any
+    /// physical input release in legato mode may begin its note-off.
     InputRelease,
+    /// Only the release of the input that struck this note may end it.
+    OwnInputRelease,
+    /// UI auditions end on their own release or before any later note.
+    NextNoteOrInputRelease,
     NextTrigger,
     OnEvent(EventId),
     EndOfScore,

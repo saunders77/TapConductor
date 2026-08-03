@@ -196,6 +196,7 @@ pub(super) fn parse_midi(
             onset,
             position_order: u32::MAX,
             end,
+            staccato: false,
             tie: TieInfo::default(),
             velocity_hint: Some(note.velocity),
         });

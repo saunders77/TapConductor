@@ -107,6 +107,9 @@ pub struct NoteAttack {
     /// `u32::MAX` denotes the principal rhythmic event after any grace notes.
     pub position_order: u32,
     pub end: Rational,
+    /// Whether the source notation marks this attack staccato.
+    #[serde(default)]
+    pub staccato: bool,
     pub tie: TieInfo,
     pub velocity_hint: Option<u8>,
 }
@@ -315,6 +318,7 @@ mod tests {
             onset,
             position_order: u32::MAX,
             end: onset.checked_add(Rational::ONE).unwrap(),
+            staccato: false,
             tie: TieInfo::default(),
             velocity_hint: None,
         }

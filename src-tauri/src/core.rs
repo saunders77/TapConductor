@@ -90,6 +90,15 @@ impl AppCore {
         self.beat_tap_mode
     }
 
+    pub fn set_legato_mode(&mut self, enabled: bool) -> Result<Option<CoreEventDto>, String> {
+        if self.performance.legato_mode() == enabled {
+            return Ok(None);
+        }
+        let event = self.panic()?;
+        self.performance.set_legato_mode(enabled);
+        Ok(event)
+    }
+
     pub fn set_midi_free_play(&mut self, enabled: bool) -> Result<Option<CoreEventDto>, String> {
         if self.midi_free_play == enabled {
             return Ok(None);
@@ -665,17 +674,17 @@ fn sequence_from_events(events: &[tapconductor_score::TapEvent]) -> Result<Score
     let mut slices = Vec::with_capacity(events.len());
     for (index, event) in events.iter().enumerate() {
         let mut attacks_by_staff: BTreeMap<
-            (u16, tapconductor_score::Rational),
+            (u16, tapconductor_score::Rational, bool),
             Vec<&tapconductor_score::NoteAttack>,
         > = BTreeMap::new();
         for attack in &event.attacks {
             attacks_by_staff
-                .entry((attack.staff, attack.end))
+                .entry((attack.staff, attack.end, attack.staccato))
                 .or_default()
                 .push(attack);
         }
         let mut staff_groups = Vec::with_capacity(attacks_by_staff.len());
-        for ((staff, end), attacks) in attacks_by_staff {
+        for ((staff, end, staccato), attacks) in attacks_by_staff {
             let pitches: Vec<MidiPitch> = attacks
                 .iter()
                 .map(|attack| {
@@ -685,12 +694,7 @@ fn sequence_from_events(events: &[tapconductor_score::TapEvent]) -> Result<Score
                 })
                 .collect::<Result<_, _>>()?;
             let chord = Chord::from_pitches(&pitches).map_err(|error| error.to_string())?;
-            // At every tap, a sounding note may end once it no longer spans
-            // the *following* playable score location. Therefore its boundary
-            // is the last later tap strictly before its resolved written/tied
-            // end. If the immediately following tap is at or after the end,
-            // physical input release may begin the note-off immediately.
-            let release_boundary = rhythm_release_boundary(events, index, end);
+            let release_boundary = rhythm_release_boundary(events, index, end, staccato);
             staff_groups.push(StaffSlice::new(staff, chord, release_boundary));
         }
         slices.push(
@@ -705,19 +709,55 @@ fn rhythm_release_boundary(
     events: &[tapconductor_score::TapEvent],
     index: usize,
     end: tapconductor_score::Rational,
+    staccato: bool,
 ) -> tapconductor_performance::SliceReleaseBoundary {
-    events
+    use tapconductor_performance::SliceReleaseBoundary;
+
+    if staccato {
+        return SliceReleaseBoundary::InputRelease;
+    }
+    let Some(next) = events.get(index + 1) else {
+        return SliceReleaseBoundary::InputRelease;
+    };
+    if next.position.absolute > end {
+        return SliceReleaseBoundary::InputRelease;
+    }
+
+    if let Some((release_index, _)) = events
         .iter()
         .enumerate()
         .skip(index + 1)
-        .take_while(|(_, candidate)| candidate.position.absolute < end)
-        .last()
-        .map(|(release_index, _)| {
-            tapconductor_performance::SliceReleaseBoundary::OnEvent(EventId::new(
-                release_index as u64 + 1,
-            ))
-        })
-        .unwrap_or(tapconductor_performance::SliceReleaseBoundary::InputRelease)
+        .find(|(_, event)| event.position.absolute == end)
+    {
+        return SliceReleaseBoundary::OnEvent(EventId::new(release_index as u64 + 1));
+    }
+
+    for (release_index, candidate) in events.iter().enumerate().skip(index + 1) {
+        let start = candidate.position.absolute;
+        if start >= end {
+            break;
+        }
+        if !candidate
+            .release_boundaries
+            .iter()
+            .any(|candidate_end| *candidate_end > end)
+        {
+            continue;
+        }
+
+        let another_boundary_intervenes = events.iter().any(|event| {
+            (event.position.absolute > start && event.position.absolute < end)
+                || event
+                    .release_boundaries
+                    .iter()
+                    .any(|note_end| *note_end > start && *note_end < end)
+        });
+        if !another_boundary_intervenes {
+            return SliceReleaseBoundary::OnEvent(EventId::new(release_index as u64 + 1));
+        }
+    }
+
+    SliceReleaseBoundary::EndOfScore
 }
 
 #[cfg(test)]
@@ -742,6 +782,12 @@ mod tests {
             release_boundaries: Vec::new(),
             display_anchors: Vec::new(),
         }
+    }
+
+    fn event_with_ends(position: i64, ends: &[i64]) -> TapEvent {
+        let mut event = event_at(position);
+        event.release_boundaries = ends.iter().copied().map(Rational::from_integer).collect();
+        event
     }
 
     #[test]
@@ -771,30 +817,41 @@ mod tests {
     fn short_note_can_release_before_the_following_note_point() {
         let events = [event_at(0), event_at(2), event_at(4)];
         assert_eq!(
-            rhythm_release_boundary(&events, 0, Rational::from_integer(1)),
+            rhythm_release_boundary(&events, 0, Rational::from_integer(1), false),
             SliceReleaseBoundary::InputRelease
         );
     }
 
     #[test]
-    fn note_releases_at_the_last_note_point_strictly_inside_its_duration() {
+    fn note_releases_on_an_exact_future_onset() {
         let events = [event_at(0), event_at(2), event_at(4), event_at(6)];
         assert_eq!(
-            rhythm_release_boundary(&events, 0, Rational::from_integer(5)),
-            SliceReleaseBoundary::OnEvent(EventId::new(3))
+            rhythm_release_boundary(&events, 0, Rational::from_integer(2), false),
+            SliceReleaseBoundary::OnEvent(EventId::new(2))
         );
+    }
+
+    #[test]
+    fn staccato_note_releases_on_input_even_when_it_reaches_the_next_slice() {
+        let events = [event_at(0), event_at(2), event_at(4)];
         assert_eq!(
-            rhythm_release_boundary(&events, 0, Rational::from_integer(2)),
+            rhythm_release_boundary(&events, 0, Rational::from_integer(2), true),
             SliceReleaseBoundary::InputRelease
         );
     }
 
     #[test]
-    fn note_extending_past_the_score_releases_at_the_final_note_point() {
-        let events = [event_at(0), event_at(2), event_at(4)];
+    fn overlapping_future_note_releases_only_without_an_intervening_boundary() {
+        let clean_overlap = [event_with_ends(0, &[3]), event_with_ends(1, &[4])];
         assert_eq!(
-            rhythm_release_boundary(&events, 0, Rational::from_integer(8)),
-            SliceReleaseBoundary::OnEvent(EventId::new(3))
+            rhythm_release_boundary(&clean_overlap, 0, Rational::from_integer(3), false),
+            SliceReleaseBoundary::OnEvent(EventId::new(2))
+        );
+
+        let interrupted = [event_with_ends(0, &[4]), event_with_ends(1, &[2, 5])];
+        assert_eq!(
+            rhythm_release_boundary(&interrupted, 0, Rational::from_integer(4), false),
+            SliceReleaseBoundary::EndOfScore
         );
     }
 }

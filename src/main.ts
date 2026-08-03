@@ -85,6 +85,10 @@ app.innerHTML = `
           <option value="beat">Beat Tap</option>
         </select>
       </label>
+      <label class="field legato-field" title="Use written note durations to connect and release notes across your gestures.">
+        <span>Legato</span>
+        <span class="switch-control"><input id="legato-mode" type="checkbox" role="switch" aria-label="Legato mode" /><span aria-hidden="true"></span><strong id="legato-value">Off</strong></span>
+      </label>
       <label class="range-field delay-field" title="Set the delay between notes when regular score chords are rolled.">
         <span>Tap Roll <output id="regular-roll-value">0 ms</output></span>
         <input id="regular-roll" type="range" min="0" max="250" value="0" />
@@ -138,7 +142,7 @@ app.innerHTML = `
             <p>By default, all staves (parts) will play during tapping, but you can select specific staves in the PARTS menu.</p>
           </section>
           <section><h3>3. Conduct the score</h3>
-            <p>Press the large <b>TAP</b> button, a supported keyboard key (A-Z, numbers, Shift, or punctuation), or your MIDI instrument/piano to play the next written note or chord, starting from the beginning. The location marker will automatically progress to the next note or chord. If you do nothing further, playing does not continue; every note waits for your tap. Hold down the control for longer notes. To play legato, use multiple fingers to hold keys down as you alternate between them. This mode is useful for rehearsals with a choir, performance, or recording. If you want each tap to roll each chord, you can use the ROLL slider at the bottom of the window. </p>
+            <p>Press the large <b>TAP</b> button, a supported keyboard key (A-Z, numbers, Shift, or punctuation), or your MIDI instrument/piano to play the next written note or chord, starting from the beginning. The location marker will automatically progress to the next note or chord. If you do nothing further, playing does not continue; every note waits for your tap. With Legato off, each note follows the key that struck it. Turn Legato on to use written durations, rests, staccato marks, and later note gestures to connect and release notes automatically. This mode is useful for rehearsals with a choir, performance, or recording. If you want each tap to roll each chord, you can use the ROLL slider at the bottom of the window.</p>
             <p>If you don't want to play a note/chord on every tap, but you instead want to use the program for normal conducting, keeping a steady beat while the notes play, then switch from the Rhythm mode to the Beat mode in the TAP MODE menu. Then you'll need to start by counting in with taps, and each tap will be interpreted as one beat in the music.</p>
             <p>The Stop button on the top right switches to a mode where TapConductor ignores your taps, except for MIDI IN, which it plays directly. Use this mode if you want to play on your piano as you would normally.</p>
           </section>
@@ -253,6 +257,8 @@ const elements = {
   midiInput: byId<HTMLSelectElement>("midi-input"),
   midiOutput: byId<HTMLSelectElement>("midi-output"),
   tapMode: byId<HTMLSelectElement>("tap-mode"),
+  legatoMode: byId<HTMLInputElement>("legato-mode"),
+  legatoValue: byId<HTMLElement>("legato-value"),
   volume: byId<HTMLInputElement>("volume"),
   volumeValue: byId<HTMLOutputElement>("volume-value"),
   regularRoll: byId<HTMLInputElement>("regular-roll"),
@@ -2234,6 +2240,11 @@ elements.tapMode.addEventListener("change", () => {
     updateTapButtonLabel();
     updatePosition();
   }
+});
+elements.legatoMode.addEventListener("change", () => {
+  const enabled = elements.legatoMode.checked;
+  elements.legatoValue.textContent = enabled ? "On" : "Off";
+  void invokeSafe("set_legato_mode", { enabled });
 });
 elements.diagnosticsButton.addEventListener("click", () => {
   if (lastDiagnostics) showDiagnostics(lastDiagnostics);

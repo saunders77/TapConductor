@@ -197,6 +197,28 @@ fn grace_note_groups_are_distinct_tap_moments_before_the_principal_note() {
 }
 
 #[test]
+fn imports_staccato_articulation_on_the_attack() {
+    let xml = br#"
+        <score-partwise>
+          <part-list><score-part id="P"><part-name>Piano</part-name></score-part></part-list>
+          <part id="P"><measure number="1">
+            <attributes><divisions>1</divisions></attributes>
+            <note id="staccato-c">
+              <pitch><step>C</step><octave>4</octave></pitch><duration>1</duration>
+              <notations><articulations><staccato/></articulations></notations>
+            </note>
+            <note id="plain-d">
+              <pitch><step>D</step><octave>4</octave></pitch><duration>1</duration>
+            </note>
+          </measure></part>
+        </score-partwise>"#;
+    let score = import_musicxml(xml, &ImportOptions::default()).unwrap();
+
+    assert!(score.attacks[0].staccato);
+    assert!(!score.attacks[1].staccato);
+}
+
+#[test]
 fn fails_closed_on_timing_that_moves_before_measure_start() {
     let xml = br#"
         <score-partwise>

@@ -216,6 +216,7 @@ pub struct PerformanceEngine<G = DefaultPianoGate> {
     held_inputs: Vec<HeldInput>,
     regular_roll_ms: u16,
     audition_roll_ms: u16,
+    legato_mode: bool,
 }
 
 impl PerformanceEngine<DefaultPianoGate> {
@@ -251,6 +252,7 @@ impl<G: GatePolicy> PerformanceEngine<G> {
             held_inputs: Vec::with_capacity(config.max_held_inputs),
             regular_roll_ms: 0,
             audition_roll_ms: 120,
+            legato_mode: false,
         })
     }
 
@@ -262,6 +264,16 @@ impl<G: GatePolicy> PerformanceEngine<G> {
     pub fn set_roll_delays(&mut self, regular_ms: u16, audition_ms: u16) {
         self.regular_roll_ms = regular_ms;
         self.audition_roll_ms = audition_ms;
+    }
+
+    /// Enables score-aware legato release gestures. It is off by default.
+    pub fn set_legato_mode(&mut self, enabled: bool) {
+        self.legato_mode = enabled;
+    }
+
+    #[must_use]
+    pub const fn legato_mode(&self) -> bool {
+        self.legato_mode
     }
 
     /// Updates the device clock rate after a safety stop. The score and cursor
@@ -584,75 +596,74 @@ impl<G: GatePolicy> PerformanceEngine<G> {
             .ok_or(EngineError::VoiceGroupIdExhausted)?;
 
         let mut transition = Transition::none();
-        if staff_scoped_tap {
-            // Validate every newly reached score boundary before mutating any
-            // groups. A late gate overflow must leave this tap retryable.
+        if staff_scoped_tap && self.legato_mode {
+            // A qualifying future note attack releases every matching held
+            // score note, regardless of which physical key originally struck
+            // it or whether that key is still down.
             for waiting in self.active_groups.iter().filter(|waiting| {
-                waiting.first_later_trigger_at.is_none()
-                    && match waiting.release_boundary {
-                        SliceReleaseBoundary::NextTrigger => true,
-                        SliceReleaseBoundary::OnEvent(event) => slice.id().get() >= event.get(),
-                        SliceReleaseBoundary::InputRelease | SliceReleaseBoundary::EndOfScore => {
-                            false
-                        }
-                    }
+                waiting.release_scheduled_at.is_none()
+                    && matches!(
+                        waiting.release_boundary,
+                        SliceReleaseBoundary::OnEvent(event) if slice.id().get() >= event.get()
+                    )
             }) {
-                self.gate
-                    .note_off_at(self.sample_rate, waiting.input_released_at, Some(at))?;
+                self.gate.note_off_at(
+                    self.sample_rate,
+                    Some(waiting.input_released_at.unwrap_or(at)),
+                    Some(at),
+                )?;
             }
-            for index in 0..self.active_groups.len() {
-                let waiting = &mut self.active_groups[index];
-                let boundary_reached = match waiting.release_boundary {
-                    SliceReleaseBoundary::InputRelease => true,
-                    SliceReleaseBoundary::NextTrigger => true,
-                    SliceReleaseBoundary::OnEvent(event) => slice.id().get() >= event.get(),
-                    SliceReleaseBoundary::EndOfScore => false,
-                };
-                if waiting.first_later_trigger_at.is_none() && boundary_reached {
-                    let release_at = self.gate.note_off_at(
-                        self.sample_rate,
-                        waiting.input_released_at,
-                        Some(at),
-                    )?;
+            for waiting in &mut self.active_groups {
+                let boundary_reached = matches!(
+                    waiting.release_boundary,
+                    SliceReleaseBoundary::OnEvent(event) if slice.id().get() >= event.get()
+                );
+                if waiting.release_scheduled_at.is_none() && boundary_reached {
+                    let release_at = self
+                        .gate
+                        .note_off_at(
+                            self.sample_rate,
+                            Some(waiting.input_released_at.unwrap_or(at)),
+                            Some(at),
+                        )?
+                        .expect("a release and trigger always produce a gate deadline");
                     waiting.first_later_trigger_at = Some(at);
-                    waiting.release_scheduled_at = release_at;
-                    if let Some(release_at) = release_at {
-                        // The input was released before the score allowed this
-                        // note to end. Begin its release envelope only now.
-                        transition.push_audio(AudioCommand::DampenGroup {
-                            at,
-                            group: waiting.id,
-                        });
-                        transition.push_audio(AudioCommand::ReleaseGroup {
-                            at: release_at,
-                            group: waiting.id,
-                        });
-                    }
+                    waiting.release_scheduled_at = Some(release_at);
+                    transition.push_audio(AudioCommand::DampenGroup {
+                        at,
+                        group: waiting.id,
+                    });
+                    transition.push_audio(AudioCommand::ReleaseGroup {
+                        at: release_at,
+                        group: waiting.id,
+                    });
                 }
             }
-        } else if let Some(index) = self.active_groups.iter().position(|group| {
-            group.first_later_trigger_at.is_none()
-                && (kind == TriggerKind::Audition
-                    || match group.release_boundary {
-                        SliceReleaseBoundary::InputRelease => true,
-                        SliceReleaseBoundary::NextTrigger => true,
-                        SliceReleaseBoundary::OnEvent(event) => slice.id().get() >= event.get(),
-                        SliceReleaseBoundary::EndOfScore => false,
-                    })
-        }) {
-            let waiting_release = self.gate.note_off_at(
-                self.sample_rate,
-                self.active_groups[index].input_released_at,
-                Some(at),
-            )?;
-            let waiting = &mut self.active_groups[index];
-            waiting.first_later_trigger_at = Some(at);
-            if let Some(release_at) = waiting_release {
-                waiting.release_scheduled_at = Some(release_at);
-                transition.push_audio(AudioCommand::ReleaseGroup {
-                    at: release_at,
-                    group: waiting.id,
-                });
+        } else if !staff_scoped_tap {
+            if let Some(index) = self.active_groups.iter().position(|group| {
+                group.first_later_trigger_at.is_none()
+                    && (kind == TriggerKind::Audition
+                        || match group.release_boundary {
+                            SliceReleaseBoundary::InputRelease => true,
+                            SliceReleaseBoundary::NextTrigger => true,
+                            SliceReleaseBoundary::OnEvent(event) => slice.id().get() >= event.get(),
+                            SliceReleaseBoundary::EndOfScore => false,
+                        })
+            }) {
+                let waiting_release = self.gate.note_off_at(
+                    self.sample_rate,
+                    self.active_groups[index].input_released_at,
+                    Some(at),
+                )?;
+                let waiting = &mut self.active_groups[index];
+                waiting.first_later_trigger_at = Some(at);
+                if let Some(release_at) = waiting_release {
+                    waiting.release_scheduled_at = Some(release_at);
+                    transition.push_audio(AudioCommand::ReleaseGroup {
+                        at: release_at,
+                        group: waiting.id,
+                    });
+                }
             }
         }
 
@@ -735,51 +746,59 @@ impl<G: GatePolicy> PerformanceEngine<G> {
                 reason: IgnoreReason::InputWasNotHeld,
             }));
         };
+        let releases_group = |group: &VoiceGroup| {
+            group.release_scheduled_at.is_none()
+                && if self.legato_mode {
+                    matches!(group.release_boundary, SliceReleaseBoundary::InputRelease)
+                        || (group.input == input
+                            && matches!(group.release_boundary, SliceReleaseBoundary::NextTrigger))
+                } else {
+                    group.input == input
+                }
+        };
         // Validate every gate calculation before changing the input latch or
-        // any group. A timestamp overflow must leave the press/release pair
-        // retryable just as it did when one input owned only one group.
-        for group in self
+        // any group. A timestamp overflow must leave the gesture retryable.
+        for _group in self
             .active_groups
             .iter()
-            .filter(|group| group.input == input && group.input_released_at.is_none())
+            .filter(|group| releases_group(group))
         {
             self.gate
-                .note_off_at(self.sample_rate, Some(at), group.first_later_trigger_at)?;
+                .note_off_at(self.sample_rate, Some(at), Some(at))?;
         }
 
         self.held_inputs.remove(binding_index);
         let mut transition = Transition::none();
         let mut scheduled_release = None;
-        for group in self
-            .active_groups
-            .iter_mut()
-            .filter(|group| group.input == input && group.input_released_at.is_none())
-        {
-            let release_at =
-                self.gate
-                    .note_off_at(self.sample_rate, Some(at), group.first_later_trigger_at)?;
-            group.input_released_at = Some(at);
-            group.release_scheduled_at = release_at;
-            scheduled_release = scheduled_release.or(release_at);
-
-            // Score-backed rhythm notes must satisfy both halves of the gate:
-            // the input is up and their written duration no longer crosses
-            // the next score onset. Auditions and legacy slices retain their
-            // ordinary physical key-up damping behavior.
-            let score_boundary_reached = group.first_later_trigger_at.is_some()
-                || matches!(group.release_boundary, SliceReleaseBoundary::NextTrigger);
-            if score_boundary_reached {
-                transition.push_audio(AudioCommand::DampenGroup {
-                    at,
-                    group: group.id,
-                });
+        for group in &mut self.active_groups {
+            if group.input == input && group.input_released_at.is_none() {
+                group.input_released_at = Some(at);
             }
-            if let Some(release_at) = release_at {
-                transition.push_audio(AudioCommand::ReleaseGroup {
-                    at: release_at,
-                    group: group.id,
-                });
+            if group.release_scheduled_at.is_some()
+                || if self.legato_mode {
+                    !matches!(group.release_boundary, SliceReleaseBoundary::InputRelease)
+                        && !(group.input == input
+                            && matches!(group.release_boundary, SliceReleaseBoundary::NextTrigger))
+                } else {
+                    group.input != input
+                }
+            {
+                continue;
             }
+            let release_at = self
+                .gate
+                .note_off_at(self.sample_rate, Some(at), Some(at))?
+                .expect("a release and trigger always produce a gate deadline");
+            group.release_scheduled_at = Some(release_at);
+            scheduled_release = scheduled_release.or(Some(release_at));
+            transition.push_audio(AudioCommand::DampenGroup {
+                at,
+                group: group.id,
+            });
+            transition.push_audio(AudioCommand::ReleaseGroup {
+                at: release_at,
+                group: group.id,
+            });
         }
         transition.set_event(PerformanceEvent::InputReleased {
             input,
@@ -1091,24 +1110,30 @@ mod tests {
     }
 
     #[test]
-    fn released_group_without_later_tap_remains_active_past_minimum() {
+    fn non_legato_key_up_schedules_release_without_a_later_tap() {
         let mut engine = engine();
         let generation = load(&mut engine, 0);
         tap(&mut engine, generation, 1, 10);
         let released = release(&mut engine, 1, 20);
         assert_eq!(
             commands(&released),
-            vec![AudioCommand::DampenGroup {
-                at: time(20),
-                group: VoiceGroupId::new(1),
-            }]
+            vec![
+                AudioCommand::DampenGroup {
+                    at: time(20),
+                    group: VoiceGroupId::new(1),
+                },
+                AudioCommand::ReleaseGroup {
+                    at: time(20 + MINIMUM),
+                    group: VoiceGroupId::new(1),
+                },
+            ]
         );
         engine
             .handle(PerformanceCommand::AdvanceClock {
                 to: time(20 + MINIMUM + 10_000),
             })
             .unwrap();
-        assert_eq!(engine.active_group_count(), 1);
+        assert_eq!(engine.active_group_count(), 0);
     }
 
     #[test]
@@ -1141,24 +1166,21 @@ mod tests {
     }
 
     #[test]
-    fn later_tap_after_release_deadline_releases_at_the_later_tap() {
+    fn later_tap_after_release_deadline_only_attacks_the_new_group() {
         let mut engine = engine();
         let generation = load(&mut engine, 0);
         let first = tap(&mut engine, generation, 1, 10);
-        let old_group = match commands(&first)[0] {
+        let _old_group = match commands(&first)[0] {
             AudioCommand::PlaySlice { group, .. } => group,
             _ => unreachable!(),
         };
         release(&mut engine, 1, 20);
         let later_at = 20 + MINIMUM + 500;
         let result = tap(&mut engine, generation, 2, later_at);
-        assert_eq!(
-            commands(&result)[0],
-            AudioCommand::ReleaseGroup {
-                at: time(later_at),
-                group: old_group,
-            }
-        );
+        assert!(matches!(
+            commands(&result).as_slice(),
+            [AudioCommand::PlaySlice { at, .. }] if *at == time(later_at)
+        ));
     }
 
     #[test]
@@ -1207,6 +1229,7 @@ mod tests {
     #[test]
     fn tap_release_is_scoped_to_staffs_whose_written_duration_has_ended() {
         let mut engine = engine();
+        engine.set_legato_mode(true);
         let score = ScoreSequence::new(vec![
             Slice::from_staff_groups(
                 event(10),
@@ -1265,8 +1288,9 @@ mod tests {
     }
 
     #[test]
-    fn written_duration_and_physical_release_are_both_required() {
+    fn legato_future_key_down_releases_even_while_original_key_is_held() {
         let mut engine = engine();
+        engine.set_legato_mode(true);
         let score = ScoreSequence::new(vec![
             Slice::from_staff_groups(
                 event(10),
@@ -1297,29 +1321,25 @@ mod tests {
             _ => unreachable!(),
         };
 
-        // Reaching the written boundary while the original key is still down
-        // must not dampen or release that note.
+        // The future attack is the release gesture; the original key may
+        // still be physically held.
         let boundary = tap(&mut engine, generation, 2, 200);
         assert!(matches!(
             commands(&boundary).as_slice(),
-            [AudioCommand::PlaySlice { .. }]
+            [
+                AudioCommand::DampenGroup { group, .. },
+                AudioCommand::ReleaseGroup { group: released, .. },
+                AudioCommand::PlaySlice { .. }
+            ] if *group == first_group && *released == first_group
         ));
 
-        // Once the original key is released, both gate conditions are true.
+        // Its eventual original key-up is only physical bookkeeping.
         let released = release(&mut engine, 1, 300);
-        assert_eq!(
-            commands(&released),
-            vec![
-                AudioCommand::DampenGroup {
-                    at: time(300),
-                    group: first_group,
-                },
-                AudioCommand::ReleaseGroup {
-                    at: time(300 + MINIMUM),
-                    group: first_group,
-                },
-            ]
-        );
+        assert!(!commands(&released).iter().any(|command| matches!(
+            command,
+            AudioCommand::DampenGroup { group, .. }
+                | AudioCommand::ReleaseGroup { group, .. } if *group == first_group
+        )));
     }
 
     #[test]
@@ -1360,8 +1380,93 @@ mod tests {
     }
 
     #[test]
+    fn non_legato_future_key_down_does_not_release_a_held_note() {
+        let mut engine = engine();
+        let score = ScoreSequence::new(vec![
+            Slice::from_staff_groups(
+                event(10),
+                &[StaffSlice::new(
+                    1,
+                    chord(&[60]),
+                    SliceReleaseBoundary::OnEvent(event(20)),
+                )],
+            )
+            .unwrap(),
+            Slice::from_staff_groups(
+                event(20),
+                &[StaffSlice::new(
+                    1,
+                    chord(&[62]),
+                    SliceReleaseBoundary::InputRelease,
+                )],
+            )
+            .unwrap(),
+        ])
+        .unwrap();
+        engine.load_score(score, time(0)).unwrap();
+        let generation = engine.generation().unwrap();
+        tap(&mut engine, generation, 1, 100);
+
+        let second = tap(&mut engine, generation, 2, 200);
+        assert!(matches!(
+            commands(&second).as_slice(),
+            [AudioCommand::PlaySlice { .. }]
+        ));
+    }
+
+    #[test]
+    fn legato_key_up_releases_all_input_release_notes_not_only_its_own() {
+        let mut engine = engine();
+        engine.set_legato_mode(true);
+        let score = ScoreSequence::new(vec![
+            Slice::from_staff_groups(
+                event(10),
+                &[StaffSlice::new(
+                    1,
+                    chord(&[60]),
+                    SliceReleaseBoundary::InputRelease,
+                )],
+            )
+            .unwrap(),
+            Slice::from_staff_groups(
+                event(20),
+                &[StaffSlice::new(
+                    1,
+                    chord(&[62]),
+                    SliceReleaseBoundary::InputRelease,
+                )],
+            )
+            .unwrap(),
+        ])
+        .unwrap();
+        engine.load_score(score, time(0)).unwrap();
+        let generation = engine.generation().unwrap();
+        let first = tap(&mut engine, generation, 1, 100);
+        let first_group = match commands(&first)[0] {
+            AudioCommand::PlaySlice { group, .. } => group,
+            _ => unreachable!(),
+        };
+        let second = tap(&mut engine, generation, 2, 200);
+        let second_group = match commands(&second)[0] {
+            AudioCommand::PlaySlice { group, .. } => group,
+            _ => unreachable!(),
+        };
+
+        let released = release(&mut engine, 2, 300);
+        let dampened: Vec<_> = commands(&released)
+            .iter()
+            .filter_map(|command| match command {
+                AudioCommand::DampenGroup { group, .. } => Some(*group),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(dampened, vec![first_group, second_group]);
+    }
+
+    #[test]
     fn notes_on_one_staff_release_independently_by_written_duration() {
         let mut engine = engine();
+        engine.set_legato_mode(true);
         let score = ScoreSequence::new(vec![
             Slice::from_staff_groups(
                 event(10),
@@ -1479,7 +1584,10 @@ mod tests {
             state[1].release_scheduled_at,
             Some(time(200 + 10 + MINIMUM))
         );
-        assert_eq!(state[2].release_scheduled_at, None);
+        assert_eq!(
+            state[2].release_scheduled_at,
+            Some(time(300 + 10 + MINIMUM))
+        );
     }
 
     #[test]

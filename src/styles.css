@@ -67,6 +67,15 @@ button { color: inherit; }
 .control-deck > .field { flex: 0 1 auto; }
 .field > span, .range-field > span, .position-readout > span, .next-readout > span { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .field select { width: 100%; min-width: 0; border: 0; background: transparent; font-size: 13px; font-weight: 600; outline: none; cursor: pointer; }
+.legato-field { min-width: 88px; }
+.switch-control { display: flex; align-items: center; gap: 7px; color: #f6f6ed; font-size: 13px; }
+.switch-control input { position: absolute; opacity: 0; pointer-events: none; }
+.switch-control > span { position: relative; width: 30px; height: 17px; border-radius: 999px; background: #5a5b53; cursor: pointer; transition: background .15s ease; }
+.switch-control > span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 11px; height: 11px; border-radius: 50%; background: #fff; transition: transform .15s ease; }
+.switch-control input:checked + span { background: var(--green); }
+.switch-control input:checked + span::after { transform: translateX(13px); }
+.switch-control input:focus-visible + span { outline: 2px solid #fff; outline-offset: 2px; }
+.switch-control strong { font-weight: 600; }
 .range-field { min-width: 130px; }.range-field > span { display: flex; justify-content: space-between; }.range-field output { color: #3c3d36; }
 .delay-field { min-width: 105px; }
 input[type="range"] { accent-color: #75ffb3; width: 125px; }

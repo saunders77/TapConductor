@@ -68,6 +68,7 @@ pub fn run() {
             commands::set_part_enabled,
             commands::set_roll_delays,
             commands::set_tap_mode,
+            commands::set_legato_mode,
             commands::performance_input_down,
             commands::release_input,
             commands::audition_event,

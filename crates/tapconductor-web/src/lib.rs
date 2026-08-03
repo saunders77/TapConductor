@@ -137,6 +137,7 @@ fn event_json((index, event): (usize, &TapEvent)) -> serde_json::Value {
             "staff": attack.staff,
             "voice": attack.voice,
             "midiPitch": attack.midi_pitch,
+            "isStaccato": attack.staccato,
             "end": rational_json(attack.end),
         })).collect::<Vec<_>>(),
     })

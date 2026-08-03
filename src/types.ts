@@ -11,6 +11,7 @@ export interface NoteDto {
   voice: string;
   midiPitch: number;
   isGrace: boolean;
+  isStaccato: boolean;
   end: RationalDto;
 }
 

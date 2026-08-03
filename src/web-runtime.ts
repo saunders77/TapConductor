@@ -34,7 +34,6 @@ type VoiceNote = {
 
 type Voice = {
   notes: VoiceNote[];
-  inputReleased: boolean;
   releaseOnInput: boolean;
   stopAt: number;
 };
@@ -131,7 +130,7 @@ class BrowserAudio {
     velocity: number,
     rollMs: number,
     output?: MIDIOutput,
-    releaseBoundaries?: Map<number, number | null>,
+    releaseBoundaries?: readonly (number | null)[],
   ): Promise<void> {
     if (pitches.length === 0) return;
     const context = await this.ensureReady();
@@ -144,7 +143,12 @@ class BrowserAudio {
       }
     }
 
-    const sorted = [...new Set(pitches)].sort((left, right) => left - right);
+    const sorted = pitches
+      .map((pitch, index) => ({
+        pitch,
+        releaseBoundaryIndex: releaseBoundaries?.[index] ?? null,
+      }))
+      .sort((left, right) => left.pitch - right.pitch);
     const baseStart = context.currentTime + 0.005;
     const finalStart = baseStart + Math.max(0, sorted.length - 1) * rollMs / 1_000;
     const naturalStop = finalStart + 10;
@@ -156,7 +160,7 @@ class BrowserAudio {
     const peakGain = velocityGain
       * chordScale
       * (this.instrument === "piano" ? 0.2 : 0.16);
-    sorted.forEach((pitch, index) => {
+    sorted.forEach(({ pitch, releaseBoundaryIndex }, index) => {
       const start = baseStart + index * rollMs / 1_000;
       const oscillator = context.createOscillator();
       const noteGain = context.createGain();
@@ -187,7 +191,7 @@ class BrowserAudio {
         oscillator,
         gain: noteGain,
         midiPitch: pitch,
-        releaseBoundaryIndex: releaseBoundaries?.get(pitch) ?? null,
+        releaseBoundaryIndex,
         boundaryReached: false,
         releasing: false,
       });
@@ -199,28 +203,30 @@ class BrowserAudio {
 
     this.voices.set(token, {
       notes,
-      inputReleased: false,
       releaseOnInput: releaseBoundaries === undefined,
       stopAt: naturalStop,
     });
     this.starts += 1;
   }
 
-  markReleased(token: string, output?: MIDIOutput): void {
-    const voice = this.voices.get(token);
-    if (!voice || !this.context) return;
-    voice.inputReleased = true;
+  releaseInput(token: string, output?: MIDIOutput): void {
+    if (!this.context) return;
     const now = this.context.currentTime;
-    for (const note of voice.notes) {
-      if (voice.releaseOnInput || note.releaseBoundaryIndex === null || note.boundaryReached) {
-        this.releaseNote(note, now, output);
+    for (const [voiceToken, voice] of this.voices) {
+      for (const note of voice.notes) {
+        if (
+          (voice.releaseOnInput && voiceToken === token)
+          || (!voice.releaseOnInput && note.releaseBoundaryIndex === null)
+        ) {
+          this.releaseNote(note, now, output);
+        }
       }
+      this.pruneVoice(voiceToken);
     }
-    this.pruneVoice(token);
   }
 
   releaseNow(token: string, output?: MIDIOutput): void {
-    this.markReleased(token, output);
+    this.releaseInput(token, output);
   }
 
   advanceScoreBoundary(eventIndex: number, output?: MIDIOutput): void {
@@ -235,7 +241,7 @@ class BrowserAudio {
           && eventIndex >= note.releaseBoundaryIndex
         ) {
           note.boundaryReached = true;
-          if (voice.inputReleased) this.releaseNote(note, now, output);
+          this.releaseNote(note, now, output);
         }
       }
       this.pruneVoice(token);
@@ -342,6 +348,7 @@ export class WebRuntime {
   private selectedMidiInput: string | null = null;
   private selectedMidiOutput: string | null = null;
   private midiFreePlay = false;
+  private legatoMode = false;
   private readonly midiTokenPitches = new Map<string, number>();
   private lastMidiError: string | undefined;
 
@@ -448,6 +455,10 @@ export class WebRuntime {
         return this.diagnostics();
       case "set_tap_mode":
         return undefined;
+      case "set_legato_mode":
+        this.panic();
+        this.legatoMode = Boolean(args.enabled);
+        return undefined;
       default:
         throw new Error(`The web runtime does not implement '${command}'.`);
     }
@@ -498,14 +509,14 @@ export class WebRuntime {
     const event = this.score.events[playedIndex];
     if (!event) return;
     const midiOutput = this.midiOutput();
-    this.audio.advanceScoreBoundary(playedIndex, midiOutput);
+    if (this.legatoMode) this.audio.advanceScoreBoundary(playedIndex, midiOutput);
     await this.audio.play(
       token,
       event.notes.map((note) => note.midiPitch),
       velocity,
       this.rollRegularMs,
       midiOutput,
-      this.releaseBoundaries(event.notes, playedIndex),
+      this.legatoMode ? this.releaseBoundaries(event.notes, playedIndex) : undefined,
     );
     const atEnd = playedIndex >= this.score.events.length - 1;
     this.cursor = atEnd ? playedIndex : playedIndex + 1;
@@ -542,7 +553,7 @@ export class WebRuntime {
     if (this.midiFreePlay && this.midiTokenPitches.has(token)) {
       this.audio.releaseNow(token, this.midiOutput());
     } else {
-      this.audio.markReleased(token, this.midiOutput());
+      this.audio.releaseInput(token, this.midiOutput());
     }
   }
 
@@ -566,23 +577,14 @@ export class WebRuntime {
   private releaseBoundaries(
     notes: LoadedScore["events"][number]["notes"],
     playedIndex: number,
-  ): Map<number, number | null> {
+  ): Array<number | null> {
     if (!this.score) throw new Error("No score is loaded.");
-    const boundaries = new Map<number, number | null>();
-    for (const note of notes) {
-      const boundary = releaseBoundaryIndex(this.score.events, playedIndex, note.end);
-      const existing = boundaries.get(note.midiPitch);
-      if (
-        !boundaries.has(note.midiPitch)
-        || (
-          boundary !== null
-          && (existing === undefined || existing === null || boundary > existing)
-        )
-      ) {
-        boundaries.set(note.midiPitch, boundary);
-      }
-    }
-    return boundaries;
+    return notes.map((note) => releaseBoundaryIndex(
+      this.score!.events,
+      playedIndex,
+      note.end,
+      note.isStaccato,
+    ));
   }
 
   private async audioDevices(): Promise<DeviceDto[]> {

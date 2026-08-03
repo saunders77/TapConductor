@@ -91,6 +91,16 @@ pub fn set_tap_mode(
 }
 
 #[tauri::command]
+pub fn set_legato_mode(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    enabled: bool,
+) -> Result<(), String> {
+    let event = lock_core(&state)?.set_legato_mode(enabled)?;
+    emit_event(&app, event)
+}
+
+#[tauri::command]
 pub fn performance_input_down(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,

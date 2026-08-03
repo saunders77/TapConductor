@@ -28,6 +28,7 @@ pub struct NoteDto {
     voice: String,
     midi_pitch: u8,
     is_grace: bool,
+    is_staccato: bool,
     end: RationalDto,
 }
 
@@ -77,6 +78,7 @@ impl TapEventDto {
                     voice: attack.voice.clone(),
                     midi_pitch: attack.midi_pitch,
                     is_grace: attack.position_order != u32::MAX,
+                    is_staccato: attack.staccato,
                     end: attack.end.into(),
                 })
                 .collect(),

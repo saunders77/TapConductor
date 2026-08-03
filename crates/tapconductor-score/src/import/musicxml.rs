@@ -425,6 +425,7 @@ struct NoteBuilder {
     tie_start: bool,
     tie_stop: bool,
     tie_number: Option<u8>,
+    staccato: bool,
 }
 
 struct ParsedPart {
@@ -459,6 +460,7 @@ struct RawNote {
     tie_start: bool,
     tie_stop: bool,
     tie_number: Option<u8>,
+    staccato: bool,
 }
 
 impl<'a> XmlState<'a> {
@@ -584,6 +586,7 @@ impl<'a> XmlState<'a> {
                     tie_start: false,
                     tie_stop: false,
                     tie_number: None,
+                    staccato: false,
                 });
             }
             "chord" => {
@@ -627,6 +630,11 @@ impl<'a> XmlState<'a> {
                     {
                         note.tie_number = Some(number);
                     }
+                }
+            }
+            "staccato" => {
+                if let Some(note) = &mut self.current_note {
+                    note.staccato = true;
                 }
             }
             "backup" => self.movement = Some((MovementKind::Backup, None)),
@@ -1143,6 +1151,7 @@ impl<'a> XmlState<'a> {
             tie_start: note.tie_start,
             tie_stop: note.tie_stop,
             tie_number: note.tie_number,
+            staccato: note.staccato,
         });
         Ok(())
     }
@@ -1525,6 +1534,7 @@ struct ExpandedNote {
     tie_start: bool,
     tie_stop: bool,
     tie_number: Option<u8>,
+    staccato: bool,
     source_order: usize,
 }
 
@@ -1573,6 +1583,7 @@ fn expand_notes(
                     tie_start: note.tie_start,
                     tie_stop: note.tie_stop,
                     tie_number: note.tie_number,
+                    staccato: note.staccato,
                     source_order: note.order,
                 });
             }
@@ -1640,6 +1651,7 @@ fn resolve_ties(notes: Vec<ExpandedNote>, warnings: &mut Vec<ImportWarning>) -> 
             onset: note.onset,
             position_order: note.position_order,
             end: note.end,
+            staccato: note.staccato,
             tie: TieInfo {
                 starts_tie: note.tie_start,
                 continuations: Vec::new(),

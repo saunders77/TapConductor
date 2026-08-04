@@ -499,18 +499,6 @@ function resetBeatTap(): void {
   if (score) updatePosition();
 }
 
-function pauseBeatTap(): void {
-  if (!beatPlaying) return;
-  clearBeatTimers();
-  beatPlaying = false;
-  beatCounted = 0;
-  beatTimes = [];
-  beatNextEventIndex = cursorIndex;
-  void invoke("panic").catch(() => undefined);
-  toast("Beat Tap paused: release the tap, then count in again.", "warning");
-  resetBeatTap();
-}
-
 function dispatchBeatEvent(index: number): void {
   if (!score || index >= score.events.length) return;
   const runId = beatRunId;
@@ -547,10 +535,6 @@ function scheduleBeatInterval(): void {
     }
     const timer = window.setTimeout(() => {
       beatTimers.delete(timer);
-      if ([...heldTokens].some((token) => !token.startsWith("audition"))) {
-        pauseBeatTap();
-        return;
-      }
       dispatchBeatEvent(planned.eventIndex);
     }, planned.delayMs);
     beatTimers.set(timer, planned.eventIndex);

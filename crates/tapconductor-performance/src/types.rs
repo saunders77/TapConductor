@@ -496,8 +496,14 @@ pub enum SafetyReason {
     Shutdown,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ChordRollOrder {
+    AscendingPitch,
+    Preserved,
+}
+
 /// Commands for the bounded audio queue. `roll_interval_frames` spaces chord
-/// attacks from lowest to highest pitch; zero retains simultaneous playback.
+/// attacks in `roll_order`; zero retains simultaneous playback.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AudioCommand {
     PlaySlice {
@@ -506,6 +512,7 @@ pub enum AudioCommand {
         chord: Chord,
         velocity: Velocity,
         roll_interval_frames: u32,
+        roll_order: ChordRollOrder,
     },
     /// Engage the built-in piano's key-up envelope without changing the
     /// score/MIDI note-off schedule for the group.

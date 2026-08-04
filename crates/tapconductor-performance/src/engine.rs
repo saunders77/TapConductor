@@ -1,10 +1,10 @@
 use core::fmt;
 
 use crate::{
-    AudioCommand, Chord, DefaultPianoGate, EventId, GateError, GatePolicy, Generation,
-    IgnoreReason, InputId, MidiPitch, PerformanceEvent, SafetyReason, SampleRate, SampleTime,
-    ScoreSequence, Slice, SliceReleaseBoundary, StaffSlice, Transition, TriggerKind, Velocity,
-    VoiceGroupId, MAX_CHORD_NOTES,
+    AudioCommand, Chord, ChordRollOrder, DefaultPianoGate, EventId, GateError, GatePolicy,
+    Generation, IgnoreReason, InputId, MidiPitch, PerformanceEvent, SafetyReason, SampleRate,
+    SampleTime, ScoreSequence, Slice, SliceReleaseBoundary, StaffSlice, Transition, TriggerKind,
+    Velocity, VoiceGroupId, MAX_CHORD_NOTES,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -766,6 +766,10 @@ impl<G: GatePolicy> PerformanceEngine<G> {
                             / 1_000
                     }
                 },
+                roll_order: match kind {
+                    TriggerKind::Tap => ChordRollOrder::AscendingPitch,
+                    TriggerKind::Audition => ChordRollOrder::Preserved,
+                },
             });
         }
         self.held_inputs.push(HeldInput {
@@ -1160,6 +1164,17 @@ mod tests {
         assert_eq!(at, time(100));
         assert_eq!(played.pitches(), chord(&[60, 64, 67]).pitches());
         assert_eq!(velocity, Velocity::DEFAULT);
+        assert_eq!(
+            command[0],
+            AudioCommand::PlaySlice {
+                at,
+                group,
+                chord: played,
+                velocity,
+                roll_interval_frames: 0,
+                roll_order: ChordRollOrder::AscendingPitch,
+            }
+        );
         assert_eq!(engine.cursor_index(), 1);
         assert_eq!(engine.next_event(), Some(event(20)));
         assert_eq!(
@@ -1804,7 +1819,11 @@ mod tests {
         assert_eq!(engine.cursor_index(), 0);
         assert!(matches!(
             commands(&audition).as_slice(),
-            [AudioCommand::PlaySlice { chord, .. }]
+            [AudioCommand::PlaySlice {
+                chord,
+                roll_order: ChordRollOrder::Preserved,
+                ..
+            }]
                 if chord.pitches() == [MidiPitch::new(64).unwrap()]
         ));
         assert!(matches!(

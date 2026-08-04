@@ -338,9 +338,12 @@ impl AudioManager {
                 chord,
                 velocity,
                 roll_interval_frames,
+                roll_order,
             } => {
                 let mut pitches = chord.pitches().to_vec();
-                pitches.sort_by_key(|pitch| pitch.get());
+                if roll_order == performance::ChordRollOrder::AscendingPitch {
+                    pitches.sort_by_key(|pitch| pitch.get());
+                }
                 if roll_interval_frames == 0 {
                     let mut audio_chord = Chord::empty();
                     for pitch in pitches {

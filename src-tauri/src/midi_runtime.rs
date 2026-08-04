@@ -275,6 +275,7 @@ impl MidiManager {
                 chord,
                 velocity,
                 roll_interval_frames,
+                roll_order,
             } => {
                 let mut notes = Vec::with_capacity(chord.pitches().len());
                 for pitch in chord.pitches() {
@@ -292,7 +293,9 @@ impl MidiManager {
                         velocity: Velocity::new(velocity.get()),
                     });
                 }
-                notes.sort_by_key(|note| note.note.get());
+                if roll_order == performance::ChordRollOrder::AscendingPitch {
+                    notes.sort_by_key(|note| note.note.get());
+                }
                 notes
                     .into_iter()
                     .enumerate()

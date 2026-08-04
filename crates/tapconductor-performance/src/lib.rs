@@ -14,8 +14,8 @@ mod types;
 pub use engine::{ActiveGroup, EngineConfig, EngineError, PerformanceCommand, PerformanceEngine};
 pub use gate::{DefaultPianoGate, GateError, GatePolicy};
 pub use types::{
-    AudioCommand, Chord, ChordError, EventId, Generation, IgnoreReason, InputId, MidiPitch,
-    PerformanceEvent, SafetyReason, SampleRate, SampleTime, ScoreSequence, ScoreSequenceError,
-    Slice, SliceReleaseBoundary, StaffSlice, Transition, TriggerKind, Velocity, VoiceGroupId,
-    MAX_CHORD_NOTES, TRANSITION_AUDIO_CAPACITY,
+    AudioCommand, Chord, ChordError, ChordRollOrder, EventId, Generation, IgnoreReason, InputId,
+    MidiPitch, PerformanceEvent, SafetyReason, SampleRate, SampleTime, ScoreSequence,
+    ScoreSequenceError, Slice, SliceReleaseBoundary, StaffSlice, Transition, TriggerKind, Velocity,
+    VoiceGroupId, MAX_CHORD_NOTES, TRANSITION_AUDIO_CAPACITY,
 };

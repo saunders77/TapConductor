@@ -1,6 +1,6 @@
 use crate::dto::LoadedScoreDto;
 use std::{collections::BTreeSet, fs, path::PathBuf};
-use tapconductor_score::{ImportOptions, NormalizedScore, TapEvent};
+use tapconductor_score::{ImportOptions, NormalizedScore, NoteAttack, Rational, TapEvent};
 
 pub struct ScoreSession {
     generation: u64,
@@ -61,17 +61,13 @@ impl ScoreSession {
             .ok_or_else(|| format!("Score event index {index} is out of range."))?
             .position
             .absolute;
-        let mut pitches: Vec<u8> = self
-            .events
-            .iter()
-            .take(index + 1)
-            .flat_map(|event| event.attacks.iter())
-            .filter(|attack| attack.onset <= position && position < attack.end)
-            .map(|attack| attack.midi_pitch)
-            .collect();
-        pitches.sort_unstable();
-        pitches.dedup();
-        Ok(pitches)
+        Ok(sounding_pitches_in_staff_order(
+            self.events
+                .iter()
+                .take(index + 1)
+                .flat_map(|event| event.attacks.iter()),
+            position,
+        ))
     }
 
     pub fn set_part_enabled(&mut self, part_id: &str, enabled: bool) -> Result<(), String> {
@@ -110,10 +106,82 @@ impl ScoreSession {
     }
 }
 
+fn sounding_pitches_in_staff_order<'a>(
+    attacks: impl Iterator<Item = &'a NoteAttack>,
+    position: Rational,
+) -> Vec<u8> {
+    let mut attacks: Vec<_> = attacks
+        .filter(|attack| attack.onset <= position && position < attack.end)
+        .collect();
+    // Parts and staffs are laid out top-to-bottom in ascending index order.
+    // Audition the visual stack from bottom to top, while retaining the
+    // conventional low-to-high roll within each individual staff.
+    attacks.sort_by(|left, right| {
+        right
+            .part_index
+            .cmp(&left.part_index)
+            .then(right.staff.cmp(&left.staff))
+            .then(left.midi_pitch.cmp(&right.midi_pitch))
+            .then(left.source_id.cmp(&right.source_id))
+    });
+    let mut seen = BTreeSet::new();
+    attacks
+        .into_iter()
+        .map(|attack| attack.midi_pitch)
+        .filter(|pitch| seen.insert(*pitch))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::ScoreSession;
+    use super::{ScoreSession, sounding_pitches_in_staff_order};
     use std::path::PathBuf;
+    use tapconductor_score::{NoteAttack, Rational, SourceAnchor, TieInfo};
+
+    fn attack(part_index: usize, staff: u16, pitch: u8) -> NoteAttack {
+        let source_id = format!("{part_index}-{staff}-{pitch}");
+        NoteAttack {
+            source_anchor: SourceAnchor {
+                source_id: source_id.clone(),
+                xml_id: None,
+                part_id: format!("part-{part_index}"),
+                measure_id: "1".to_owned(),
+                measure_index: 0,
+                occurrence: 1,
+                offset: Rational::ZERO,
+                staff,
+                voice: "1".to_owned(),
+            },
+            source_id,
+            part_index,
+            staff,
+            voice: "1".to_owned(),
+            written_pitch: None,
+            midi_pitch: pitch,
+            midi_channel: None,
+            onset: Rational::ZERO,
+            position_order: u32::MAX,
+            end: Rational::from_integer(2),
+            staccato: false,
+            tie: TieInfo::default(),
+            velocity_hint: None,
+        }
+    }
+
+    #[test]
+    fn sounding_pitches_roll_bottom_staff_first_even_when_it_is_higher() {
+        let attacks = [
+            attack(0, 1, 40),
+            attack(0, 2, 80),
+            attack(0, 2, 70),
+            attack(1, 1, 90),
+        ];
+
+        assert_eq!(
+            sounding_pitches_in_staff_order(attacks.iter(), Rational::ONE),
+            vec![90, 70, 80, 40]
+        );
+    }
 
     #[test]
     fn sounding_pitches_include_held_notes_but_not_notes_ending_at_the_position() {

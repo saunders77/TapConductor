@@ -114,6 +114,7 @@ pub struct LoadedScoreDto {
     beats: Vec<BeatDto>,
     parts: Vec<PartDto>,
     warnings: Vec<String>,
+    structural_duration: Option<RationalDto>,
 }
 
 impl LoadedScoreDto {
@@ -189,6 +190,13 @@ impl LoadedScoreDto {
                 .iter()
                 .map(|warning| warning.message.clone())
                 .collect(),
+            structural_duration: score.playback_measures.last().and_then(|measure| {
+                measure
+                    .start
+                    .checked_add(measure.duration)
+                    .ok()
+                    .map(Into::into)
+            }),
         }
     }
 }

@@ -12,6 +12,8 @@
     "test:incremental-render": "node --experimental-strip-types --test src/incremental-score-render.test.ts",
     "test:web-runtime": "node tools/smoke-web.mjs",
     "test:web-gate": "node --experimental-strip-types --test src/web-note-gate.test.ts",
+    "test:telemetry-relay": "node --test infra/telemetry-relay/worker.test.mjs",
+    "test:telemetry": "node --experimental-strip-types --test src/telemetry.test.ts",
     "preview": "vite preview",
     "preview:web": "vite preview --host 127.0.0.1",
     "tauri": "tauri",

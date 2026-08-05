@@ -3,6 +3,8 @@
 /dist/
 /public/wasm/
 /.vite/
+/.env.local
+/.env.*.local
 /rustup-init.exe
 *.pdb
 *.log

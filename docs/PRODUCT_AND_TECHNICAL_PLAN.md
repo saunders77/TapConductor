@@ -290,9 +290,270 @@ audition does not advance the cursor. Reposition always performs all-notes-off f
 previous location cannot hang.
 
 Persist only preferences and recent-file bookmarks. The source score remains the authority; do not
-rewrite it. Local telemetry is opt-in and should contain timings/device classes, never score data.
+rewrite it. Product telemetry follows the opt-out, data-minimized design in the next section and
+must never contain score content or identifying file/device names.
 
-## 6. Format support
+## 6. Telemetry and crash reporting
+
+### Recommendation and boundaries
+
+Use the small, typed `src/telemetry.ts` subsystem shared by the browser build and every Tauri WebView,
+not vendor analytics calls spread through the product. It owns consent, correlation IDs, active-time
+accounting, bounded persistence, error aggregation, and upload scheduling. Call sites pass only
+allow-listed categories and counters. The audio, MIDI, sampler, and scheduling callbacks never call
+it. Native crash adapters are separate because a terminated process cannot depend on WebView code.
+The recommended initial services are:
+
+- **PostHog Cloud US** for product events, handled-error aggregates, funnels, retention, and
+  dashboards. Use only its batch capture API; disable autocapture, person profiles, session replay,
+  surveys, cookies, and feature flags. Every event includes the application version. The host remains
+  configurable for an EU project or a later self-hosted deployment.
+- **Sentry only for fatal native crashes that PostHog cannot symbolicate reliably on a target.** Do
+  not send ordinary handled/recoverable errors to Sentry. Keep tracing, replay, logs, and automatic
+  breadcrumbs disabled. A base build does not initialize Sentry; enable a platform adapter only after
+  a deliberate Windows, macOS, or iPadOS crash test proves that PostHog cannot provide the required
+  dump and symbolication. This makes Sentry's 5,000-error free allowance a fatal-crash budget rather
+  than a product-error budget.
+- A very small first-party HTTPS ingestion relay (`telemetry.tapconductor.app/v1/events`) in front of
+  PostHog. It validates an allow-listed schema, rejects oversized/unknown properties, rate-limits,
+  derives only an ISO country code from the connection, discards the source IP, and forwards a batch
+  to the selected backend. An edge/serverless worker is sufficient at expected volume. The client
+  talks directly to an enabled Sentry native-crash adapter because a fatal process cannot depend on
+  application code; Sentry's PII scrubbing must be enabled.
+
+At the August 2026 public free-tier limits, PostHog's one million product-analytics events per month
+should be ample for an initial TapConductor release; batching reduces requests but does not reduce
+the number of billable events. The application must alert on 50%, 75%, and 90% of that allowance and
+review sampling before upgrading. `app_error` aggregates count as ordinary product events. If
+PostHog's `$exception` Error Tracking is enabled later, its separate free exception allowance must
+also be monitored. Sentry's 5,000 errors per month is too small for routine handled faults but should
+be adequate when restricted to fatal native crashes. No paid plan is expected initially; a paid plan
+becomes necessary only if measured usage, retention, team-seat, or crash volume exceeds the free
+allowances.
+
+Do not put OpenTelemetry Collector or a general logging agent on customer devices. Internally model
+events so an OTLP exporter can be added behind the typed telemetry API; OTLP is a useful vendor-neutral
+transport, but its full SDK/collector stack is unnecessary for these low-volume product events.
+
+The public PostHog project token is not an administrative secret, but the relay is still valuable: it
+prevents arbitrary properties and raw IP addresses from reaching the analytics store, provides an
+emergency kill switch, and makes backend migration invisible to released clients. A direct
+PostHog sink is an acceptable beta fallback if the relay is unavailable; in that mode disable IP
+retention at both organization and project level and accept that country enrichment is controlled by
+the processor rather than TapConductor.
+
+### Consent and privacy behavior
+
+Telemetry is enabled by default only after a clear first-run disclosure has been shown. The screen
+explains what is collected, links to the privacy policy, and offers **Continue** and **Do not share**
+with equal prominence. Until it is dismissed, the sink is a no-op and no install/launch event is
+sent. Settings must always expose **Share usage and crash data**, the current state, a
+plain-language data inventory, and **Reset telemetry identifier**.
+
+If the user chooses **Continue** on the initial run, enqueue exactly one `app_installed` (or
+`browser_instance_created`) event and exactly one `session_started` event for that same initial
+launch. Schedule that first consented launch batch immediately rather than waiting for the normal
+five-minute upload window. Persist their `event_id` values before transmission so retrying after a
+network failure cannot create duplicate logical events. If the user chooses **Do not share**, send
+neither event. Every later consented process launch likewise emits exactly one `session_started`.
+
+The consent state is read synchronously before either analytics or crash SDK initialization:
+
+- On opt-out, stop enqueueing immediately, shut down network exporters, and delete the unsent spool.
+  Do not send an `opted_out` event. Any optional Sentry native-crash adapter must also close/disable.
+- On later opt-in, create fresh installation and device-instance IDs; do not upload events from the
+  opted-out period.
+- Resetting the identifier purges the spool and rotates both IDs. Because there is no account, the
+  app cannot reliably perform server-side deletion without keeping another identifying secret;
+  document a support-assisted deletion route and retention period in the privacy policy.
+- Make the compile-time default configurable by distribution/territory so a release can be opt-in
+  where local law or store policy requires prior consent. The product preference may be opt-out, but
+  it does not override applicable consent law.
+
+This feature changes the shipped privacy posture. Before enabling it, update `PRIVACY.md`, the in-app
+privacy copy, Apple's privacy manifest/App Store privacy answers, and Microsoft Store disclosures.
+Apple classifies product interaction, device identifiers, crash data, performance data, and derived
+coarse location as collected data even when the identifiers are pseudonymous. Do not describe this
+as anonymous in legal copy; **pseudonymous usage and diagnostic data** is accurate.
+
+Never collect a hardware serial, advertising ID, IDFV, MAC address, username, email address, IP
+address, exact location, score/file name or path, title/composer text, score contents, MIDI messages,
+MIDI/audio device names, or a hash that could identify a user's file. Region means country code
+derived at the relay, never GPS or OS location permission.
+
+### Identity, time, and common envelope
+
+Each accepted event uses random UUID values generated locally:
+
+- `device_instance_id`: random pseudonymous app/device identifier stored in the WebView's
+  origin-scoped application storage (the same mechanism is used by the browser build). It is not
+  derived from hardware, an OS advertising identifier, or a login. Storage may be cleared at any
+  time and is not guaranteed to survive uninstall. It is therefore a device-instance correlation ID,
+  not proof of a person or physical machine. Without accounts, there is intentionally no
+  cross-device `user_id`.
+- `installation_id`: random ID created when this installation's application-data record is first
+  created. It survives application updates and rotates on reset/reinstall when the OS removes the
+  data container.
+- `session_id`: random ID created for every document/process launch. Foreground/resume remains part
+  of that launch session; an operating-system process restart creates a new one.
+- `event_id`: unique ID used by the relay/backend for deduplication. `error_id` additionally links an
+  error event to its Sentry issue/event where available.
+
+Every event has this allow-listed envelope:
+
+```text
+event_name, schema_version, event_id, occurred_at_utc,
+device_instance_id, installation_id, session_id,
+app_version, build_number, release_channel,
+os_family, os_version, cpu_arch, app_platform,
+country_code, locale, telemetry_sdk_version
+```
+
+The client sets `occurred_at_utc`; durations use a monotonic clock and are not derived by subtracting
+wall-clock timestamps. The relay overwrites `country_code` from its edge metadata and rejects client
+claims for that field. Record only country, not city, latitude/longitude, postal code, or full time
+zone. `locale` is useful for localization prioritization but must not be repurposed as region.
+
+An "install" cannot be observed at installer/store download time by application code. For native
+packages, define `app_installed` as **first consented launch of a newly created application-data
+record** and use Microsoft/Apple store analytics separately for downloads and installations that
+never launch or opt out. The static browser edition has no install lifecycle; its equivalent is
+`browser_instance_created`, meaning first consented use for that origin/browser storage. An update
+emits `app_updated` once when `app_version` changes under an existing `installation_id`.
+
+### Versioned event catalog
+
+All settings properties are enums, booleans, bounded integers, or coarse numeric buckets. Additive
+optional properties do not change `schema_version`; removal, renaming, or semantic changes do.
+
+| Event | Event-specific properties |
+| --- | --- |
+| `app_installed` | `initial_app_version`, `distribution` |
+| `browser_instance_created` | `initial_app_version`, `distribution` (`web_static`) |
+| `app_updated` | `from_version`, `to_version` |
+| `session_started` | `launch_kind` (`normal`, `file_association`, `recovery`), `previous_session_unclean` |
+| `score_loaded` | `source_kind` (`bundled_demo`, `user_file`), `file_format` (`musicxml`, `mxl`, `midi`, `other_supported`), `duration_seconds`, `structural_duration_quarter_notes`, `duration_bucket`, `part_count_bucket`, `tap_event_count_bucket`, `load_duration_ms_bucket`, `warning_count_bucket`, `result` |
+| `midi_settings_changed` | `input_enabled`, `output_enabled`, `input_connection` (`none`, `physical`, `virtual`, `unknown`), `output_connection`, `channel_filter_mode`, `velocity_curve`, `sustain_enabled`; never device name, manufacturer, MIDI payload, or note value |
+| `audio_settings_changed` | `backend`, `output_kind` (`built_in`, `wired`, `wireless`, `virtual`, `unknown`), `sample_rate_hz`, `buffer_frames`, `channel_count`, `internal_audio_enabled`, `estimated_latency_ms_bucket`; never device name |
+| `rhythm_settings_changed` | `performance_mode`, `beat_mode`, `legato_enabled`, `meter_family`, `subdivision`, `tempo_source`; do not report score-derived note/rhythm sequences |
+| `roll_settings_changed` | `roll_enabled`, `roll_order`, `tap_spread_ms_bucket`, `chord_spread_ms_bucket`, `gate_policy` |
+| `app_error` | `error_id`, stable `error_code`, `component`, `severity`, `handled`, `operation`, `fingerprint`, `occurrence_count`; no raw user text, paths, device names, score fragments, or unsanitized exception message |
+| `app_crashed` | `error_id`, `crash_kind`, `component`, `signal_or_exception_class`, `last_checkpoint_age_bucket`, `sentry_event_id`; sent on next launch as a minimal recovery event if the fatal handler could not upload |
+| `session_recovered` | `active_duration_seconds`, `wall_duration_seconds`, `tap_count`, `score_load_count`, `error_count`, `last_checkpoint_age_bucket`, `end_reason` (`unclean`); an unclean session is not automatically labeled a crash |
+| `session_ended` | `end_reason`, `active_duration_seconds`, `wall_duration_seconds`, `tap_count`, `score_load_count`, `error_count` |
+
+`duration_seconds` for a score is musical/playback duration when known; if the active mode has no
+meaningful tempo, send `null` plus the structural `tap_event_count_bucket`. Keep the exact duration
+only if it is already available from import; telemetry must never do extra score analysis on the
+critical path. A set of stable warning/error codes is acceptable, but detailed parser messages are
+not.
+
+Settings events fire only after a committed user-visible change and should be debounced into one
+snapshot per settings panel close or 2-second idle window. Do not send an event for every tap. The
+session's tap count is an atomic counter reported only in the end or recovered-session aggregate. If
+future product questions genuinely need per-tap timing, they require a new privacy review and
+sampled/bucketed event rather than silently expanding this schema.
+
+### Lifecycle accuracy and crash recovery
+
+`session_ended` is best effort: operating systems do not guarantee code execution on process kill,
+power loss, crash, or mobile suspension. On session start, atomically write a small local session
+record marked `open`. Every 60 seconds the background worker updates that local record with cumulative
+counters. This checkpoint is not a telemetry event and never causes a network request. A clean close
+marks it `closed` after enqueueing `session_ended`. If the next launch finds an open record, it emits
+`session_recovered` with the last checkpoint totals and `end_reason = unclean`; it emits
+`app_crashed` only when a crash marker/report provides positive evidence. It must not invent a
+precise close time after the last checkpoint.
+
+Track both `wall_duration_seconds` and `active_duration_seconds`. Wall duration is monotonic time for
+which the process/session remained open. Active duration accrues only while the app is foregrounded
+and has not been idle for five minutes. A score load, tap, score navigation, settings interaction,
+audition, keyboard/pointer input, or MIDI input ends the idle state. Entering the background begins
+idle immediately. This activity detection updates local counters only: leaving the app open idle
+must produce no PostHog heartbeat, event, polling request, or other network traffic.
+
+Handled and recoverable failures—including malformed XML/MXL/MIDI, missing or incompatible hardware,
+device initialization, and non-blocking application faults—go through `recordError`. The client
+fingerprints them by stable error code, component, operation, and allow-listed categorical context;
+it never captures the raw exception message. Repeats become one `app_error` with
+`occurrence_count`, and at most 32 distinct fingerprints are retained per upload window. These error
+summaries share the next ordinary five-minute PostHog request, so a widespread repeating problem
+does not consume one remote error event per occurrence.
+
+PostHog supplies querying, dashboards, release/version segmentation, and an optional Error Tracking
+product. The aggregate `app_error` schema intentionally favors prevalence and hardware/format
+correlation over stack traces. Sentry adds mature native minidumps, Windows PDB/macOS and iPadOS dSYM
+symbolication, richer stack grouping, and crash-context inspection. Those extras matter for a fatal
+native crash but do not justify sending routine handled errors twice.
+
+For fatal-crash diagnostics:
+
+- JavaScript uncaught exceptions and unhandled rejections become scrubbed `app_error` aggregates;
+  raw URL, DOM text, path, score metadata, message, and stack are not sent in the base configuration.
+- Rust uses stable error codes for handled errors. Because the current release profile uses
+  `panic = "abort"`, a panic hook alone is insufficient; a Sentry-enabled desktop build needs a
+  native minidump adapter and Apple builds need an Apple-native crash adapter.
+- Keep only allow-listed breadcrumbs such as `score_load_started`, `audio_backend_initialized`, and
+  stable settings enums. Never breadcrumb taps, pitches, filenames, device names, or exception text.
+- Release CI uploads version-matched JavaScript source maps, Windows PDBs, and Apple dSYMs only when
+  the optional adapter is enabled, and verifies symbolication with a deliberate crash on each target.
+
+An enabled Sentry crash carries `device_instance_id`, `installation_id`, `session_id`, and
+`app_version` as tags/context. PostHog receives a sanitized `app_crashed` summary with the Sentry
+event ID on recovery, not the stack trace or minidump. The Sentry organization token is a privileged
+CI/server credential and must never ship in the app; the crash client uses a project DSN.
+
+### Performance, delivery, and failure rules
+
+Telemetry must be impossible to observe from the performance path:
+
+```text
+shared UI lifecycle + settings + errors --> bounded local queue --> HTTPS relay --> PostHog
+audio/MIDI/performance callbacks -------> normal product events only; no telemetry work
+accepted tap at UI/core boundary -------> in-memory counter --> 60-second local checkpoint
+optional fatal native crash adapter -----------------------------------------------> Sentry
+```
+
+- No network, serialization, allocation, locks, logging, filesystem access, or telemetry queue write
+  occurs in the audio callback, native input callback, MIDI callback, or sampler scheduler.
+- Non-real-time producers append to an origin-scoped bounded queue (maximum 500 events/1 MiB). On
+  overflow the oldest non-lifecycle event is removed; telemetry never blocks product work.
+- The telemetry coordinator uploads at most one
+  ordinary batch every five minutes. The interval is a maximum transmission frequency, not a poll:
+  when no events are pending it performs no DNS lookup or request. Installation/launch is one
+  immediate batch after consent, and graceful close is one final best-effort batch; these lifecycle
+  batches are the only normal exceptions to the five-minute limit. Never retry a rejected schema.
+- All score-load and settings events accumulated during a five-minute window share one PostHog
+  request. Event volume does not trigger an early upload; the bounded queue/spool applies backpressure
+  by dropping the oldest non-lifecycle product event rather than increasing request frequency.
+- Use the bounded origin-scoped application-data spool described above, with oldest-first eviction.
+  Do not spool while opted out. Because it contains only minimized pseudonymous events and never
+  score/device data, strict minimization and bounds are the primary controls; an OS-protected native
+  spool can replace it later without changing instrumentation.
+- Flush for at most 150 ms on graceful desktop close; do not delay a mobile suspend or application
+  shutdown beyond the platform deadline. Remaining events stay in the spool for the next launch.
+- Treat all telemetry failures as silent, non-user-facing failures. Relay/WAF configuration supplies
+  the emergency kill switch; telemetry startup never delays the product's Ready state.
+
+Acceptance tests must prove that opt-out performs zero telemetry DNS/HTTP calls, wipes the spool,
+and disables any optional Sentry adapter; forbidden fields are rejected by both client and relay; duplicate `event_id`
+values are idempotent; clocks changing do not corrupt durations; offline queues remain bounded; a
+stalled endpoint does not affect launch, score load, MIDI, or audio latency. Before an optional
+Sentry adapter is enabled, its crash reports from Windows, macOS, and iPadOS must be symbolicated and
+contain the correlation IDs but no sample user data.
+They must also prove that an opted-in initial run produces one `session_started` plus one install or
+browser-instance event, an opted-out initial run produces neither, an idle open session makes no
+PostHog request, and ordinary uploads never occur more than once in a five-minute window.
+Benchmark the 30-minute real-time stress test with telemetry on and off; the existing latency and
+underrun acceptance thresholds must be identical.
+
+Relevant upstream references: [PostHog capture/batch API](https://posthog.com/docs/api/capture),
+[PostHog data-collection controls](https://posthog.com/docs/privacy/data-collection),
+[Sentry Rust SDK](https://docs.rs/sentry/latest/sentry/),
+[OpenTelemetry event conventions](https://opentelemetry.io/docs/specs/semconv/general/events/), and
+[Apple App Privacy data definitions](https://developer.apple.com/app-store/app-privacy-details/).
+
+## 7. Format support
 
 ### MusicXML MVP
 
@@ -322,7 +583,7 @@ PDF needs optical music recognition and a correction workflow, not just a decode
 separate product project: PDF/image -> OMR -> editable validation -> MusicXML -> existing importer.
 Never send unverified OMR output straight into performance mode.
 
-## 7. Delivery plan and gates
+## 8. Delivery plan and gates
 
 Assuming one experienced full-time engineer, a credible Windows beta is roughly 8-11 weeks. The
 latency and score-corpus gates matter more than the calendar.
@@ -400,7 +661,7 @@ below pass.
   import, background/interruption policy, App Store signing, and hardware/MIDI validation.
 - PDF/OMR discovery only after the digital-score workflow is stable.
 
-## 8. Acceptance criteria for the Windows beta
+## 9. Acceptance criteria for the Windows beta
 
 ### Functional
 
@@ -436,7 +697,7 @@ below pass.
 - All bundled fonts, notation assets, piano samples, and libraries appear in third-party notices and
   are cleared for commercial distribution.
 
-## 9. Decisions to validate with musicians
+## 10. Decisions to validate with musicians
 
 These do not block the architecture, but should be tested before the beta behavior is frozen:
 
@@ -447,7 +708,7 @@ These do not block the architecture, but should be tested before the beta behavi
    performance surface should do so to avoid accidental taps while navigating.
 5. Whether transposing-score users want concert-pitch sound by default or an explicit per-part choice.
 
-## 10. First engineering backlog
+## 11. First engineering backlog
 
 1. Add a Rust/Tauri workspace and Windows CI.
 2. Add a synthetic latency harness before any score features.

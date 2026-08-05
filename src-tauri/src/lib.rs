@@ -1,11 +1,16 @@
 mod audio_runtime;
 mod commands;
 mod core;
+mod crash_marker;
 mod dto;
 mod midi_runtime;
 mod session;
 
-use crate::{core::AppCore, midi_runtime::MidiInputAction};
+use crate::{
+    core::AppCore,
+    crash_marker::{NativeTelemetryState, install_panic_marker},
+    midi_runtime::MidiInputAction,
+};
 use std::sync::{Arc, Mutex, mpsc};
 use tauri::{Emitter, Manager};
 #[cfg(target_os = "ios")]
@@ -86,8 +91,18 @@ pub fn run() {
             commands::set_midi_input,
             commands::set_midi_output,
             commands::diagnostics,
+            commands::set_native_telemetry_consent,
+            commands::take_native_crash_marker,
         ])
         .setup(move |app| {
+            let marker_path = app.path().app_data_dir().ok().and_then(|app_data_dir| {
+                std::fs::create_dir_all(&app_data_dir)
+                    .ok()
+                    .map(|()| app_data_dir.join("telemetry-crash-marker-v1"))
+            });
+            let native_telemetry = Arc::new(NativeTelemetryState::new(marker_path));
+            install_panic_marker(native_telemetry.clone());
+            app.manage(native_telemetry);
             let resource_dir = app.path().resource_dir()?;
             let salamander_directory = resource_dir.join("instruments").join("salamander");
             let core = AppCore::new(midi_sender, Some(&salamander_directory))

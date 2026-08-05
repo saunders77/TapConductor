@@ -18,6 +18,14 @@ import {
   type UnlistenFn,
 } from "./platform";
 import { detectAppleUiPlatform } from "./ui-platform";
+import {
+  TelemetryClient,
+  countBucket,
+  createTelemetryConfig,
+  durationQuarterNotes,
+  millisecondsBucket,
+  type TelemetryProperties,
+} from "./telemetry";
 import type {
   BeatMidiInput,
   CoreEvent,
@@ -168,8 +176,11 @@ app.innerHTML = `
           </section>
           <section id="privacy" class="legal-disclosure" tabindex="-1">
             <h3>Privacy</h3>
-            <p>TapConductor processes your selected score, taps, connected MIDI device information, audio output information, and performance diagnostics locally on your device. It has no account system, advertising, analytics, tracking, or cloud sync, and it does not upload your scores or performances.</p>
+            <p>TapConductor processes scores and performances locally. If usage and crash sharing is enabled, it sends pseudonymous application usage, coarse system/settings categories, country, and sanitized error summaries. It never sends score contents or names, paths, MIDI messages, device names, precise location, or contact information.</p>
             <p>On iPadOS and macOS, a score chosen through the document picker is copied into TapConductor's private app storage so the sandboxed app can read it. Your original document is not changed. The imported copy may remain in app storage until the operating system clears it or you clear or remove the app's data.</p>
+            <label class="telemetry-choice"><input id="telemetry-toggle" type="checkbox" /> <span><b>Share usage and crash data</b><small id="telemetry-status">Checking…</small></span></label>
+            <button id="telemetry-copy-id" class="secondary-button" type="button">Copy telemetry identifier</button>
+            <button id="telemetry-reset" class="secondary-button" type="button">Reset telemetry identifier</button>
             <p>TapConductor does not request access to your microphone, camera, location, contacts, or photos. The full policy is available in <b>PRIVACY.md</b> and at <span class="legal-url">github.com/saunders77/TapConductor</span>.</p>
           </section>
           <section id="acknowledgements" class="legal-disclosure" tabindex="-1">
@@ -179,6 +190,23 @@ app.innerHTML = `
           </section>
         </div>
         <button id="help-done" class="primary-button" type="button">Got it</button>
+      </section>
+    </div>
+
+    <div id="telemetry-consent" class="help-overlay telemetry-consent hidden" role="dialog" aria-modal="true" aria-labelledby="telemetry-consent-title" aria-describedby="telemetry-consent-summary">
+      <section class="help-card telemetry-consent-card">
+        <div class="help-card-header">
+          <div><span class="help-kicker">Privacy choice</span><h2 id="telemetry-consent-title">Help improve TapConductor?</h2></div>
+        </div>
+        <div class="help-content">
+          <section>
+            <p id="telemetry-consent-summary">Share pseudonymous installs, launches, score type and length, settings categories, session totals, and sanitized errors. Country is derived from the network connection. Scores, filenames, paths, device names, MIDI notes, and precise location are never sent.</p>
+          </section>
+        </div>
+        <div class="telemetry-consent-actions">
+          <button id="telemetry-continue" class="secondary-button large" type="button">Continue and share</button>
+          <button id="telemetry-decline" class="secondary-button large" type="button">Do not share</button>
+        </div>
       </section>
     </div>
 
@@ -260,6 +288,13 @@ const elements = {
   helpOverlay: byId("help-overlay"),
   helpClose: byId<HTMLButtonElement>("help-close"),
   helpDone: byId<HTMLButtonElement>("help-done"),
+  telemetryConsent: byId("telemetry-consent"),
+  telemetryContinue: byId<HTMLButtonElement>("telemetry-continue"),
+  telemetryDecline: byId<HTMLButtonElement>("telemetry-decline"),
+  telemetryToggle: byId<HTMLInputElement>("telemetry-toggle"),
+  telemetryStatus: byId("telemetry-status"),
+  telemetryCopyId: byId<HTMLButtonElement>("telemetry-copy-id"),
+  telemetryReset: byId<HTMLButtonElement>("telemetry-reset"),
   emptyOpen: byId<HTMLButtonElement>("empty-open"),
   demoChoirOpen: byId<HTMLButtonElement>("demo-choir-open"),
   demoPianoOpen: byId<HTMLButtonElement>("demo-piano-open"),
@@ -304,6 +339,8 @@ const elements = {
   forward: byId<HTMLButtonElement>("forward-button"),
   toasts: byId("toast-region"),
 };
+
+const telemetry = new TelemetryClient(createTelemetryConfig(isWebBuild()));
 
 const performanceStrip = document.querySelector<HTMLElement>(".performance-strip");
 const bottomControls = document.createElement("div");
@@ -744,36 +781,73 @@ function moveOsmdCursorToStep(visualStep: number): void {
   }
 }
 
-async function invokeSafe<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+async function invokeSafe<T>(
+  command: string,
+  args?: Record<string, unknown>,
+  telemetryContext?: TelemetryProperties | false,
+): Promise<T> {
   try {
     return await invoke<T>(command, args);
   } catch (error) {
+    if (telemetryContext !== false) {
+      telemetry.recordError({
+        errorCode: "command.failed",
+        component: commandComponent(command),
+        operation: command,
+        context: telemetryContext,
+      });
+    }
     const message = error instanceof Error ? error.message : String(error);
     toast(message, "error");
     throw error;
   }
 }
 
+function commandComponent(command: string): string {
+  if (/score|part|cursor|audition|performance|release|panic/.test(command)) return "performance";
+  if (/audio|instrument|volume|roll|legato/.test(command)) return "audio";
+  if (/midi/.test(command)) return "midi";
+  return "application";
+}
+
+type ScoreTelemetryContext = {
+  sourceKind: "bundled_demo" | "user_file";
+  fileFormat: "musicxml" | "mxl" | "midi" | "other_supported";
+};
+
+function scoreFileFormat(source: File | string): ScoreTelemetryContext["fileFormat"] {
+  const name = source instanceof File ? source.name : source;
+  const extension = name.split(/[.]/).pop()?.toLowerCase();
+  if (extension === "mxl") return "mxl";
+  if (extension === "mid" || extension === "midi") return "midi";
+  if (extension === "xml" || extension === "musicxml") return "musicxml";
+  return "other_supported";
+}
+
 async function chooseScore(): Promise<void> {
   const path = await openScoreDialog();
   if (!path) return;
   await loadScore(
-    () => invokeSafe<LoadedScore>("load_score", { path }),
+    () => invokeSafe<LoadedScore>("load_score", { path }, false),
     "Loading score…",
+    { sourceKind: "user_file", fileFormat: scoreFileFormat(path) },
   );
 }
 
 async function loadDemoScore(kind: "choir" | "piano"): Promise<void> {
   await loadScore(
-    () => invokeSafe<LoadedScore>("load_demo_score", { kind }),
+    () => invokeSafe<LoadedScore>("load_demo_score", { kind }, false),
     `Loading demo ${kind} score…`,
+    { sourceKind: "bundled_demo", fileFormat: "mxl" },
   );
 }
 
 async function loadScore(
   loader: () => Promise<LoadedScore>,
   loadingMessage: string,
+  telemetryContext: ScoreTelemetryContext,
 ): Promise<void> {
+  const totalLoadStarted = performance.now();
   setStatus("loading", loadingMessage);
   const loadButtons = [elements.open, elements.emptyOpen, elements.demoChoirOpen, elements.demoPianoOpen];
   loadButtons.forEach((button) => {
@@ -788,6 +862,21 @@ async function loadScore(
     await displayScore(loaded);
     const fileName = loaded.path.split(/[\\/]/).pop() || loaded.displayName;
     setAppWindowTitle(fileName);
+    const structuralLength = durationQuarterNotes(loaded);
+    telemetry.recordScoreLoaded({
+      source_kind: telemetryContext.sourceKind,
+      file_format: telemetryContext.fileFormat,
+      duration_seconds: null,
+      structural_duration_quarter_notes: structuralLength === null
+        ? null
+        : Math.round(structuralLength * 1_000) / 1_000,
+      duration_bucket: structuralLength === null ? "unknown" : countBucket(Math.ceil(structuralLength)),
+      part_count_bucket: countBucket(loaded.parts.length),
+      tap_event_count_bucket: countBucket(loaded.events.length),
+      load_duration_ms_bucket: millisecondsBucket(performance.now() - totalLoadStarted),
+      warning_count_bucket: countBucket(loaded.warnings.length),
+      result: "success",
+    });
   } catch (error) {
     // Native load failures are already surfaced by invokeSafe. Rendering is a
     // separate step, so make OSMD failures visible instead of looking like an
@@ -796,6 +885,24 @@ async function loadScore(
       const message = error instanceof Error ? error.message : String(error);
       toast(`The score loaded, but its notation could not be displayed: ${message}`, "error");
     }
+    telemetry.capture("score_loaded", {
+      source_kind: telemetryContext.sourceKind,
+      file_format: telemetryContext.fileFormat,
+      duration_seconds: null,
+      structural_duration_quarter_notes: null,
+      duration_bucket: "unknown",
+      part_count_bucket: "unknown",
+      tap_event_count_bucket: "unknown",
+      load_duration_ms_bucket: millisecondsBucket(performance.now() - totalLoadStarted),
+      warning_count_bucket: "unknown",
+      result: loaded ? "render_failed" : "load_failed",
+    });
+    telemetry.recordError({
+      errorCode: loaded ? "score.render_failed" : "score.load_failed",
+      component: loaded ? "notation" : "import",
+      operation: loaded ? "display_score" : "load_score",
+      context: { source_kind: telemetryContext.sourceKind, file_format: telemetryContext.fileFormat },
+    });
     setStatus("fault", "Score load failed");
   } finally {
     loadButtons.forEach((button) => {
@@ -1669,7 +1776,9 @@ async function auditionDown(token: string, index: number, midiPitches?: number[]
 
 async function performDown(token: string, velocity = DEFAULT_VELOCITY): Promise<void> {
   if (tapMode === "beat" && !token.startsWith("audition:")) {
+    const shouldCountTap = Boolean(score) && !heldTokens.has(token);
     beatTapDown(token);
+    if (shouldCountTap) telemetry.recordTap();
     return;
   }
   if (!score || heldTokens.has(token)) return;
@@ -1680,6 +1789,7 @@ async function performDown(token: string, velocity = DEFAULT_VELOCITY): Promise<
   try {
     await pending;
     lastUiNativeRoundTripMs = performance.now() - started;
+    telemetry.recordTap();
   } catch {
     heldTokens.delete(token);
     return;
@@ -1782,6 +1892,18 @@ function fitSelect(select: HTMLSelectElement): void {
   select.style.width = `${Math.max(38, Math.min(206, text.length * 7 + nativeControlAllowance))}px`;
 }
 
+function telemetryAudioBackend(value: string | undefined): string {
+  const backend = value?.toLowerCase() ?? "";
+  if (backend.includes("asio")) return "asio";
+  if (backend.includes("wasapi")) return "wasapi";
+  if (backend.includes("coreaudio") || backend.includes("core audio")) return "coreaudio";
+  if (backend.includes("web")) return "web_audio";
+  if (backend.includes("alsa")) return "alsa";
+  if (backend.includes("jack")) return "jack";
+  if (backend.includes("pulse")) return "pulseaudio";
+  return "unknown";
+}
+
 async function refreshDevices(): Promise<void> {
   const [audioResult, midiResult, diagnosticsResult] = await Promise.allSettled([
     invoke<DeviceDto[]>("audio_devices"),
@@ -1816,6 +1938,15 @@ async function refreshDevices(): Promise<void> {
     errors.push(`Diagnostics failed: ${String(diagnosticsResult.reason)}`);
   }
   if (errors.length > 0) {
+    if (audioResult.status === "rejected") {
+      telemetry.recordError({ errorCode: "audio.discovery_failed", component: "audio", operation: "audio_devices" });
+    }
+    if (midiResult.status === "rejected") {
+      telemetry.recordError({ errorCode: "midi.discovery_failed", component: "midi", operation: "midi_ports" });
+    }
+    if (diagnosticsResult.status === "rejected") {
+      telemetry.recordError({ errorCode: "diagnostics.unavailable", component: "audio", operation: "diagnostics" });
+    }
     elements.diagnosticsButton.classList.add("not-ready");
     toast(errors.join(" "), "error");
   }
@@ -1926,12 +2057,24 @@ async function refreshDiagnostics(): Promise<void> {
     const previousMidiError = previousDiagnostics?.midiOutputError;
     showDiagnostics(diagnostics);
     if (diagnostics.midiOutputError && diagnostics.midiOutputError !== previousMidiError) {
+      telemetry.recordError({
+        errorCode: "midi.output_error",
+        component: "midi",
+        operation: "output",
+        context: { output_enabled: Boolean(diagnostics.midiOutput) },
+      });
       toast(diagnostics.midiOutputError, "warning");
     }
     if (
       !diagnostics.ready
       && (previousDiagnostics?.ready !== false || diagnostics.message !== previousDiagnostics.message)
     ) {
+      telemetry.recordError({
+        errorCode: "audio.output_not_ready",
+        component: "audio",
+        operation: "diagnostics",
+        context: { backend: telemetryAudioBackend(diagnostics.audioBackend) },
+      });
       toast(
         `${diagnostics.message ?? "The audio output is unavailable."} Reload devices from Audio Out.`,
         "error",
@@ -1939,6 +2082,7 @@ async function refreshDiagnostics(): Promise<void> {
     }
     elements.diagnosticsButton.classList.toggle("not-ready", !diagnostics.ready);
   } catch {
+    telemetry.recordError({ errorCode: "diagnostics.unavailable", component: "audio", operation: "diagnostics" });
     elements.diagnosticsButton.classList.add("not-ready");
     elements.diagnosticsValue.textContent = "Unavailable";
   }
@@ -1948,6 +2092,7 @@ async function installListeners(): Promise<void> {
   unlisteners.push(
     await listen<CoreEvent>("performance-event", ({ payload }) => {
       if (payload.type === "fault") {
+        telemetry.recordError({ errorCode: "performance.fault", component: "performance", operation: "core_event" });
         elements.diagnosticsButton.classList.add("not-ready");
         toast(payload.message, "error");
         return;
@@ -1963,6 +2108,7 @@ async function installListeners(): Promise<void> {
     }),
     await listen<DiagnosticsDto>("audio-diagnostics", ({ payload }) => showDiagnostics(payload)),
     await listen<string>("audio-lifecycle-error", ({ payload }) => {
+      telemetry.recordError({ errorCode: "audio.lifecycle_error", component: "audio", operation: "lifecycle" });
       elements.diagnosticsButton.classList.add("not-ready");
       toast(`${payload} Reload devices from Audio Out.`, "error");
     }),
@@ -1972,6 +2118,146 @@ async function installListeners(): Promise<void> {
     }),
   );
 }
+
+function syncTelemetryControls(): void {
+  const configured = telemetry.isConfigured();
+  const consent = telemetry.getConsent();
+  elements.telemetryToggle.disabled = !configured;
+  elements.telemetryReset.disabled = !configured || consent !== "enabled";
+  elements.telemetryCopyId.disabled = !configured || consent !== "enabled";
+  elements.telemetryToggle.checked = configured && consent === "enabled";
+  elements.telemetryStatus.textContent = !configured
+    ? "Not configured in this build"
+    : consent === "enabled"
+      ? "On. Change this at any time."
+      : consent === "disabled"
+        ? "Off. No telemetry is sent."
+        : "No data is sent until you choose.";
+}
+
+async function syncNativeTelemetryConsent(enabled: boolean): Promise<void> {
+  if (isWebBuild()) return;
+  try {
+    await invoke("set_native_telemetry_consent", { enabled });
+    if (!enabled) return;
+    const crashed = await invoke<boolean>("take_native_crash_marker");
+    if (crashed) {
+      telemetry.capture("app_crashed", {
+        error_id: crypto.randomUUID(),
+        crash_kind: "rust_panic",
+        component: "native_core",
+        signal_or_exception_class: "rust_panic_abort",
+        last_checkpoint_age_bucket: "unknown",
+        sentry_event_id: null,
+      });
+    }
+  } catch {
+    // Telemetry state synchronization is deliberately silent and must never
+    // interfere with application startup or shutdown.
+  }
+}
+
+function initializeTelemetry(): void {
+  syncTelemetryControls();
+  if (!telemetry.isConfigured()) {
+    void syncNativeTelemetryConsent(false);
+    return;
+  }
+  if (telemetry.getConsent() === "enabled") {
+    telemetry.start();
+    void syncNativeTelemetryConsent(true);
+  } else if (telemetry.getConsent() === "unknown") {
+    elements.telemetryConsent.classList.remove("hidden");
+    window.requestAnimationFrame(() => elements.telemetryContinue.focus());
+  } else {
+    void syncNativeTelemetryConsent(false);
+  }
+}
+
+elements.telemetryContinue.addEventListener("click", () => {
+  telemetry.enable();
+  void syncNativeTelemetryConsent(true);
+  elements.telemetryConsent.classList.add("hidden");
+  syncTelemetryControls();
+});
+elements.telemetryDecline.addEventListener("click", () => {
+  telemetry.disable();
+  void syncNativeTelemetryConsent(false);
+  elements.telemetryConsent.classList.add("hidden");
+  syncTelemetryControls();
+});
+elements.telemetryConsent.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") event.preventDefault();
+  event.stopPropagation();
+});
+elements.telemetryToggle.addEventListener("change", () => {
+  if (elements.telemetryToggle.checked) {
+    telemetry.enable();
+    void syncNativeTelemetryConsent(true);
+  } else {
+    telemetry.disable();
+    void syncNativeTelemetryConsent(false);
+  }
+  syncTelemetryControls();
+});
+elements.telemetryReset.addEventListener("click", () => {
+  telemetry.resetIdentifiers();
+  syncTelemetryControls();
+  toast("Telemetry identifiers and pending data were reset.", "info");
+});
+elements.telemetryCopyId.addEventListener("click", () => {
+  const identifier = telemetry.getDeviceInstanceId();
+  if (!identifier) return;
+  if (!navigator.clipboard) {
+    toast("Clipboard access is unavailable in this build.", "warning");
+    return;
+  }
+  void navigator.clipboard.writeText(identifier).then(
+    () => toast("Telemetry identifier copied.", "info"),
+    () => toast("The telemetry identifier could not be copied.", "warning"),
+  );
+});
+
+type PendingSettingsEvent = {
+  eventName: string;
+  properties: () => TelemetryProperties;
+  timer: number;
+};
+const pendingSettingsTelemetry = new Map<string, PendingSettingsEvent>();
+
+function scheduleSettingsTelemetry(
+  key: string,
+  eventName: string,
+  properties: () => TelemetryProperties,
+): void {
+  const existing = pendingSettingsTelemetry.get(key);
+  if (existing) window.clearTimeout(existing.timer);
+  const timer = window.setTimeout(() => {
+    const pending = pendingSettingsTelemetry.get(key);
+    if (!pending) return;
+    pendingSettingsTelemetry.delete(key);
+    telemetry.capture(pending.eventName, pending.properties());
+  }, 2_000);
+  pendingSettingsTelemetry.set(key, { eventName, properties, timer });
+}
+
+function flushSettingsTelemetry(): void {
+  for (const pending of pendingSettingsTelemetry.values()) {
+    window.clearTimeout(pending.timer);
+    telemetry.capture(pending.eventName, pending.properties());
+  }
+  pendingSettingsTelemetry.clear();
+}
+
+window.addEventListener("error", () => {
+  telemetry.recordError({ errorCode: "javascript.uncaught", component: "ui", operation: "window_error" });
+});
+window.addEventListener("unhandledrejection", () => {
+  telemetry.recordError({ errorCode: "javascript.unhandled_rejection", component: "ui", operation: "promise" });
+});
+document.addEventListener("visibilitychange", () => telemetry.setForeground(!document.hidden));
+document.addEventListener("pointerdown", () => telemetry.markActivity(), { capture: true, passive: true });
+document.addEventListener("keydown", () => telemetry.markActivity(), { capture: true });
 
 elements.open.addEventListener("click", () => void chooseScore());
 elements.emptyOpen.addEventListener("click", () => void chooseScore());
@@ -2141,6 +2427,8 @@ window.addEventListener("blur", () => {
   for (const token of [...heldTokens]) void performUp(token);
 });
 window.addEventListener("beforeunload", () => {
+  flushSettingsTelemetry();
+  telemetry.endSession();
   unlisteners.forEach((unlisten) => unlisten());
   void invoke("panic").catch(() => undefined);
 });
@@ -2154,7 +2442,15 @@ const updateRollDelays = (): void => {
   const auditionMs = Number(elements.auditionRoll.value);
   elements.regularRollValue.value = `${regularMs} ms`;
   elements.auditionRollValue.value = `${auditionMs} ms`;
-  void invokeSafe("set_roll_delays", { regularMs, auditionMs });
+  void invokeSafe("set_roll_delays", { regularMs, auditionMs }).then(() => {
+    scheduleSettingsTelemetry("roll", "roll_settings_changed", () => ({
+      roll_enabled: Number(elements.regularRoll.value) > 0 || Number(elements.auditionRoll.value) > 0,
+      roll_order: "low_to_high",
+      tap_spread_ms_bucket: millisecondsBucket(Number(elements.regularRoll.value)),
+      chord_spread_ms_bucket: millisecondsBucket(Number(elements.auditionRoll.value)),
+      gate_policy: "written_or_input_release",
+    }));
+  });
 };
 elements.regularRoll.addEventListener("input", updateRollDelays);
 elements.auditionRoll.addEventListener("input", updateRollDelays);
@@ -2209,9 +2505,20 @@ elements.audioOutput.addEventListener("change", async () => {
   }
   const previous = selectedAudioDeviceId;
   try {
-    await invokeSafe("set_audio_device", { id: requested });
+    await invokeSafe("set_audio_device", { id: requested }, {
+      backend: telemetryAudioBackend(lastDiagnostics?.audioBackend),
+      output_kind: "unknown",
+    });
     selectedAudioDeviceId = requested;
     fitSelect(elements.audioOutput);
+    scheduleSettingsTelemetry("audio", "audio_settings_changed", () => ({
+      backend: telemetryAudioBackend(lastDiagnostics?.audioBackend),
+      output_kind: "unknown",
+      sample_rate_hz: lastDiagnostics?.sampleRate ?? 0,
+      buffer_frames: lastDiagnostics?.bufferFrames ?? 0,
+      internal_audio_enabled: true,
+      estimated_latency_ms_bucket: millisecondsBucket(lastDiagnostics?.estimatedLatencyMs ?? 0),
+    }));
   } catch {
     elements.audioOutput.value = previous;
     fitSelect(elements.audioOutput);
@@ -2225,6 +2532,15 @@ elements.midiInput.addEventListener("change", () => {
   fitSelect(elements.midiInput);
   void invokeSafe("set_midi_input", { id: elements.midiInput.value || null })
     .then(() => {
+      scheduleSettingsTelemetry("midi", "midi_settings_changed", () => ({
+        input_enabled: elements.midiInput.value.length > 0,
+        output_enabled: elements.midiOutput.value.length > 0,
+        input_connection: elements.midiInput.value ? "unknown" : "none",
+        output_connection: elements.midiOutput.value ? "unknown" : "none",
+        channel_filter_mode: "all",
+        velocity_curve: "device",
+        sustain_enabled: true,
+      }));
       if (isWebBuild()) return refreshDevices();
     });
 });
@@ -2232,13 +2548,31 @@ elements.midiOutput.addEventListener("change", () => {
   fitSelect(elements.midiOutput);
   void invokeSafe("set_midi_output", { id: elements.midiOutput.value || null })
     .then(() => {
+      scheduleSettingsTelemetry("midi", "midi_settings_changed", () => ({
+        input_enabled: elements.midiInput.value.length > 0,
+        output_enabled: elements.midiOutput.value.length > 0,
+        input_connection: elements.midiInput.value ? "unknown" : "none",
+        output_connection: elements.midiOutput.value ? "unknown" : "none",
+        channel_filter_mode: "all",
+        velocity_curve: "device",
+        sustain_enabled: true,
+      }));
       if (isWebBuild()) return refreshDevices();
     });
 });
 elements.tapMode.addEventListener("change", () => {
   tapMode = elements.tapMode.value === "beat" ? "beat" : "rhythm";
   clearBeatTimers();
-  void invokeSafe("set_tap_mode", { beat: tapMode === "beat" });
+  void invokeSafe("set_tap_mode", { beat: tapMode === "beat" }).then(() => {
+    scheduleSettingsTelemetry("rhythm", "rhythm_settings_changed", () => ({
+      performance_mode: tapMode,
+      beat_mode: tapMode === "beat",
+      legato_enabled: elements.legatoMode.checked,
+      meter_family: "score_defined",
+      subdivision: "score_defined",
+      tempo_source: tapMode === "beat" ? "conducted_taps" : "individual_taps",
+    }));
+  });
   if (tapMode === "beat") resetBeatTap();
   else {
     lastPressedBeatIndex = null;
@@ -2250,7 +2584,16 @@ elements.tapMode.addEventListener("change", () => {
 elements.legatoMode.addEventListener("change", () => {
   const enabled = elements.legatoMode.checked;
   elements.legatoValue.textContent = enabled ? "On" : "Off";
-  void invokeSafe("set_legato_mode", { enabled });
+  void invokeSafe("set_legato_mode", { enabled }).then(() => {
+    scheduleSettingsTelemetry("rhythm", "rhythm_settings_changed", () => ({
+      performance_mode: tapMode,
+      beat_mode: tapMode === "beat",
+      legato_enabled: elements.legatoMode.checked,
+      meter_family: "score_defined",
+      subdivision: "score_defined",
+      tempo_source: tapMode === "beat" ? "conducted_taps" : "individual_taps",
+    }));
+  });
 });
 elements.diagnosticsButton.addEventListener("click", () => {
   if (lastDiagnostics) showDiagnostics(lastDiagnostics);
@@ -2305,6 +2648,8 @@ elements.zoomRange.addEventListener("input", () => {
 elements.zoomRange.addEventListener("change", () => {
   commitZoomPercent(Number(elements.zoomRange.value));
 });
+
+initializeTelemetry();
 
 void installListeners().then(refreshDevices).catch((error: unknown) => {
   setStatus("fault", "Core unavailable");

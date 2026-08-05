@@ -51,6 +51,7 @@ export interface LoadedScore {
   beats: BeatDto[];
   parts: PartDto[];
   warnings: string[];
+  structuralDuration?: RationalDto;
 }
 
 export interface DeviceDto {

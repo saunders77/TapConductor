@@ -12,6 +12,11 @@ jobs:
   build-and-test:
     runs-on: windows-latest
     timeout-minutes: 45
+    env:
+      VITE_POSTHOG_PROJECT_KEY: ${{ secrets.TAPCONDUCTOR_POSTHOG_PROJECT_KEY }}
+      VITE_TELEMETRY_ENDPOINT: https://telemetry.tapconductor.app/v1/events
+      VITE_BUILD_NUMBER: ${{ github.run_number }}
+      VITE_RELEASE_CHANNEL: ci
 
     steps:
       - name: Check out source

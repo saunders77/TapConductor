@@ -116,6 +116,9 @@ impl WebScore {
                 "enabled": self.active_parts.contains(&part.id),
             })).collect::<Vec<_>>(),
             "warnings": self.score.warnings.iter().map(|warning| warning.message.clone()).collect::<Vec<_>>(),
+            "structuralDuration": self.score.playback_measures.last().and_then(|measure| {
+                measure.start.checked_add(measure.duration).ok().map(rational_json)
+            }),
         });
         serde_json::to_string(&dto).map_err(js_error)
     }

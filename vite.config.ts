@@ -1,6 +1,10 @@
+import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
 
 const host = process.env.TAURI_DEV_HOST;
+const packageVersion = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf8"),
+) as { version: string };
 
 export default defineConfig({
   // Relative URLs let the static browser bundle work at a domain root or in
@@ -15,6 +19,9 @@ export default defineConfig({
     watch: { ignored: ["**/src-tauri/**", "**/target/**"] },
   },
   envPrefix: ["VITE_", "TAURI_ENV_"],
+  define: {
+    __TAPCONDUCTOR_VERSION__: JSON.stringify(packageVersion.version),
+  },
   build: {
     target: process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari13",
     minify: process.env.TAURI_ENV_DEBUG ? false : "esbuild",

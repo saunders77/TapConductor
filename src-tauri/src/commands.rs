@@ -1,6 +1,7 @@
 use crate::{
     AppState,
     core::AppCore,
+    crash_marker::NativeTelemetryState,
     dto::{DeviceDto, DiagnosticsDto, LoadedScoreDto, MidiPortsDto},
 };
 use std::sync::Arc;
@@ -20,6 +21,21 @@ fn emit_event(app: &AppHandle, event: Option<crate::dto::CoreEventDto>) -> Resul
             .map_err(|error| error.to_string())?;
     }
     Ok(())
+}
+
+#[tauri::command]
+pub fn set_native_telemetry_consent(
+    state: State<'_, Arc<NativeTelemetryState>>,
+    enabled: bool,
+) -> Result<(), String> {
+    state.set_enabled(enabled)
+}
+
+#[tauri::command]
+pub fn take_native_crash_marker(
+    state: State<'_, Arc<NativeTelemetryState>>,
+) -> Result<bool, String> {
+    state.take_marker()
 }
 
 #[tauri::command]

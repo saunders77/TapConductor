@@ -14,6 +14,10 @@ const ALLOWED_EVENTS = new Set([
   "session_ended",
 ]);
 
+// Public PostHog ingestion token. An environment value may override it for a
+// staging/fork deployment; never place a personal API key here.
+const DEFAULT_POSTHOG_PROJECT_TOKEN = "phc_vrFBPUnAAgVUhWxViveC38TjS4LKuqJQ88C8WnsMZhkH";
+
 const COMMON_PROPERTIES = new Set([
   "schema_version", "device_instance_id", "installation_id", "session_id",
   "app_version", "build_number", "release_channel", "distribution",
@@ -172,14 +176,12 @@ export async function handleRequest(request, env) {
     return new Response(validation.reason, { status: 400, headers: corsHeaders(origin) });
   }
 
-  if (!env.POSTHOG_PROJECT_TOKEN) {
-    return new Response("Relay not configured", { status: 503, headers: corsHeaders(origin) });
-  }
+  const posthogProjectToken = String(env.POSTHOG_PROJECT_TOKEN || DEFAULT_POSTHOG_PROJECT_TOKEN);
 
   const countryCandidate = String(request.cf?.country ?? "").toUpperCase();
   const country = /^[A-Z]{2}$/.test(countryCandidate) ? countryCandidate : "ZZ";
   const forwarded = {
-    api_key: env.POSTHOG_PROJECT_TOKEN,
+    api_key: posthogProjectToken,
     historical_migration: false,
     batch: payload.batch.map((item) => ({
       event: item.event,

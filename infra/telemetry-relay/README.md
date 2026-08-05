@@ -7,9 +7,9 @@ geolocation, and forwards the sanitized batch. It never logs or forwards the sou
 Deployment requires a Cloudflare account/domain and Wrangler:
 
 1. Review `ALLOWED_ORIGINS` and the custom-domain route in `wrangler.jsonc`.
-2. Run `npx wrangler secret put POSTHOG_PROJECT_TOKEN` and enter the public `phc_...` project token.
-3. Run `npx wrangler deploy` from this directory.
-4. Set `VITE_TELEMETRY_ENDPOINT=https://telemetry.tapconductor.app/v1/events` in release builds.
+2. Run `npx wrangler deploy` from this directory.
+3. Set `VITE_TELEMETRY_ENDPOINT=https://telemetry.tapconductor.app/v1/events` in release builds.
 
-Keep the token in the Worker secret store even though a PostHog project token is designed to be
-public in shipped clients. Do not put a PostHog personal API key or Sentry organization token here.
+The public production project token is embedded in both the client and Worker. A staging/fork
+deployment can override it with `npx wrangler secret put POSTHOG_PROJECT_TOKEN`. Never put a PostHog
+personal API key or Sentry organization token in the client or Worker source.

@@ -83,6 +83,9 @@ export interface TelemetryDependencies {
 }
 
 const KEY_PREFIX = "tapconductor.telemetry.v1";
+// PostHog project tokens are public ingestion identifiers intended to ship in
+// client applications. This is not a personal or administrative API key.
+const DEFAULT_POSTHOG_PROJECT_KEY = "phc_vrFBPUnAAgVUhWxViveC38TjS4LKuqJQ88C8WnsMZhkH";
 const CONSENT_KEY = `${KEY_PREFIX}.consent`;
 const DEVICE_ID_KEY = `${KEY_PREFIX}.device_id`;
 const INSTALLATION_ID_KEY = `${KEY_PREFIX}.installation_id`;
@@ -682,7 +685,8 @@ export class TelemetryClient {
 }
 
 export function createTelemetryConfig(webBuild: boolean): TelemetryConfig {
-  const projectKey = import.meta.env.VITE_POSTHOG_PROJECT_KEY?.trim() ?? "";
+  const projectKey = import.meta.env.VITE_POSTHOG_PROJECT_KEY?.trim()
+    || DEFAULT_POSTHOG_PROJECT_KEY;
   const relay = import.meta.env.VITE_TELEMETRY_ENDPOINT?.trim();
   const host = import.meta.env.VITE_POSTHOG_HOST?.trim() || "https://us.i.posthog.com";
   return {

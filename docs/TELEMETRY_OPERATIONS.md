@@ -2,23 +2,30 @@
 
 ## Release configuration
 
-The client is deliberately unconfigured when `VITE_POSTHOG_PROJECT_KEY` is absent. In that state it
-sends nothing and does not show the first-run telemetry choice. Do not put credentials in tracked
-source or commit `.env.local`.
+TapConductor's public PostHog project ingestion token is compiled into the client. This is
+intentional: released clients must include it in direct PostHog capture calls, and it cannot read
+analytics or administer the project. It is not equivalent to a PostHog personal API key. Production
+builds therefore show the first-run telemetry choice without requiring a build secret.
 
-For local release testing, copy `.env.example` to `.env.local` and set:
+The matching public token is also compiled into the relay, which replaces any client-supplied
+`api_key` before forwarding a validated batch. No PostHog key setup is required for the standard
+TapConductor project. Project ID **544266** is useful for PostHog administration/API tooling but is
+not needed by the capture client.
+
+For a staging project or fork, copy `.env.example` to `.env.local` and optionally override:
 
 ```dotenv
-VITE_POSTHOG_PROJECT_KEY=phc_your_public_project_token
+VITE_POSTHOG_PROJECT_KEY=phc_staging_or_fork_project_token
 VITE_TELEMETRY_ENDPOINT=https://telemetry.tapconductor.app/v1/events
 VITE_BUILD_NUMBER=your_build_number
 VITE_RELEASE_CHANNEL=production
 ```
 
-For GitHub builds, create an Actions secret named `TAPCONDUCTOR_POSTHOG_PROJECT_KEY`. The workflows
-map it to the Vite variable. Project ID **544266** is useful for PostHog administration/API tooling
-but is not needed by the capture client. Confirm that this project is in the US region; otherwise
-change both `VITE_POSTHOG_HOST` and the relay's `POSTHOG_HOST` to the EU ingestion host.
+The standard GitHub workflows do not require a PostHog secret. Confirm that project 544266 is in the
+US region; otherwise change both `VITE_POSTHOG_HOST` and the relay's `POSTHOG_HOST` to the EU
+ingestion host. When rotating or changing the production project token, update both
+`DEFAULT_POSTHOG_PROJECT_KEY` in `src/telemetry.ts` and `DEFAULT_POSTHOG_PROJECT_TOKEN` in the relay,
+or provide matching build/Worker overrides.
 
 ## Deploy the relay
 
@@ -26,11 +33,14 @@ Follow `infra/telemetry-relay/README.md`. In outline:
 
 1. Put `telemetry.tapconductor.app` on a Cloudflare-managed zone.
 2. Review the allow-listed browser and Tauri origins in `wrangler.jsonc`.
-3. Store the PostHog `phc_...` project token with `wrangler secret put POSTHOG_PROJECT_TOKEN`.
-4. Deploy, then send a schema-valid canary batch and confirm the country code is present and no IP
+3. Deploy, then send a schema-valid canary batch and confirm the country code is present and no IP
    property is stored in PostHog.
-5. Keep the Cloudflare rate-limit binding/WAF rule enabled and ensure Worker request logging does not
+4. Keep the Cloudflare rate-limit binding/WAF rule enabled and ensure Worker request logging does not
    retain request bodies or source IPs beyond Cloudflare's necessary service logs.
+
+The Worker needs no secret for the standard production project. A staging/fork deployment may set
+`POSTHOG_PROJECT_TOKEN` as a Worker secret to override the compiled public token without changing
+source.
 
 Until the relay is ready, omitting `VITE_TELEMETRY_ENDPOINT` uses the configured PostHog host's
 `/batch/` endpoint directly. That is suitable only for beta testing; configure PostHog to discard IP

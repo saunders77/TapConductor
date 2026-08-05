@@ -126,7 +126,7 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .note-target { position: absolute; padding: 0; border: 1px solid transparent; border-radius: 50%; background: transparent; cursor: pointer; pointer-events: auto; z-index: 2; }
 .note-target:hover, .note-target:focus-visible { border-color: #75ffb3; outline: 2px solid #75ffb3aa; background: #75ffb32e; }
 .empty-state { height: 100%; min-height: 420px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 35px; text-align: center; }
-.empty-state h1 { margin: 16px 0 6px; font: 600 31px/1.1 Georgia, serif; }.empty-state p { max-width: 480px; margin: 0 0 20px; color: #73746b; font-size: 14px; line-height: 1.6; }.empty-state small { margin-top: 12px; color: #8b8c81; }
+.empty-state h1 { margin: 16px 0 6px; font: 600 31px/1.1 Georgia, serif; }.empty-state p { max-width: 680px; margin: 0 0 20px; color: #73746b; font-size: 14px; line-height: 1.6; }.empty-state small { margin-top: 12px; color: #8b8c81; }
 .empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .empty-score { position: relative; width: 210px; height: 85px; display: grid; place-items: center; color: #525349; font: 58px Georgia, serif; }
 .empty-score span { position: relative; z-index: 2; padding: 0 9px; background: #dad9d0; }.empty-score i { position: absolute; left: 0; right: 0; height: 1px; background: #9a9b90; }.empty-score i:nth-of-type(1) { top: 20px; }.empty-score i:nth-of-type(2) { top: 31px; }.empty-score i:nth-of-type(3) { top: 42px; }.empty-score i:nth-of-type(4) { top: 53px; }.empty-score i:nth-of-type(5) { top: 64px; }

@@ -121,23 +121,35 @@ app.innerHTML = `
       <section class="help-card">
         <div class="help-card-header">
           <div>
-            <span class="help-kicker">TapConductor guide</span>
-            <h2 id="help-title">Help, privacy, and acknowledgements</h2>
-            <p id="help-summary" class="help-summary">Instructions and product information for TapConductor.</p>
+            <h2 id="Info</h2>
           </div>
           <button id="help-close" class="help-close" type="button" aria-label="Close help">×</button>
         </div>
         <nav class="help-jump-links" aria-label="Help topics">
-          <a href="#help-instructions">Instructions</a>
+        <a href="#about">About</a>  
+        <a href="#help-instructions">Instructions</a>
           <a href="#privacy">Privacy</a>
           <a href="#acknowledgements">Acknowledgements</a>
         </nav>
         <div class="help-content">
+          <section id="about"><h3>About TapConductor</h3>
+            <p>I made TapConductor for musicians like me whose piano skills aren't good enough or who have disabilities. You can use it <strong>with</strong> or <strong>without</strong> a piano for:
+              <ul>
+                <li>Leading a rehearsal, especially choirs learning <strong>unaccompanied</strong> or <strong>accompanied</strong> music</li>
+                <li>Accompanying other musicians in auditions or rehearsals</li>
+                <li>Accompanying yourself while you sing</li>
+                <li>Playing a piece on piano before you've learned the notes to experience the enjoyment of playing it before you learn how</li>
+                <li>Performing for an audience</li>
+                <li>Recording with MIDI to capture subtle expression, timing, and dynamics</li>
+                <li>(Caution) Pretending you can play piano music that's actually too difficult for you</li>
+              </ul>
+            </p>
+          </section>
           <section id="help-instructions" tabindex="-1"><h3>1. Open a score</h3><p>Select a MusicXML, compressed MusicXML, or MIDI file (file extensions .musicxml, .xml, .mxl, .mid, or .midi). If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read. If you only have a PDF, you can use a converter program to create a file TapConductor can read (such as Audiveris or MuseScore).</p></section>
           <section><h3>2. Configure audio settings</h3>
             <p>Use the Audio Out control to select the speakers or sound card to use. On Windows, an option marked (ASIO) is an installed ASIO driver and may provide lower latency on supported hardware. A driver such as ASIO4ALL can route to built-in Realtek speakers or headphones after that endpoint is enabled in the driver's control panel. ASIO is not automatically the best choice for every device or configuration; choose the output that is stable and responsive with your hardware.</p>
             <p id="instrument-help">Choose an instrument, either the grand piano or a synthesizer.</p>
-            <p>If you want to control TapConductor with a piano or another MIDI instrument, then plug in the instrument and select it from the MIDI In menu. You'll still be able to tap using normal mouse and keyboard controls too. When you use a piano, TapConductor will use the dynamics you play for each note. If you connect or reconnect a device while TapConductor is open, choose <b>Reload audio &amp; MIDI devices</b> from Audio Out.</p>
+            <p>If you want to control TapConductor with a piano or another MIDI instrument, then plug in the instrument and select it from the MIDI In menu. You'll still be able to tap using normal mouse and keyboard controls too. When you use a piano, TapConductor will use the dynamics you play for each note, and you can use a sustain pedal. If you connect or reconnect a device while TapConductor is open, choose <b>Reload audio &amp; MIDI devices</b> from Audio Out.</p>
             <p>The MIDI OUT setting is only needed if you want to route your performance to another program for recording or further manipulation. For normal playing, it's not necessary.</p>
             <p>By default, all staves (parts) will play during tapping, but you can select specific staves in the PARTS menu.</p>
           </section>
@@ -183,17 +195,17 @@ app.innerHTML = `
         </div>
         <div id="score-scroll" class="score-scroll">
           <div id="empty-state" class="empty-state">
-            <h1>Play sheet music by tapping.</h1>
-            <p>Open your sheet music score in TapConductor using any of these file formats: <b>.musicxml</b>, <b>.xml</b>, <b>.mxl</b>, <b>.mid</b>, <b>.midi</b>.</p>
+            <h1>Play sheet music by tapping</h1>
+            <p>If your piano skills aren't great or if you don't have a piano, TapConductor can help you accompany other musicians, lead a rehearsal, or make a recording.</p>
+            <p>TapConductor reads any of these file formats: <b>.musicxml</b>, <b>.xml</b>, <b>.mxl</b>, <b>.mid</b>, <b>.midi</b>.</p>
             <p>If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read.
-            <p>If you only have a PDF, you can use a converter program to create a file TapConductor can read (such as Audiveris or MuseScore).</p>
+            <p>If you only have a PDF, you can use a converter program to create a file TapConductor can read (free options like Audiveris or MuseScore or paid options like SmartScore, PlayScore, Soundslice, NewZik, or PhotoScore).</p>
             <div class="empty-actions" aria-label="Choose a score">
               <button id="empty-open" class="primary-button large" type="button">Open a score</button>
               <button id="demo-choir-open" class="secondary-button large" type="button">Demo choir score</button>
               <button id="demo-piano-open" class="secondary-button large" type="button">Demo piano score</button>
             </div>
-            <small>Every tap plays the next written note or chord. You can also connect a piano or other MIDI instruments and control dynamics.</small>
-            <small>Use any keyboard keys, mouse, tapping the touchscreen, or MIDI</small>
+            <p>Every tap on your keyboard or mouse plays the next written note or chord. You can also connect a piano or other MIDI instruments and control dynamics. The key/note you press doesn't matter; TapConductor will always play the right notes.</p>
           </div>
           <div id="score-stage" class="score-stage hidden">
             <div id="score-highlights" class="score-highlights"></div>

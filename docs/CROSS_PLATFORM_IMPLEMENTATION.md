@@ -253,9 +253,10 @@ The controlling rules are the current App Review Guidelines:
 - 5.2.1: retain rights evidence for code, icons, fonts, and the CC BY 3.0 piano.
 
 The privacy manifest declares no tracking and lists the pseudonymous device identifier, product
-interaction, crash/diagnostic/performance data, and derived coarse country used by opted-in
-telemetry, plus required-reason API categories for local files, timing, and preferences. App Store
-Connect privacy answers must match it. Inspect Xcode's generated privacy report before every upload.
+interaction, crash/diagnostic/performance data, and PostHog-derived coarse country/region used by
+opted-in telemetry, plus required-reason API categories for local files, timing, and preferences.
+App Store Connect privacy answers must match it. Inspect Xcode's generated privacy report before
+every upload.
 
 ## Verification matrix
 

@@ -3,7 +3,7 @@
  *
  * This module deliberately avoids vendor SDKs. Product events are small, typed at
  * their call sites, persisted in a bounded queue, and sent through PostHog's batch
- * endpoint (or the schema-validating relay). It never sees score contents, paths,
+ * endpoint. It never sees score contents, paths,
  * device names, MIDI messages, or real-time audio callbacks.
  */
 
@@ -687,11 +687,10 @@ export class TelemetryClient {
 export function createTelemetryConfig(webBuild: boolean): TelemetryConfig {
   const projectKey = import.meta.env.VITE_POSTHOG_PROJECT_KEY?.trim()
     || DEFAULT_POSTHOG_PROJECT_KEY;
-  const relay = import.meta.env.VITE_TELEMETRY_ENDPOINT?.trim();
   const host = import.meta.env.VITE_POSTHOG_HOST?.trim() || "https://us.i.posthog.com";
   return {
     posthogProjectKey: projectKey,
-    endpoint: relay || `${host.replace(/\/$/, "")}/batch/`,
+    endpoint: `${host.replace(/\/$/, "")}/batch/`,
     appVersion: __TAPCONDUCTOR_VERSION__,
     buildNumber: import.meta.env.VITE_BUILD_NUMBER?.trim() || __TAPCONDUCTOR_VERSION__,
     releaseChannel: import.meta.env.VITE_RELEASE_CHANNEL?.trim() || "production",

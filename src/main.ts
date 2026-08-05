@@ -176,7 +176,7 @@ app.innerHTML = `
           </section>
           <section id="privacy" class="legal-disclosure" tabindex="-1">
             <h3>Privacy</h3>
-            <p>TapConductor processes scores and performances locally. If usage and crash sharing is enabled, it sends pseudonymous application usage, coarse system/settings categories, country, and sanitized error summaries. It never sends score contents or names, paths, MIDI messages, device names, precise location, or contact information.</p>
+            <p>TapConductor processes scores and performances locally. If usage and crash sharing is enabled, it sends pseudonymous application usage, coarse system/settings categories, and sanitized error summaries directly to PostHog. PostHog derives approximate country/region from the network connection. TapConductor never sends score contents or names, paths, MIDI messages, device names, precise location, or contact information.</p>
             <p>On iPadOS and macOS, a score chosen through the document picker is copied into TapConductor's private app storage so the sandboxed app can read it. Your original document is not changed. The imported copy may remain in app storage until the operating system clears it or you clear or remove the app's data.</p>
             <label class="telemetry-choice"><input id="telemetry-toggle" type="checkbox" /> <span><b>Share usage and crash data</b><small id="telemetry-status">Checking…</small></span></label>
             <button id="telemetry-copy-id" class="secondary-button" type="button">Copy telemetry identifier</button>
@@ -200,7 +200,7 @@ app.innerHTML = `
         </div>
         <div class="help-content">
           <section>
-            <p id="telemetry-consent-summary">Share pseudonymous installs, launches, score type and length, settings categories, session totals, and sanitized errors. Country is derived from the network connection. Scores, filenames, paths, device names, MIDI notes, and precise location are never sent.</p>
+            <p id="telemetry-consent-summary">Share pseudonymous installs, launches, score type and length, settings categories, session totals, and sanitized errors directly with PostHog. PostHog derives approximate country/region from the network connection. Scores, filenames, paths, device names, MIDI notes, and precise location are never sent.</p>
           </section>
         </div>
         <div class="telemetry-consent-actions">

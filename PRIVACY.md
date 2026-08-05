@@ -36,8 +36,9 @@ When **Share usage and crash data** is on, TapConductor may send:
   count of repeated occurrences, never raw exception text, paths, score fragments, or device names;
 - random device-instance, installation, session, event, and error correlation identifiers; OS
   family/version, CPU architecture, application platform, locale, timestamp, and release channel;
-- a two-letter country code derived by the relay from the network connection. TapConductor does not
-  request location permission or retain city, coordinates, postal code, or the source IP.
+- approximate country/region derived by PostHog from the direct network connection. TapConductor
+  does not request location permission or add an IP address, city, coordinates, or postal code to
+  the event payload.
 
 The identifiers are random and are not derived from hardware serials, advertising identifiers,
 email, login, username, or contact information. The data is pseudonymous, not anonymous, because
@@ -50,16 +51,18 @@ most one batch every five minutes when events exist. First consented install/lau
 immediately, and a graceful close attempts one final batch. A healthy open-but-idle app sends no
 heartbeat or polling request. Repeating handled errors are combined locally before upload.
 
-The production ingestion relay is operated on Cloudflare and validates a strict schema, derives
-country, and forwards accepted data to PostHog in the United States. The relay does not log or
-forward the source IP. PostHog is used for product analytics and handled-error aggregates with
-person profiles, autocapture, cookies, replay, and advertising features disabled. Release owners
-must configure product data retention to no more than 12 months.
+The app sends consented batches directly to PostHog in the United States; TapConductor operates no
+telemetry intermediary. As with any direct HTTPS service, PostHog receives the connection's source
+IP for network delivery and may process it for approximate geographic enrichment. TapConductor does
+not include the IP as an event property. PostHog is used for product analytics and handled-error
+aggregates with person profiles, autocapture, cookies, replay, and advertising features disabled.
+Release owners must configure PostHog privacy controls and product-data retention of no more than
+12 months.
 
 Sentry is not used for ordinary handled errors. A future release may enable it only for fatal native
 crash dumps that cannot be diagnosed adequately in PostHog; that release must use a project DSN,
 scrub personal data, update store disclosures, and apply a retention period no longer than 90 days.
-Cloudflare, PostHog, Apple, Microsoft, and distribution stores may independently process ordinary
+PostHog, Apple, Microsoft, and distribution stores may independently process ordinary
 service, download, or crash information under their own policies.
 
 ## User choices and deletion

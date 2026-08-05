@@ -307,19 +307,17 @@ The recommended initial services are:
 - **PostHog Cloud US** for product events, handled-error aggregates, funnels, retention, and
   dashboards. Use only its batch capture API; disable autocapture, person profiles, session replay,
   surveys, cookies, and feature flags. Every event includes the application version. The host remains
-  configurable for an EU project or a later self-hosted deployment.
+  configurable for an EU project or a later self-hosted deployment. The client sends directly to
+  PostHog with its embedded public project ingestion token; no application backend, proxy, custom
+  domain, or Cloudflare account is required.
 - **Sentry only for fatal native crashes that PostHog cannot symbolicate reliably on a target.** Do
   not send ordinary handled/recoverable errors to Sentry. Keep tracing, replay, logs, and automatic
   breadcrumbs disabled. A base build does not initialize Sentry; enable a platform adapter only after
   a deliberate Windows, macOS, or iPadOS crash test proves that PostHog cannot provide the required
   dump and symbolication. This makes Sentry's 5,000-error free allowance a fatal-crash budget rather
   than a product-error budget.
-- A very small first-party HTTPS ingestion relay (`telemetry.tapconductor.app/v1/events`) in front of
-  PostHog. It validates an allow-listed schema, rejects oversized/unknown properties, rate-limits,
-  derives only an ISO country code from the connection, discards the source IP, and forwards a batch
-  to the selected backend. An edge/serverless worker is sufficient at expected volume. The client
-  talks directly to an enabled Sentry native-crash adapter because a fatal process cannot depend on
-  application code; Sentry's PII scrubbing must be enabled.
+- The client talks directly to an enabled Sentry native-crash adapter because a fatal process cannot
+  depend on application code; Sentry's PII scrubbing must be enabled.
 
 At the August 2026 public free-tier limits, PostHog's one million product-analytics events per month
 should be ample for an initial TapConductor release; batching reduces requests but does not reduce
@@ -335,12 +333,13 @@ Do not put OpenTelemetry Collector or a general logging agent on customer device
 events so an OTLP exporter can be added behind the typed telemetry API; OTLP is a useful vendor-neutral
 transport, but its full SDK/collector stack is unnecessary for these low-volume product events.
 
-The public PostHog project token is not an administrative secret, but the relay is still valuable: it
-prevents arbitrary properties and raw IP addresses from reaching the analytics store, provides an
-emergency kill switch, and makes backend migration invisible to released clients. A direct
-PostHog sink is an acceptable beta fallback if the relay is unavailable; in that mode disable IP
-retention at both organization and project level and accept that country enrichment is controlled by
-the processor rather than TapConductor.
+The public PostHog project token is not an administrative secret and is intentionally embedded in
+released clients. The typed client is the schema and data-minimization boundary: it creates only
+allow-listed properties, enforces queue and batch limits, and posts directly to PostHog's `/batch/`
+endpoint. PostHog receives the connection's source IP as part of direct HTTPS delivery and may use
+it for approximate geographic enrichment. TapConductor does not add an IP property or request OS
+location permission. PostHog project privacy, access, and retention controls therefore form part of
+the production configuration.
 
 ### Consent and privacy behavior
 
@@ -376,10 +375,11 @@ Apple classifies product interaction, device identifiers, crash data, performanc
 coarse location as collected data even when the identifiers are pseudonymous. Do not describe this
 as anonymous in legal copy; **pseudonymous usage and diagnostic data** is accurate.
 
-Never collect a hardware serial, advertising ID, IDFV, MAC address, username, email address, IP
-address, exact location, score/file name or path, title/composer text, score contents, MIDI messages,
-MIDI/audio device names, or a hash that could identify a user's file. Region means country code
-derived at the relay, never GPS or OS location permission.
+Never collect a hardware serial, advertising ID, IDFV, MAC address, username, email address, exact
+location, score/file name or path, title/composer text, score contents, MIDI messages, MIDI/audio
+device names, or a hash that could identify a user's file. Never add the connection IP address to
+the event payload. Region means country code or broader approximate region derived by PostHog from
+the network connection, never GPS or OS location permission.
 
 ### Identity, time, and common envelope
 
@@ -396,7 +396,7 @@ Each accepted event uses random UUID values generated locally:
   data container.
 - `session_id`: random ID created for every document/process launch. Foreground/resume remains part
   of that launch session; an operating-system process restart creates a new one.
-- `event_id`: unique ID used by the relay/backend for deduplication. `error_id` additionally links an
+- `event_id`: unique ID used by PostHog for deduplication. `error_id` additionally links an
   error event to its Sentry issue/event where available.
 
 Every event has this allow-listed envelope:
@@ -406,13 +406,14 @@ event_name, schema_version, event_id, occurred_at_utc,
 device_instance_id, installation_id, session_id,
 app_version, build_number, release_channel,
 os_family, os_version, cpu_arch, app_platform,
-country_code, locale, telemetry_sdk_version
+locale, telemetry_sdk_version
 ```
 
 The client sets `occurred_at_utc`; durations use a monotonic clock and are not derived by subtracting
-wall-clock timestamps. The relay overwrites `country_code` from its edge metadata and rejects client
-claims for that field. Record only country, not city, latitude/longitude, postal code, or full time
-zone. `locale` is useful for localization prioritization but must not be repurposed as region.
+wall-clock timestamps. Approximate country/region is PostHog ingestion enrichment rather than a
+client-supplied envelope field. Product dashboards should use only country/region granularity, not
+city, coordinates, postal code, or a precise location. `locale` is useful for localization
+prioritization but must not be repurposed as region.
 
 An "install" cannot be observed at installer/store download time by application code. For native
 packages, define `app_installed` as **first consented launch of a newly created application-data
@@ -508,7 +509,7 @@ CI/server credential and must never ship in the app; the crash client uses a pro
 Telemetry must be impossible to observe from the performance path:
 
 ```text
-shared UI lifecycle + settings + errors --> bounded local queue --> HTTPS relay --> PostHog
+shared UI lifecycle + settings + errors --> bounded local queue --> PostHog batch API
 audio/MIDI/performance callbacks -------> normal product events only; no telemetry work
 accepted tap at UI/core boundary -------> in-memory counter --> 60-second local checkpoint
 optional fatal native crash adapter -----------------------------------------------> Sentry
@@ -532,11 +533,12 @@ optional fatal native crash adapter --------------------------------------------
   spool can replace it later without changing instrumentation.
 - Flush for at most 150 ms on graceful desktop close; do not delay a mobile suspend or application
   shutdown beyond the platform deadline. Remaining events stay in the spool for the next launch.
-- Treat all telemetry failures as silent, non-user-facing failures. Relay/WAF configuration supplies
-  the emergency kill switch; telemetry startup never delays the product's Ready state.
+- Treat all telemetry failures as silent, non-user-facing failures. PostHog project ingestion
+  controls provide an operational kill switch; disabling capture in a subsequent release provides
+  the client-side kill switch. Telemetry startup never delays the product's Ready state.
 
 Acceptance tests must prove that opt-out performs zero telemetry DNS/HTTP calls, wipes the spool,
-and disables any optional Sentry adapter; forbidden fields are rejected by both client and relay; duplicate `event_id`
+and disables any optional Sentry adapter; the client strips or rejects forbidden fields; duplicate `event_id`
 values are idempotent; clocks changing do not corrupt durations; offline queues remain bounded; a
 stalled endpoint does not affect launch, score load, MIDI, or audio latency. Before an optional
 Sentry adapter is enabled, its crash reports from Windows, macOS, and iPadOS must be symbolicated and

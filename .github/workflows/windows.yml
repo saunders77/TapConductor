@@ -13,7 +13,6 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 45
     env:
-      VITE_TELEMETRY_ENDPOINT: https://telemetry.tapconductor.app/v1/events
       VITE_BUILD_NUMBER: ${{ github.run_number }}
       VITE_RELEASE_CHANNEL: ci
 

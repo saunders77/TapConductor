@@ -2,60 +2,46 @@
 
 ## Release configuration
 
+TapConductor sends consented telemetry batches directly to PostHog Cloud. There is no TapConductor
+telemetry server, proxy, relay, Cloudflare account, or custom telemetry domain to deploy.
+
 TapConductor's public PostHog project ingestion token is compiled into the client. This is
-intentional: released clients must include it in direct PostHog capture calls, and it cannot read
-analytics or administer the project. It is not equivalent to a PostHog personal API key. Production
-builds therefore show the first-run telemetry choice without requiring a build secret.
+intentional: every direct capture request must contain it, and it cannot read analytics or
+administer the project. It is not equivalent to a PostHog personal API key. Project ID **544266** is
+useful for PostHog administration/API tooling but is not needed by the capture client. Standard
+local and GitHub release builds require no PostHog secret.
 
-The matching public token is also compiled into the relay, which replaces any client-supplied
-`api_key` before forwarding a validated batch. No PostHog key setup is required for the standard
-TapConductor project. Project ID **544266** is useful for PostHog administration/API tooling but is
-not needed by the capture client.
-
-For a staging project or fork, copy `.env.example` to `.env.local` and optionally override:
+The default client posts to the US ingestion endpoint. For a staging project, EU project, or fork,
+copy `.env.example` to `.env.local` and override only what is needed:
 
 ```dotenv
 VITE_POSTHOG_PROJECT_KEY=phc_staging_or_fork_project_token
-VITE_TELEMETRY_ENDPOINT=https://telemetry.tapconductor.app/v1/events
+VITE_POSTHOG_HOST=https://eu.i.posthog.com
 VITE_BUILD_NUMBER=your_build_number
 VITE_RELEASE_CHANNEL=production
 ```
 
-The standard GitHub workflows do not require a PostHog secret. Confirm that project 544266 is in the
-US region; otherwise change both `VITE_POSTHOG_HOST` and the relay's `POSTHOG_HOST` to the EU
-ingestion host. When rotating or changing the production project token, update both
-`DEFAULT_POSTHOG_PROJECT_KEY` in `src/telemetry.ts` and `DEFAULT_POSTHOG_PROJECT_TOKEN` in the relay,
-or provide matching build/Worker overrides.
-
-## Deploy the relay
-
-Follow `infra/telemetry-relay/README.md`. In outline:
-
-1. Put `telemetry.tapconductor.app` on a Cloudflare-managed zone.
-2. Review the allow-listed browser and Tauri origins in `wrangler.jsonc`.
-3. Deploy, then send a schema-valid canary batch and confirm the country code is present and no IP
-   property is stored in PostHog.
-4. Keep the Cloudflare rate-limit binding/WAF rule enabled and ensure Worker request logging does not
-   retain request bodies or source IPs beyond Cloudflare's necessary service logs.
-
-The Worker needs no secret for the standard production project. A staging/fork deployment may set
-`POSTHOG_PROJECT_TOKEN` as a Worker secret to override the compiled public token without changing
-source.
-
-Until the relay is ready, omitting `VITE_TELEMETRY_ENDPOINT` uses the configured PostHog host's
-`/batch/` endpoint directly. That is suitable only for beta testing; configure PostHog to discard IP
-data and understand that country derivation then follows PostHog's processing rather than the relay.
+Confirm that project 544266 is hosted in PostHog's US region. If it is an EU project, set
+`VITE_POSTHOG_HOST=https://eu.i.posthog.com` in release builds. When rotating or changing the
+production project token, update `DEFAULT_POSTHOG_PROJECT_KEY` in `src/telemetry.ts`. A public
+ingestion token may be present in source and shipped binaries; personal API keys must never be.
 
 ## PostHog project checklist
 
 - Disable autocapture, person profiles, session replay, surveys, cookies, and feature flags.
+- Keep GeoIP enrichment enabled if country/region reporting is required. The direct HTTPS request
+  exposes its source IP to PostHog for network delivery and approximate geolocation; TapConductor
+  does not add an IP property or request OS location permission. Configure PostHog's privacy and
+  retention controls accordingly.
 - Set product-event retention to no more than 12 months and document the exact configured value.
-- Create dashboards for installs/launches by app version/OS/country, active time and taps, score
-  format/source/length/load result, settings adoption, and `app_error` occurrence counts.
+- Create dashboards for installs/launches by app version/OS/country/region, active time and taps,
+  score format/source/length/load result, settings adoption, and `app_error` occurrence counts.
 - Define alerts at 50%, 75%, and 90% of the monthly product-event allowance. A batch request still
   contains individually billable events.
 - Verify `$insert_id` deduplication by replaying a canary event ID.
-- Test opt-out with a network inspector: zero relay/PostHog requests, including while idle.
+- Test opt-out with a network inspector: zero PostHog requests, including while idle.
+- Verify a consented event reaches `https://us.i.posthog.com/batch/` (or the configured EU host),
+  includes `app_version`, and contains none of the forbidden fields listed in `PRIVACY.md`.
 
 ## Sentry decision and credentials
 
@@ -85,12 +71,11 @@ Run:
 ```text
 npx tsc --noEmit
 npm run test:telemetry
-npm run test:telemetry-relay
 cargo test --locked --workspace
 cargo fmt --all -- --check
 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 ```
 
 Then manually verify initial Continue/Do not share, later opt-in/out, identifier reset/copy, install
-and launch cardinality, five-minute batching, graceful close, idle network silence, offline recovery,
-and the Rust panic-marker recovery flow on every release platform.
+and launch cardinality, direct PostHog delivery, five-minute batching, graceful close, idle network
+silence, offline recovery, and the Rust panic-marker recovery flow on every release platform.

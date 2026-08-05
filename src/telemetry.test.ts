@@ -24,11 +24,13 @@ function harness() {
   let nextTimer = 0;
   const storage = new MemoryStorage();
   const requests: Array<Record<string, unknown>> = [];
+  const requestUrls: string[] = [];
   const timeouts = new Map<number, () => void>();
   const intervals = new Map<number, () => void>();
   const dependencies: TelemetryDependencies = {
     storage,
-    fetch: (async (_input, init) => {
+    fetch: (async (input, init) => {
+      requestUrls.push(String(input));
       requests.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
       return new Response(null, { status: 200 });
     }) as typeof fetch,
@@ -54,7 +56,7 @@ function harness() {
   };
   const config: TelemetryConfig = {
     posthogProjectKey: "phc_test",
-    endpoint: "https://telemetry.example/v1/events",
+    endpoint: "https://us.i.posthog.com/batch/",
     appVersion: "1.2.3",
     buildNumber: "45",
     releaseChannel: "test",
@@ -63,6 +65,7 @@ function harness() {
   return {
     client: new TelemetryClient(config, dependencies),
     requests,
+    requestUrls,
     storage,
     timeouts,
     intervals,
@@ -86,6 +89,8 @@ test("first opt-in immediately sends one install and one launch with app version
   state.client.enable();
   await settle();
   assert.equal(state.requests.length, 1);
+  assert.deepEqual(state.requestUrls, ["https://us.i.posthog.com/batch/"]);
+  assert.equal(state.requests[0]!.api_key, "phc_test");
   assert.deepEqual(events(state.requests[0]!).map((event) => event.event), ["app_installed", "session_started"]);
   for (const event of events(state.requests[0]!)) {
     assert.equal((event.properties as Record<string, unknown>).app_version, "1.2.3");

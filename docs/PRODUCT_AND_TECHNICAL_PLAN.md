@@ -181,8 +181,8 @@ audio or own the authoritative performance cursor.
   an installed ASIO driver.
 - Windows performance backend: native vendor ASIO, prioritized for interfaces such as the Roland
   QUAD-CAPTURE where acoustic tests show that the ASIO path materially outperforms WASAPI. The
-  Steinberg SDK has GPLv3 and proprietary licensing routes; TapConductor uses the GPLv3 route and
-  the entire application is now distributed under GPLv3-only terms.
+  Steinberg SDK has GPLv3 and proprietary licensing routes; TapConductor uses the GPLv3 route on
+  Windows, whose release is GPLv3-only. Releases for all other platforms use the MIT License.
 - Prototype/enumeration backend: `cpal`, which supports WASAPI, optional ASIO, macOS CoreAudio, and
   iOS CoreAudio. Use it to validate the engine quickly, not as an excuse to accept a larger buffer.
 - Apple port: CoreAudio through `cpal` initially, with `AVAudioSession` configured for playback and

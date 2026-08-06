@@ -69,7 +69,7 @@ software alone. Ableton's local preferences confirm that its low-latency compari
 ASIO's different driver path is therefore the leading explanation for the acoustic difference.
 
 Native ASIO support is implemented through CPAL and Steinberg's open SDK. TapConductor elects the
-SDK's GPLv3 route and the repository is licensed GPLv3-only. The ASIO path still requires physical
+SDK's GPLv3 route and the Windows release is licensed GPLv3-only. Non-Windows releases use MIT. The ASIO path still requires physical
 loopback and sustained-load qualification on each driver and buffer setting before release claims
 can be made.
 

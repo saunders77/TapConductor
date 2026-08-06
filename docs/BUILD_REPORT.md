@@ -104,8 +104,9 @@ Version: 0.1.0
 
 ## Previous artifacts (superseded)
 
-These hashes identify the pre-ASIO MIT build and must not be distributed as the current GPLv3 ASIO
-version. Produce fresh signed artifacts after native ASIO CI and hardware qualification pass.
+These hashes identify the pre-ASIO Windows MIT build and must not be distributed as the current
+GPLv3 Windows ASIO version. Produce fresh signed artifacts after native ASIO CI and hardware
+qualification pass.
 
 | Artifact | Size | SHA-256 |
 | --- | ---: | --- |

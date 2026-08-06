@@ -2,7 +2,7 @@
 name = "tapconductor-app"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
+license-file.workspace = true
 authors.workspace = true
 description = "Low-latency score performance application"
 

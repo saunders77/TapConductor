@@ -288,8 +288,7 @@ Source engineering cannot manufacture Partner Center/App Store Connect enrollmen
 identities, product reservations, certificates, profiles, devices, API keys, immutable hosting,
 listing decisions, review approval, or physical audio/MIDI results.
 
-There is also a licensing gate. The project is GPL-3.0-only, influenced by the Windows ASIO route.
-Before an Apple App Store upload, copyright owners need qualified legal review and, if necessary, a
-contributor-approved App Store exception or dual license. Developer ID macOS distribution can proceed
-under GPL compliance while that Store-specific question is resolved. Every release must include the
-GPL license, corresponding source/build inputs, notices, and piano CC BY attribution.
+Licensing is platform-specific. Windows releases are GPL-3.0-only because they use the GPLv3 ASIO
+SDK route; releases for every other platform use the MIT License. Windows releases must include the
+GPL license and corresponding source/build inputs. Non-Windows releases must include the MIT license.
+Every release must also include third-party notices and the piano CC BY attribution.

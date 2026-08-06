@@ -37,14 +37,14 @@
       "../assets/SlenderSalamander44khz16bit": "instruments/salamander",
       "../assets/demo/Prelude in C Minor - Chopin 1839.musicxml": "demo/Prelude in C Minor - Chopin 1839.musicxml",
       "../assets/demo/All-Night Vigil - Rachmaninoff 1915.musicxml": "demo/All-Night Vigil - Rachmaninoff 1915.musicxml",
-      "../LICENSE": "LICENSE",
+      "../LICENSING.md": "LICENSING.md",
       "../PRIVACY.md": "PRIVACY.md",
       "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
     },
     "category": "Music",
     "shortDescription": "Perform written scores one tap at a time.",
     "longDescription": "TapConductor plays each rhythmically aligned note or chord in a score exactly when the performer taps.",
-    "copyright": "Copyright © 2026 TapConductor contributors",
+    "copyright": "Copyright © 2026 Michael Saunders",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

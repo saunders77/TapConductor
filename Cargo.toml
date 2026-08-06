@@ -14,8 +14,8 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-license = "GPL-3.0-only"
-authors = ["TapConductor contributors"]
+license-file = "LICENSING.md"
+authors = ["Michael Saunders"]
 repository = "https://github.com/saunders77/TapConductor"
 
 [workspace.dependencies]

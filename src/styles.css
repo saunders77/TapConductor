@@ -163,6 +163,7 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .help-card h2 { margin: 4px 0 0; font: 600 27px/1.1 Georgia, serif; }.help-card h3 { margin: 0 0 4px; font-size: 14px; }.help-card p { margin: 0; color: #5d5f56; font-size: 13px; line-height: 1.5; }
 .help-close { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 7px; background: #fff; cursor: pointer; font-size: 24px; line-height: 1; }.help-close:hover, .help-close:focus-visible { border-color: #75ffb3; background: #75ffb32e; outline: none; }
 .help-content { display: grid; gap: 16px; padding: 19px 0; }.help-content section { padding-left: 14px; border-left: 3px solid #75ffb3; }
+.help-content p + p { margin-top: 10px; }
 .help-demo-links { margin-top: 8px !important; }
 .telemetry-consent { z-index: 260; }
 .telemetry-consent-card { width: min(560px, 100%); }

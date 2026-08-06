@@ -202,4 +202,6 @@ WebView.
   loopback and sustained-load testing on representative Windows audio hardware.
 
 See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for direct dependency licenses. TapConductor
-source and distributed binaries are licensed under the [GNU GPL version 3 only](LICENSE).
+for Windows is licensed under [GNU GPL version 3 only](LICENSE); TapConductor for every other
+platform is licensed under the [MIT License](LICENSE-MIT). See the complete
+[platform-specific licensing policy](LICENSING.md). Copyright (c) 2026 Michael Saunders.

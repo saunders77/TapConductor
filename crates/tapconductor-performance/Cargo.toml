@@ -3,7 +3,7 @@ name = "tapconductor-performance"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.75"
-license = "GPL-3.0-only"
+license-file.workspace = true
 description = "Deterministic score cursor and gesture gate state machine for TapConductor"
 publish = false
 

@@ -99,7 +99,7 @@ app.innerHTML = `
         <span>Legato</span>
         <span class="switch-control"><input id="legato-mode" type="checkbox" role="switch" aria-label="Legato mode" /><span aria-hidden="true"></span><strong id="legato-value">Off</strong></span>
       </label>
-      <label class="range-field delay-field" title="Set the delay between notes when regular score chords are rolled.">
+      <label class="range-field delay-field" title="Set the delay between notes in a chord when you tap (normally no delay, but a roll can help you hear individual notes better for rehearsal).">
         <span>Tap Roll <output id="regular-roll-value">0 ms</output></span>
         <input id="regular-roll" type="range" min="0" max="250" value="0" />
       </label>
@@ -107,7 +107,7 @@ app.innerHTML = `
         <span>Volume <output id="volume-value">100%</output></span>
         <input id="volume" type="range" min="0" max="100" value="100" />
       </label>
-      <label class="range-field delay-field" title="Set the delay between notes when auditioned chords are rolled.">
+      <label class="range-field delay-field" title="Set the delay between notes when you use the 'Play single chord' button.">
         <span>Chord Roll <output id="audition-roll-value">120 ms</output></span>
         <input id="audition-roll" type="range" min="0" max="250" value="120" />
       </label>

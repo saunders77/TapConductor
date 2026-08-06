@@ -4,8 +4,8 @@
     "targets": ["app", "dmg"],
     "resources": {
       "../assets/SlenderSalamander44khz16bit": "instruments/salamander",
-      "../assets/demo/Prelude in C Minor - Chopin 1839.mxl": "demo/Prelude in C Minor - Chopin 1839.mxl",
-      "../assets/demo/All-Night Vigil - Rachmaninoff 1915.mxl": "demo/All-Night Vigil - Rachmaninoff 1915.mxl",
+      "../assets/demo/Prelude in C Minor - Chopin 1839.musicxml": "demo/Prelude in C Minor - Chopin 1839.musicxml",
+      "../assets/demo/All-Night Vigil - Rachmaninoff 1915.musicxml": "demo/All-Night Vigil - Rachmaninoff 1915.musicxml",
       "../LICENSE": "LICENSE",
       "../PRIVACY.md": "PRIVACY.md",
       "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",

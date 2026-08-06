@@ -196,8 +196,8 @@ mod tests {
     #[test]
     fn bundled_demo_scores_are_importable() {
         for file_name in [
-            "Prelude in C Minor - Chopin 1839.mxl",
-            "All-Night Vigil - Rachmaninoff 1915.mxl",
+            "Prelude in C Minor - Chopin 1839.musicxml",
+            "All-Night Vigil - Rachmaninoff 1915.musicxml",
         ] {
             let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("../assets/demo")

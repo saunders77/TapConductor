@@ -40,11 +40,11 @@ const wasmBinaryUrl = dataUrl(
 
 const pianoDemoUrl = dataUrl(
   "application/vnd.recordare.musicxml+xml",
-  resolve(root, "assets", "demo", "Prelude in C Minor - Chopin 1839.mxl"),
+  resolve(root, "assets", "demo", "Prelude in C Minor - Chopin 1839.musicxml"),
 );
 const choirDemoUrl = dataUrl(
   "application/vnd.recordare.musicxml",
-  resolve(root, "assets", "demo", "All-Night Vigil - Rachmaninoff 1915.mxl"),
+  resolve(root, "assets", "demo", "All-Night Vigil - Rachmaninoff 1915.musicxml"),
 );
 const fingerUrl = dataUrl(
   "image/png",

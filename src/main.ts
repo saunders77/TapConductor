@@ -125,11 +125,11 @@ app.innerHTML = `
 
     <aside id="diagnostics-popover" class="popover diagnostics hidden" aria-label="Audio diagnostics"></aside>
 
-    <div id="help-overlay" class="help-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="help-title" aria-describedby="help-summary">
+    <div id="help-overlay" class="help-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="help-title">
       <section class="help-card">
         <div class="help-card-header">
           <div>
-            <h2 id="Info</h2>
+            <h2 id="help-title">Info</h2>
           </div>
           <button id="help-close" class="help-close" type="button" aria-label="Close help">×</button>
         </div>
@@ -153,7 +153,7 @@ app.innerHTML = `
               </ul>
             </p>
           </section>
-          <section id="help-instructions" tabindex="-1"><h3>1. Open a score</h3><p>Select a MusicXML, compressed MusicXML, or MIDI file (file extensions .musicxml, .xml, .mxl, .mid, or .midi). If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read. If you only have a PDF, you can use a converter program to create a file TapConductor can read (such as Audiveris or MuseScore).</p></section>
+          <section id="help-instructions" tabindex="-1"><h3>1. Open a score</h3><p>Select a MusicXML, compressed MusicXML, or MIDI file (file extensions .musicxml, .xml, .mxl, .mid, or .midi). If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read. If you only have a PDF, you can use a converter program to create a file TapConductor can read (such as Audiveris or MuseScore).</p><p class="help-demo-links">Or open one of the included examples: <a id="help-demo-choir-open" href="#">demo choir score</a> or <a id="help-demo-piano-open" href="#">demo piano score</a>.</p></section>
           <section><h3>2. Configure audio settings</h3>
             <p>Use the Audio Out control to select the speakers or sound card to use. On Windows, an option marked (ASIO) is an installed ASIO driver and may provide lower latency on supported hardware. A driver such as ASIO4ALL can route to built-in Realtek speakers or headphones after that endpoint is enabled in the driver's control panel. ASIO is not automatically the best choice for every device or configuration; choose the output that is stable and responsive with your hardware.</p>
             <p id="instrument-help">Choose an instrument, either the grand piano or a synthesizer.</p>
@@ -288,6 +288,8 @@ const elements = {
   helpOverlay: byId("help-overlay"),
   helpClose: byId<HTMLButtonElement>("help-close"),
   helpDone: byId<HTMLButtonElement>("help-done"),
+  helpDemoChoirOpen: byId<HTMLAnchorElement>("help-demo-choir-open"),
+  helpDemoPianoOpen: byId<HTMLAnchorElement>("help-demo-piano-open"),
   telemetryConsent: byId("telemetry-consent"),
   telemetryContinue: byId<HTMLButtonElement>("telemetry-continue"),
   telemetryDecline: byId<HTMLButtonElement>("telemetry-decline"),
@@ -2278,6 +2280,16 @@ elements.helpButton.addEventListener("click", () => {
 });
 elements.helpClose.addEventListener("click", closeHelp);
 elements.helpDone.addEventListener("click", closeHelp);
+elements.helpDemoChoirOpen.addEventListener("click", (event) => {
+  event.preventDefault();
+  closeHelp();
+  void loadDemoScore("choir");
+});
+elements.helpDemoPianoOpen.addEventListener("click", (event) => {
+  event.preventDefault();
+  closeHelp();
+  void loadDemoScore("piano");
+});
 elements.helpOverlay.addEventListener("pointerdown", (event) => {
   if (event.target === elements.helpOverlay) closeHelp();
 });

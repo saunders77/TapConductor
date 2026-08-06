@@ -156,11 +156,14 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .diagnostics { width: 330px; }.diagnostics div { display: flex; justify-content: space-between; gap: 15px; padding: 7px 0; border-top: 1px solid #ecebe2; font-size: 11px; }.diagnostics div span { color: var(--muted); }.diagnostics div b { text-align: right; }
 .help-overlay { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 24px; background: #171813ad; }
 .help-card { width: min(620px, 100%); max-height: min(720px, calc(100vh - 48px)); overflow: auto; padding: 24px; border: 1px solid #d8d7cd; border-radius: 14px; background: #fffef8; box-shadow: 0 24px 64px #0008; }
+#help-overlay { padding: 0; background: #fffef8; }
+#help-overlay > .help-card { width: 100%; height: 100%; max-height: none; padding: max(24px, env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-right, 0px)) max(24px, env(safe-area-inset-bottom, 0px)) max(24px, env(safe-area-inset-left, 0px)); border: 0; border-radius: 0; box-shadow: none; }
 .help-card-header { display: flex; justify-content: space-between; gap: 18px; align-items: start; padding-bottom: 15px; border-bottom: 1px solid #e7e6dc; }
 .help-kicker { color: #5e8b70; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .help-card h2 { margin: 4px 0 0; font: 600 27px/1.1 Georgia, serif; }.help-card h3 { margin: 0 0 4px; font-size: 14px; }.help-card p { margin: 0; color: #5d5f56; font-size: 13px; line-height: 1.5; }
 .help-close { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 7px; background: #fff; cursor: pointer; font-size: 24px; line-height: 1; }.help-close:hover, .help-close:focus-visible { border-color: #75ffb3; background: #75ffb32e; outline: none; }
 .help-content { display: grid; gap: 16px; padding: 19px 0; }.help-content section { padding-left: 14px; border-left: 3px solid #75ffb3; }
+.help-demo-links { margin-top: 8px !important; }
 .telemetry-consent { z-index: 260; }
 .telemetry-consent-card { width: min(560px, 100%); }
 .telemetry-consent-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

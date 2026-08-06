@@ -95,7 +95,7 @@ app.innerHTML = `
           <option value="beat">Beat Tap</option>
         </select>
       </label>
-      <label class="field legato-field" title="Use written note durations to connect and release notes across your gestures.">
+      <label class="field legato-field" title="Enabling Legato will hold notes until the next tap, according to the score.">
         <span>Legato</span>
         <span class="switch-control"><input id="legato-mode" type="checkbox" role="switch" aria-label="Legato mode" /><span aria-hidden="true"></span><strong id="legato-value">Off</strong></span>
       </label>
@@ -111,7 +111,7 @@ app.innerHTML = `
         <span>Chord Roll <output id="audition-roll-value">120 ms</output></span>
         <input id="audition-roll" type="range" min="0" max="250" value="120" />
       </label>
-      <button id="parts-button" class="field deck-menu-button" type="button" title="Choose which score parts TapConductor plays.">
+      <button id="parts-button" class="field deck-menu-button" type="button" title="Choose which score parts (staves) TapConductor plays.">
         <span>Parts</span><strong id="parts-value">—</strong>
       </button>
         <button id="diagnostics-button" class="field deck-menu-button diagnostics-button" type="button" title="View live audio and MIDI diagnostics." aria-label="Audio diagnostics">
@@ -2515,23 +2515,21 @@ elements.tap.addEventListener("click", (event) => {
   const token = `tap-keyboard:${crypto.randomUUID()}`;
   void performDown(token).then(() => performUp(token));
 });
-elements.back.addEventListener("click", async () => {
+const setCursorIndex = async (index: number): Promise<void> => {
   if (!score) return;
-  const index = Math.max(0, cursorIndex - 1);
   await invokeSafe("set_cursor", { generation: score.generation, index });
   cursorIndex = index;
   highlightIndex = index;
   updatePosition();
   if (tapMode === "beat") resetBeatTap();
+};
+elements.back.addEventListener("click", async () => {
+  if (!score) return;
+  await setCursorIndex(Math.max(0, cursorIndex - 1));
 });
 elements.forward.addEventListener("click", async () => {
   if (!score) return;
-  const index = Math.min(score.events.length - 1, cursorIndex + 1);
-  await invokeSafe("set_cursor", { generation: score.generation, index });
-  cursorIndex = index;
-  highlightIndex = index;
-  updatePosition();
-  if (tapMode === "beat") resetBeatTap();
+  await setCursorIndex(Math.min(score.events.length - 1, cursorIndex + 1));
 });
 
 const tapKeyCodes = new Set([
@@ -2554,7 +2552,11 @@ const tapKeyCodes = new Set([
 document.addEventListener("keydown", (event) => {
   if (event.code === "ArrowLeft") {
     event.preventDefault();
-    elements.back.click();
+    if (event.ctrlKey || event.metaKey) {
+      void setCursorIndex(0);
+    } else {
+      elements.back.click();
+    }
     return;
   }
   if (event.code === "ArrowRight") {

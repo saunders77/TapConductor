@@ -489,7 +489,7 @@ impl AudioManager {
             ready: self.runtime.is_some() && snapshot.backend_errors == 0,
             message: self.last_error.clone().or_else(|| {
                 (snapshot.backend_errors > 0).then(|| {
-                    "The audio backend reported an output-stream error; reselect the device before performing."
+                    "Please select or reselect an AUDIO OUT device."
                         .to_owned()
                 })
             }).or_else(|| self.instrument_message.clone()),

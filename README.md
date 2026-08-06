@@ -1,207 +1,55 @@
 # TapConductor
 
-TapConductor is a cross-platform score-performance app targeting Windows, macOS, and iPadOS. It
-supplies the pitches from a written score while the performer supplies the timing: each keyboard,
-pointer/touch, or MIDI-key press sounds the next set of notes that begin at exactly the same score
-position, including notes across staves and parts. Rests do not consume taps.
+<p>I made TapConductor for musicians like me whose piano skills aren't good enough or who have disabilities. You can use it <strong>with</strong> or <strong>without</strong> a piano for:
+  <ul>
+    <li>Leading a rehearsal, especially choirs learning <strong>unaccompanied</strong> or <strong>accompanied</strong> music</li>
+    <li>Accompanying other musicians in auditions or rehearsals</li>
+    <li>Accompanying yourself while you sing</li>
+    <li>Playing a piece on piano before you've learned the notes to experience the enjoyment of playing it before you learn how</li>
+    <li>Performing for an audience</li>
+    <li>Recording with MIDI to capture subtle expression, timing, and dynamics</li>
+    <li>(Caution) Pretending you can play piano music that's actually too difficult for you</li>
+  </ul>
+</p>
 
-This repository contains an MVP foundation spanning phases 0–4: score import and display,
-deterministic conducting, low-latency built-in audio, score navigation/audition, and MIDI
-input/output. It is not yet a release-qualified completion of every phase gate; hardware loopback,
-long-duration stress/rehearsal, signing, Apple-device qualification, ASIO hardware qualification,
-and physical-controller coverage remain explicit validation work.
+<p>
+  TapConductor is open-source software. You can build it from the code in this repository or download the installer for Windows or Mac:
+</p>
 
-## MVP capabilities
+<h2>Supported files</h2>
 
-- Opens partwise MusicXML (`.musicxml`/`.xml`), compressed MusicXML (`.mxl`), and Standard MIDI
-  Files (`.mid`/`.midi`). MusicXML is engraved with OpenSheetMusicDisplay; MIDI uses a compact event
-  view because MIDI files do not contain complete engraving information.
-- Groups simultaneous pitched note attacks by exact rational score time, even across enabled parts.
-  Rests and tied continuations do not create extra conducting events.
-- Conducts from Space, Enter, the large pointer target, or MIDI Note On. MIDI input
-  velocity controls the whole sounded note/chord; the MIDI key's pitch is intentionally ignored.
-- Highlights the most recently played slice separately from the next live cursor.
-- Engraves MusicXML as one long horizontal system with a persistent horizontal scrollbar. During
-  playback, the view follows the slice by whole-measure context rather than continually chasing it.
-- Shows permanent ear and down-arrow controls at every slice: the ear plays that single chord
-  without moving the live cursor, while the arrow moves the live cursor there. Selecting an
-  individual notehead plays only that note, even while other sounds are active.
-- Selects score parts, audio output, MIDI input, and MIDI output at runtime. **Panic** immediately
-  clears sounding groups and MIDI output notes.
-- Uses a bounded, allocation-free audio callback path, sample-clock scheduling, a fixed voice pool,
-  and an SPSC command queue. Windows retains its native ASIO and direct event-driven
-  `IAudioClient3` paths. Apple hosts use CoreAudio; iPadOS also has a native `AVAudioSession`
-  lifecycle bridge.
-- Includes Rhythm Tap and Beat Tap/count-in modes, independently configurable score/audition chord
-  rolls, a bundled reviewer demo, and in-app help, privacy, and acknowledgements.
+<p>TapConductor reads MusicXML, compressed MusicXML, or MIDI files (file extensions .musicxml, .xml, .mxl, .mid, or .midi). If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read. If you only have a PDF, you can use a converter program to create a file TapConductor can read (such as Audiveris or MuseScore).</p>
 
-The default instrument is the 44.1 kHz, 16-bit Slender Salamander Grand Piano: Signal Experiments'
-phase-aligned derivative of Alexander Holm's Salamander Grand Piano V3. Its three sampled velocity
-layers are crossfaded into a continuous response. The 90 note samples are loaded once as compact
-16-bit PCM and reused across audio-device changes; playback performs no allocation, decoding,
-locking, or file I/O in the audio callback. The installed library occupies about 250 MB and uses
-about 203 MiB for note PCM while the app is running. A small procedural piano remains available
-automatically if the sampled asset is missing or invalid.
+<h2>Configuring audio settings</h2>
+    <p>Use the Audio Out control to select the speakers or sound card to use. On Windows, an option marked (ASIO) has an installed ASIO driver and may provide better latency on supported hardware. A driver such as ASIO4ALL can route to built-in Realtek speakers or headphones after that endpoint is enabled in the driver's control panel. ASIO is not automatically the best choice for every device or configuration; choose the output that is stable and responsive with your hardware.</p>
+    <p id="instrument-help">Choose an instrument, either the grand piano or a synthesizer.</p>
+    <p>If you want to control TapConductor with a <strong>piano</strong> or another MIDI instrument, then plug in the instrument and select it from the MIDI In menu. You'll still be able to tap using normal mouse and keyboard controls too. When you use a piano, TapConductor will use the dynamics you play for each note, and you can use a sustain pedal. If you connect or reconnect a device while TapConductor is open, choose <b>Reload audio &amp; MIDI devices</b> from Audio Out.</p>
+    <p>The MIDI OUT setting is only needed if you want to route your performance to another program for recording or further manipulation. For normal playing, it's not necessary. You can also use it to route back to your piano, which will use your piano's built-in sounds and speakers instead of your computer's speakers.</p>
+    <p>By default, all staves (parts) will play during tapping, but you can select specific staves in the PARTS menu.</p>
 
-## Piano gate behavior
+<h2>Conducting the score</h2>
+            <p>Press the large <b>TAP</b> button, a supported keyboard key (A-Z, numbers, Shift, or punctuation), or your MIDI instrument/piano to play the next written note or chord, starting from the beginning. The location marker will automatically progress to the next note or chord. If you do nothing further, playing does not continue; every note waits for your tap. With Legato off, each note follows the key that struck it. Turn Legato on to use written durations, rests, staccato marks, and later note gestures to connect and release notes automatically. This mode is useful for rehearsals with a choir, performance, or recording. If you want each tap to roll each chord, you can use the ROLL slider at the bottom of the window.</p>
+            <p>If you don't want to play a note/chord on every tap, but you instead want to use the program for normal conducting, keeping a steady beat while the notes play, then switch from the Rhythm mode to the Beat mode in the TAP MODE menu. Then you'll need to start by counting in with taps, and each tap will be interpreted as one beat in the music.</p>
+            <p>The Stop button on the top right switches to a mode where TapConductor ignores your taps, except for MIDI IN, which it plays directly. Use this mode if you want to play on your piano as you would normally.</p>
+          
+<h2>Playing specific notes and chords</h2>
+            <p>Click a note on the score to hear it played at any time - the position indicator doesn't need to be on that note, and the click won't move the position indicator.</p>
+            <p>Use the speaker buttons above the score system to hear any chord at any time. It will play a rolled chord from bottom to top if there are multiple notes. You can configure how long time time between rolled notes is with the CHORD slider at the bottom.</p>
+   
+<h3>Navigation</h3>
+        <p>Use the downward-pointing arrows above each score location to control the green location selector and choose where to start playing when you resume tapping. You can also use the left and right arrow keys to move the selector left and right. Cmd/Ctrl+Left-arrow-key takes you back to the start of the piece.</p>
+        <p>The Spacebar replays the last chord, which can be useful in a rehearsal situation.</p>
 
-Every physical press creates an independent voice group and sounds immediately. For that group,
-note-off occurs at:
 
-```text
-max(first later tap, matching input release + 100 ms)
-```
+<h2>Other info</h2>
 
-Thus a quick next tap starts on time while the earlier sound may continue until its 100 ms
-post-release minimum. Several groups can overlap during fast passages. If no later tap has happened,
-the group remains eligible until one does. While the physical tap is held, the built-in piano uses
-the sample's natural decay. Lifting the tap immediately engages its faster SFZ key-up release
-envelope; this timbre/envelope change is independent of the score and MIDI note-off gate above.
+<p>Agents, please see [`CAPABILITIES_MVP.md`](CAPABILITIES_MVP.md) for information on TapConductor's features.</p>
 
-## Windows prerequisites
+<p>See [`PRIVACY.md`](PRIVACY.md) for the privacy policy.</p>
 
-- 64-bit Windows 10 or Windows 11.
-- [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with
-  **Desktop development with C++**, an MSVC x64 toolset, and a Windows 10 or 11 SDK.
-- [LLVM](https://releases.llvm.org/) with `libclang` available to the build. The ASIO binding
-  generator normally finds a standard LLVM installation; otherwise set `LIBCLANG_PATH` to its
-  `bin` directory.
-- [Rust](https://rustup.rs/) stable with the `x86_64-pc-windows-msvc` target.
-- Node.js 22.12 or newer and npm (the current Node LTS is recommended).
-- Microsoft Edge WebView2 Runtime. It is normally already present on supported Windows systems.
-- A wired audio device is strongly recommended for live use; Bluetooth adds latency outside the
-  app's control.
+<p>The bundled grand piano is <b>Slender Salamander Grand Piano</b>, Signal Experiments' phase-aligned derivative of Salamander Grand Piano V3. The original Yamaha C5 recordings are by Alexander Holm, with phase alignment and Slender SFZ mappings by Signal Experiments. It is used under the Creative Commons Attribution 3.0 Unported license.</p>
 
-Install/select the Rust toolchain from PowerShell if needed:
-
-```powershell
-rustup toolchain install stable-x86_64-pc-windows-msvc --profile minimal
-rustup default stable-x86_64-pc-windows-msvc
-```
-
-## Run in development
-
-From the repository root:
-
-```powershell
-npm ci
-npm run tauri:dev
-```
-
-Use **Open score** and try [`examples/scores/cross-staff-demo.musicxml`](examples/scores/cross-staff-demo.musicxml).
-Select a low-latency wired output in the top bar, then use Space or Enter to conduct. Key repeat is
-ignored; release events are paired with their presses for correct gating.
-
-ASIO entries are suffixed **(ASIO)** in the output selector. Choose the vendor driver for an audio
-interface such as the Roland QUAD-CAPTURE; TapConductor opens its main output pair at the driver's
-native sample rate and minimum reported buffer. Increase the buffer in the vendor control panel if
-the minimum clicks or drops out. Built-in devices such as Realtek remain available through the
-low-latency WASAPI path unless an installed ASIO driver exposes them. ASIO is a host API, not a
-universal replacement driver, so TapConductor cannot create native ASIO support for hardware whose
-manufacturer supplies none.
-TapConductor lists every driver registered with the Windows ASIO host and validates its current
-format when selected. Wrapper drivers such as ASIO4ALL appear as one ASIO entry; choose the desired
-Realtek speakers or headphone endpoint in the wrapper's own control panel.
-
-To exercise MIDI, choose the device under **MIDI in** or **MIDI out**, and use **Panic** before
-disconnecting or changing a live routing setup. After connecting or reconnecting hardware while the
-app is open, choose **Reload audio & MIDI devices** from **Audio out**.
-
-## Build installers
-
-```powershell
-npm ci
-npm run tauri:build
-```
-
-### Browser build
-
-TapConductor can also be built as a static browser application. The web edition keeps score
-processing on the user's device, compiles the shared Rust importer to WebAssembly, uses Web Audio
-for playback, and uses Web MIDI where the browser supports it.
-
-```powershell
-rustup target add wasm32-unknown-unknown
-cargo install wasm-bindgen-cli --version 0.2.126 --locked
-npm run build:web
-```
-
-Upload the contents of `dist/` to an HTTPS web server. The generated URLs are relative, so the
-bundle works at a domain root or in a subdirectory. See
-[`docs/WEB_BROWSER.md`](docs/WEB_BROWSER.md) for browser limitations, headers, and local preview
-instructions. The generated `dist/index.html` is also self-contained and can be opened directly;
-the repository-root `index.html` remains the Vite development entry point.
-
-Release artifacts are written beneath `target\release\bundle\`, including NSIS and MSI packages.
-Rust and JavaScript dependencies are pinned by `Cargo.lock` and `package-lock.json`; use `npm ci`
-and Cargo's `--locked` flag in automated builds. The `asio-sys` build currently downloads
-Steinberg's SDK from its official stable URL, so release engineering must archive the exact SDK and
-license materials used for each build.
-Local development bundles are unsigned; production distribution still requires code signing.
-
-For the Microsoft Store test/production lanes and the macOS/iPadOS build commands, see
-[`docs/CROSS_PLATFORM_IMPLEMENTATION.md`](docs/CROSS_PLATFORM_IMPLEMENTATION.md). Apple bundles must
-be built on macOS with Xcode; device and App Store packages also require the relevant Apple
-Developer identities and provisioning profiles.
-
-## Test and measure
-
-```powershell
-npm run build
-cargo test --locked --workspace
-cargo check --locked --workspace --all-targets
-cargo run --locked --release -p tapconductor-latency-probe
-cargo run --locked --release -p tapconductor-latency-probe -- --live
-cargo run --locked --release -p tapconductor-latency-probe -- --live --device "Realtek"
-cargo run --locked --release -p tapconductor-latency-probe -- --live --device "QUAD-CAPTURE (ASIO)"
-```
-
-The latency probe reports median/p95/p99 software command-to-first-render timings over 2,000
-iterations, along with queue and late-command counters. It deliberately does **not** claim physical
-input-to-speaker latency: validate that separately with loopback hardware on each performance
-machine, audio interface, driver, and buffer configuration. The in-app diagnostics panel reports
-the active backend/device, sample rate, callback buffer size, estimated output latency, queue
-overflows, backend errors, active voices, and MIDI routing.
-
-The latest checked-in measurement and its limits are recorded in
-[`docs/LATENCY_REPORT.md`](docs/LATENCY_REPORT.md).
-The verified Windows artifact paths, hashes, and test record are in
-[`docs/BUILD_REPORT.md`](docs/BUILD_REPORT.md).
-
-## Repository layout
-
-| Path | Responsibility |
-| --- | --- |
-| `src/` | Tauri WebView UI and OSMD score rendering |
-| `src-tauri/` | Cross-platform Tauri host, device lifecycle, IPC, and bundle configuration |
-| `crates/tapconductor-score/` | MusicXML/MXL/MIDI import and normalized score events |
-| `crates/tapconductor-performance/` | Cursor, gesture, generation, and piano-gate state machine |
-| `crates/tapconductor-audio/` | Real-time command queue, scheduler, diagnostics, and synth |
-| `crates/tapconductor-midi/` | MIDI message mapping, ports, and overlapping-note tracking |
-| `tools/latency-probe/` | Repeatable offline command-to-render benchmark |
-| `docs/PRODUCT_AND_TECHNICAL_PLAN.md` | Product semantics, budgets, phases, and acceptance criteria |
-| `docs/CROSS_PLATFORM_IMPLEMENTATION.md` | Implemented architecture, policy matrix, and release runbook |
-
-The score, performance, audio, and MIDI crates are UI-independent Rust libraries. That separation
-lets Windows, macOS, and iPadOS share correctness-sensitive behavior without moving it into a
-WebView.
-
-## MVP boundaries
-
-- The importer intentionally supports a practical, tested subset of MusicXML rather than every
-  publisher extension. Inspect import warnings before relying on an unfamiliar score live.
-- Native ASIO uses the driver's current sample rate, main one or two output channels, native sample
-  representation, and minimum reported buffer. Other Windows devices use the direct event-driven
-  shared `IAudioClient3` renderer. End-to-end latency remains dependent on the hardware and driver.
-- Salamander's 44.1 kHz source samples are linearly resampled when an output device operates at a
-  different native rate. The procedural synth is a recovery instrument rather than the default.
-- MIDI output currently uses the MVP routing/channel behavior rather than per-part routing.
-- PDF/optical recognition remains future work. Apple hardware testing and signed packaging remain
-  release qualification work performed by the macOS release lane.
-- The software latency harness is included, but release qualification still requires end-to-end
-  loopback and sustained-load testing on representative Windows audio hardware.
-
-See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for direct dependency licenses. TapConductor
+<p>See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for direct dependency licenses. TapConductor
 for Windows is licensed under [GNU GPL version 3 only](LICENSE); TapConductor for every other
 platform is licensed under the [MIT License](LICENSE-MIT). See the complete
-[platform-specific licensing policy](LICENSING.md). Copyright (c) 2026 Michael Saunders.
+[platform-specific licensing policy](LICENSING.md). Copyright (c) 2026 Michael Saunders.</p>

@@ -12,7 +12,6 @@
   --accent: #75ffb3;
   --accent-strong: #75ffb3;
   --dark: #171813;
-  --danger: #e0443e;
 }
 
 * { box-sizing: border-box; }
@@ -82,10 +81,10 @@ button { color: inherit; }
 input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .deck-button, .panic-button { align-self: center; height: 38px; padding: 0 13px; border: 1px solid var(--line); border-radius: 7px; background: #fffef9; cursor: pointer; font-size: 12px; font-weight: 700; }
 .deck-button b { display: inline-grid; place-items: center; min-width: 20px; height: 20px; margin-left: 5px; border-radius: 10px; background: #ededdf; }
-.icon-button { min-width: 38px; padding: 0; font-size: 20px; }.panic-button { min-width: 38px; margin-left: auto; padding: 0; color: #fff; border-color: #f07b75; background: var(--danger); font-size: 16px; }
-.panic-button:hover { background: #b92f2b; }
+.icon-button { min-width: 38px; padding: 0; font-size: 20px; }.panic-button { min-width: 38px; margin-left: auto; padding: 0; color: #f6f6ed; border-color: #73746a; background: #25261f; font-size: 16px; box-shadow: inset 0 -1px 0 #171813; }
+.panic-button:hover, .panic-button:focus-visible { border-color: var(--accent); background: #75ffb31f; outline: none; }
 .panic-button.midi-free-play { color: #171813; border-color: #75ffb3; background: var(--accent); font-family: "Segoe UI Symbol", "Segoe UI", sans-serif; font-size: 20px; }
-.panic-button.midi-free-play:hover { background: #b8ffd4; }
+.panic-button.midi-free-play:hover, .panic-button.midi-free-play:focus-visible { background: #b8ffd4; }
 
 .workspace { width: 100%; min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 150px; overflow: hidden; }
 .score-panel { width: 100%; min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column; overflow: hidden; }

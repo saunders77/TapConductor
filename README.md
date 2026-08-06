@@ -16,6 +16,8 @@
   TapConductor is open-source software. You can build it from the code in this repository or download the installer for Windows or Mac:
 </p>
 
+![TapConductor application screenshot](assets/screenshot.png)
+
 <h2>Supported files</h2>
 
 <p>TapConductor reads MusicXML, compressed MusicXML, or MIDI files (file extensions .musicxml, .xml, .mxl, .mid, or .midi). If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read. If you only have a PDF, you can use a converter program to create a file TapConductor can read (such as Audiveris or MuseScore).</p>
@@ -43,13 +45,13 @@
 
 <h2>Other info</h2>
 
-<p>Agents, please see [`CAPABILITIES_MVP.md`](/CAPABILITIES_MVP.md) for information on TapConductor's features.</p>
+<p>Agents, please see <a href="CAPABILITIES_MVP.md"><code>CAPABILITIES_MVP.md</code></a> for information on TapConductor's features.</p>
 
-<p>See [`PRIVACY.md`](/PRIVACY.md) for the privacy policy.</p>
+<p>See <a href="PRIVACY.md"><code>PRIVACY.md</code></a> for the privacy policy.</p>
 
 <p>The bundled grand piano is <b>Slender Salamander Grand Piano</b>, Signal Experiments' phase-aligned derivative of Salamander Grand Piano V3. The original Yamaha C5 recordings are by Alexander Holm, with phase alignment and Slender SFZ mappings by Signal Experiments. It is used under the Creative Commons Attribution 3.0 Unported license.</p>
 
-<p>See [`THIRD_PARTY_NOTICES.md`](/THIRD_PARTY_NOTICES.md) for direct dependency licenses. TapConductor
-for Windows is licensed under [GNU GPL version 3 only](/LICENSE); TapConductor for every other
-platform is licensed under the [MIT License](/LICENSE-MIT). See the complete
-[platform-specific licensing policy](/LICENSING.md). Copyright (c) 2026 Michael Saunders.</p>
+<p>See <a href="THIRD_PARTY_NOTICES.md"><code>THIRD_PARTY_NOTICES.md</code></a> for direct dependency licenses. TapConductor
+for Windows is licensed under <a href="LICENSE">GNU GPL version 3 only</a>; TapConductor for every other
+platform is licensed under the <a href="LICENSE-MIT">MIT License</a>. See the complete
+<a href="LICENSING.md">platform-specific licensing policy</a>. Copyright (c) 2026 Michael Saunders.</p>

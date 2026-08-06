@@ -40,6 +40,22 @@ pub fn take_native_crash_marker(
 }
 
 #[tauri::command]
+pub fn get_installer_telemetry_consent(app: AppHandle) -> Result<Option<bool>, String> {
+    let path = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?
+        .join("telemetry-install-consent-v1");
+    match std::fs::read_to_string(path) {
+        Ok(value) if value.trim() == "enabled" => Ok(Some(true)),
+        Ok(value) if value.trim() == "disabled" => Ok(Some(false)),
+        Ok(_) => Ok(None),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+#[tauri::command]
 pub fn load_score(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,

@@ -166,10 +166,6 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .help-content { display: grid; gap: 16px; padding: 19px 0; }.help-content section { padding-left: 14px; border-left: 3px solid #75ffb3; }
 .help-content p + p { margin-top: 10px; }
 .help-demo-links { margin-top: 8px !important; }
-.telemetry-consent { z-index: 260; }
-.telemetry-consent-card { width: min(560px, 100%); }
-.telemetry-consent-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.telemetry-consent-actions button { min-height: 48px; }
 .telemetry-choice { display: flex; gap: 10px; align-items: flex-start; margin: 12px 0; padding: 12px; border: 1px solid #d8d7cd; border-radius: 8px; background: #f8f7ef; cursor: pointer; }
 .telemetry-choice input { margin-top: 3px; }
 .telemetry-choice span { display: grid; gap: 2px; color: #26271f; font-size: 13px; }
@@ -269,7 +265,6 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 }
 
 @media (max-width: 700px) {
-  .telemetry-consent-actions { grid-template-columns: 1fr; }
   .topbar > .primary-button { flex: 1 1 auto; }
   .topbar > .help-button { flex: 0 0 auto; }
   .empty-state h1 { font-size: 25px; }

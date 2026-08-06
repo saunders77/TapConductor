@@ -73,7 +73,7 @@ The privacy policy must describe the release actually shipped. At minimum, confi
 - If an updater is added, what update host is contacted and what ordinary server data is retained,
   including IP address, app version, OS, and architecture.
 - User controls, retention, disclosure, security, and a privacy contact.
-- The first-run telemetry choice, direct PostHog processing, pseudonymous identifiers, derived
+- The setup-completion telemetry choice, later Info-page control, direct PostHog processing, pseudonymous identifiers, derived
   country/region, five-minute batching, idle behavior, and the reset/deletion workflow.
 
 Win32 products must always have a privacy policy under policy 10.5.1:

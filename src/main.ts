@@ -179,7 +179,7 @@ app.innerHTML = `
             <h3>Privacy</h3>
             <p>TapConductor processes scores and performances locally. If usage and crash sharing is enabled, it sends pseudonymous application usage, coarse system/settings categories, and sanitized error summaries directly to PostHog. PostHog derives approximate country/region from the network connection. TapConductor never sends score contents or names, paths, MIDI messages, device names, precise location, or contact information.</p>
             <p>On iPadOS and macOS, a score chosen through the document picker is copied into TapConductor's private app storage so the sandboxed app can read it. Your original document is not changed. The imported copy may remain in app storage until the operating system clears it or you clear or remove the app's data.</p>
-            <label class="telemetry-choice"><input id="telemetry-toggle" type="checkbox" /> <span><b>Share usage and crash data</b><small id="telemetry-status">Checking…</small></span></label>
+            <label class="telemetry-choice"><input id="telemetry-toggle" type="checkbox" /> <span><b>Send anonymous crash and usage data to the developer to help improve TapConductor</b><small id="telemetry-status">Checking…</small></span></label>
             <button id="telemetry-copy-id" class="secondary-button" type="button">Copy telemetry identifier</button>
             <button id="telemetry-reset" class="secondary-button" type="button">Reset telemetry identifier</button>
             <p>TapConductor does not request access to your microphone, camera, location, contacts, or photos. The full policy is available in <b>PRIVACY.md</b> and at <span class="legal-url">github.com/saunders77/TapConductor</span>.</p>
@@ -191,23 +191,6 @@ app.innerHTML = `
           </section>
         </div>
         <button id="help-done" class="primary-button" type="button">Got it</button>
-      </section>
-    </div>
-
-    <div id="telemetry-consent" class="help-overlay telemetry-consent hidden" role="dialog" aria-modal="true" aria-labelledby="telemetry-consent-title" aria-describedby="telemetry-consent-summary">
-      <section class="help-card telemetry-consent-card">
-        <div class="help-card-header">
-          <div><span class="help-kicker">Privacy choice</span><h2 id="telemetry-consent-title">Help improve TapConductor?</h2></div>
-        </div>
-        <div class="help-content">
-          <section>
-            <p id="telemetry-consent-summary">Share pseudonymous installs, launches, score type and length, settings categories, session totals, and sanitized errors directly with PostHog. PostHog derives approximate country/region from the network connection. Scores, filenames, paths, device names, MIDI notes, and precise location are never sent.</p>
-          </section>
-        </div>
-        <div class="telemetry-consent-actions">
-          <button id="telemetry-continue" class="secondary-button large" type="button">Continue and share</button>
-          <button id="telemetry-decline" class="secondary-button large" type="button">Do not share</button>
-        </div>
       </section>
     </div>
 
@@ -291,9 +274,6 @@ const elements = {
   helpDone: byId<HTMLButtonElement>("help-done"),
   helpDemoChoirOpen: byId<HTMLAnchorElement>("help-demo-choir-open"),
   helpDemoPianoOpen: byId<HTMLAnchorElement>("help-demo-piano-open"),
-  telemetryConsent: byId("telemetry-consent"),
-  telemetryContinue: byId<HTMLButtonElement>("telemetry-continue"),
-  telemetryDecline: byId<HTMLButtonElement>("telemetry-decline"),
   telemetryToggle: byId<HTMLInputElement>("telemetry-toggle"),
   telemetryStatus: byId("telemetry-status"),
   telemetryCopyId: byId<HTMLButtonElement>("telemetry-copy-id"),
@@ -2160,39 +2140,28 @@ async function syncNativeTelemetryConsent(enabled: boolean): Promise<void> {
   }
 }
 
-function initializeTelemetry(): void {
+async function initializeTelemetry(): Promise<void> {
   syncTelemetryControls();
   if (!telemetry.isConfigured()) {
     void syncNativeTelemetryConsent(false);
     return;
   }
+  if (telemetry.getConsent() === "unknown") {
+    const installerConsent = isWebBuild()
+      ? false
+      : await invoke<boolean | null>("get_installer_telemetry_consent").catch(() => null);
+    if (installerConsent === true) telemetry.enable();
+    else telemetry.disable();
+    syncTelemetryControls();
+  }
   if (telemetry.getConsent() === "enabled") {
     telemetry.start();
     void syncNativeTelemetryConsent(true);
-  } else if (telemetry.getConsent() === "unknown") {
-    elements.telemetryConsent.classList.remove("hidden");
-    window.requestAnimationFrame(() => elements.telemetryContinue.focus());
   } else {
     void syncNativeTelemetryConsent(false);
   }
 }
 
-elements.telemetryContinue.addEventListener("click", () => {
-  telemetry.enable();
-  void syncNativeTelemetryConsent(true);
-  elements.telemetryConsent.classList.add("hidden");
-  syncTelemetryControls();
-});
-elements.telemetryDecline.addEventListener("click", () => {
-  telemetry.disable();
-  void syncNativeTelemetryConsent(false);
-  elements.telemetryConsent.classList.add("hidden");
-  syncTelemetryControls();
-});
-elements.telemetryConsent.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") event.preventDefault();
-  event.stopPropagation();
-});
 elements.telemetryToggle.addEventListener("change", () => {
   if (elements.telemetryToggle.checked) {
     telemetry.enable();
@@ -2662,7 +2631,7 @@ elements.zoomRange.addEventListener("change", () => {
   commitZoomPercent(Number(elements.zoomRange.value));
 });
 
-initializeTelemetry();
+void initializeTelemetry();
 
 void installListeners().then(refreshDevices).catch((error: unknown) => {
   setStatus("fault", "Core unavailable");

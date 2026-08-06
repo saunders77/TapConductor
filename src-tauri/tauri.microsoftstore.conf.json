@@ -18,7 +18,8 @@
         "silent": true
       },
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "template": "installer.nsi"
       }
     }
   }

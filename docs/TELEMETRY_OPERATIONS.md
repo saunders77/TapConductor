@@ -61,9 +61,6 @@ symbolication. At that point:
 4. Configure PII scrubbing and at most 90-day crash retention, deliberately crash each release
    target, and inspect every captured field before shipping.
 
-The organization token pasted into a chat or issue must be revoked and rotated immediately. It is
-privileged server/CI material and is neither used nor stored by this repository implementation.
-
 ## Release verification
 
 Run:

@@ -94,6 +94,7 @@ pub fn run() {
             commands::diagnostics,
             commands::set_native_telemetry_consent,
             commands::take_native_crash_marker,
+            commands::get_installer_telemetry_consent,
         ])
         .setup(move |app| {
             let marker_path = app.path().app_data_dir().ok().and_then(|app_data_dir| {

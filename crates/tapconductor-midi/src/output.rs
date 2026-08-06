@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use crate::backend::{MidiBackendError, MidiOutputConnection};
 use crate::{MidiChannel, MidiMessage, MidiNote, Velocity};
 use core::fmt;

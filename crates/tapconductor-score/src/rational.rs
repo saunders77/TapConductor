@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use std::{cmp::Ordering, fmt, str::FromStr};
 
 use serde::{de, Deserialize, Deserializer, Serialize};

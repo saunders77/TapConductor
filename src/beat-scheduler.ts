@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 export interface RationalPoint {
   numerator: number;
   denominator: number;

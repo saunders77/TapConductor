@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use core::fmt;
 
 /// Largest chord accepted on the real-time command path.

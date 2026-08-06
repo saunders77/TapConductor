@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 //! Low-latency audio primitives for TapConductor.
 //!
 //! The audio callback path is deliberately small: a bounded SPSC queue feeds

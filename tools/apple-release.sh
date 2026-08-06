@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 Michael Saunders
 set -euo pipefail
 
 MODE="${1:-validate}"

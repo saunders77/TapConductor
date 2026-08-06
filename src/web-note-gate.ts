@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 import type { RationalDto, TapEventDto } from "./types";
 
 export type ScoreReleasePlan = {

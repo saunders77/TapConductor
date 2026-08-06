@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use serde::{Deserialize, Serialize};
 
 /// Stable warning identifiers suitable for UI localization and import telemetry.

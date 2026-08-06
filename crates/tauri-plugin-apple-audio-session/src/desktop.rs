@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use tauri::{AppHandle, Runtime, plugin::PluginApi};
 
 pub fn init<R: Runtime>(

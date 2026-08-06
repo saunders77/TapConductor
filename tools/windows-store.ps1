@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Michael Saunders
 [CmdletBinding()]
 param(
     [ValidateSet("TestUnsigned", "Production")]

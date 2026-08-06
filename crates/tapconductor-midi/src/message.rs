@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use core::fmt;
 
 /// Timestamp in microseconds on the backend's monotonic clock.

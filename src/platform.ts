@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 import type { BeatMidiInput, CoreEvent, DiagnosticsDto } from "./types";
 import { WebRuntime } from "./web-runtime";
 

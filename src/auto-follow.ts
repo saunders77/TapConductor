@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 /**
  * Returns the scroll position needed to keep a slice visible with one measure
  * of context to its left. Forward playback follows before entering the final

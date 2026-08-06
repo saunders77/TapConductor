@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use crate::{
     audio_runtime::AudioManager,
     dto::{CoreEventDto, LoadedScoreDto},

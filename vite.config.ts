@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
 

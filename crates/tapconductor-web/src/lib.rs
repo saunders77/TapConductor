@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 //! Small WebAssembly boundary around the platform-neutral score importer.
 //!
 //! Audio, browser MIDI, and file selection deliberately remain in TypeScript,

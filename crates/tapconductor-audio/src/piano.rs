@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use crate::{Sampler, VoiceGroupId, VoiceStart};
 use core::f32::consts::TAU;
 

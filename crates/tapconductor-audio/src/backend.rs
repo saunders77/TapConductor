@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 //! Platform output abstraction with native Windows ASIO and WASAPI hosts.
 
 use crate::AudioRenderCallback;

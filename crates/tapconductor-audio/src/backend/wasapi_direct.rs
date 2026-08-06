@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use super::{
     AudioRenderCallback, BackendError, OutputSampleFormat, OutputStreamConfig, RunningAudioStream,
 };

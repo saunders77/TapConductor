@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 //! A small bounded SPSC queue.
 //!
 //! `Producer` and `Consumer` are deliberately not clonable. Requiring `&mut

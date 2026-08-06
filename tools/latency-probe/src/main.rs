@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use std::time::Instant;
 #[cfg(windows)]
 use std::{

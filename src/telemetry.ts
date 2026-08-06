@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 /**
  * Cross-platform product telemetry for both Tauri WebViews and the static web build.
  *

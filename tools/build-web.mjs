@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 import { mkdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";

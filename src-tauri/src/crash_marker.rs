@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use std::{
     fs,
     path::PathBuf,

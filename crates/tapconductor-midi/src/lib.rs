@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 //! MIDI 1.0 input/output primitives for TapConductor.
 //!
 //! The semantic API uses 16-bit velocities and timestamped messages so the

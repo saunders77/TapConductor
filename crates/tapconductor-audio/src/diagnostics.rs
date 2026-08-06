@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 /// Lock-free counters written on the real-time path and sampled by the UI.

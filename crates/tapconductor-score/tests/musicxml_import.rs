@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use std::{collections::BTreeSet, path::PathBuf};
 
 use serde_json::json;

@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 //! Native, deterministic score ingestion for TapConductor.
 //!
 //! This crate deliberately does not use engraving coordinates to decide which notes are

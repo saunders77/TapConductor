@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use crate::dto::{DeviceDto, DiagnosticsDto, WasapiPeriodsDto};
 use std::{path::Path, sync::Arc};
 use tapconductor_audio::{

@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 

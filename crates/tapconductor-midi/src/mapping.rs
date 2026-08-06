@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use crate::{MidiChannel, MidiMessage, MidiNote, MidiTimestamp, TimestampedMidiMessage, Velocity};
 
 /// Unique token paired across one MIDI Note On/Note Off gesture.

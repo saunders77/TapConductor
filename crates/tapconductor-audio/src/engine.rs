@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use crate::command::{AudioCommand, SampleTime, VoiceGroupId};
 use crate::diagnostics::AudioDiagnostics;
 use crate::queue::{spsc_channel, Consumer, Producer, QueueFull};

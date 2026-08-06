@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 //! Deterministic, device-independent performance state for TapConductor.
 //!
 //! The engine deliberately deals only in audio sample positions. Callers map

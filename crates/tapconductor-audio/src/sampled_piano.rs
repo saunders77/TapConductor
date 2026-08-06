@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use crate::{PianoConfig, PianoSynth, Sampler, VoiceGroupId, VoiceStart};
 use std::{
     collections::HashMap,

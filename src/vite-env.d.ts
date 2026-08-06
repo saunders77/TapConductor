@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 /// <reference types="vite/client" />
 
 declare const __TAPCONDUCTOR_VERSION__: string;

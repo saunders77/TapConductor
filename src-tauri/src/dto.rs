@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use serde::Serialize;
 use std::path::Path;
 use tapconductor_score::{NormalizedScore, Rational, ScoreFormat, TapEvent};

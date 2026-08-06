@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 export type AppleUiPlatform = "ipados" | "macos" | null;
 
 export function detectAppleUiPlatform(

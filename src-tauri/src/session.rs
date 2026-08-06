@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use crate::dto::LoadedScoreDto;
 use std::{collections::BTreeSet, fs, path::PathBuf};
 use tapconductor_score::{ImportOptions, NormalizedScore, NoteAttack, Rational, TapEvent};

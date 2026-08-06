@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use crate::dto::{DeviceDto, MidiPortsDto};
 use std::{
     sync::mpsc::{self, Receiver, RecvTimeoutError, Sender},

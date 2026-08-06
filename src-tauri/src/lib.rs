@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 mod audio_runtime;
 mod commands;
 mod core;

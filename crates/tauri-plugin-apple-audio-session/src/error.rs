@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 use serde::{Serialize, Serializer};
 
 pub type Result<T> = std::result::Result<T, Error>;

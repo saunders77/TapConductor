@@ -1,3 +1,4 @@
+// Copyright (c) 2026 Michael Saunders
 mod midi;
 mod musicxml;
 

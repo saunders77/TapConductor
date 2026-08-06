@@ -23,6 +23,7 @@ tauri-plugin-dialog = "2.6"
 tapconductor-score = { path = "../crates/tapconductor-score" }
 tapconductor-performance = { path = "../crates/tapconductor-performance" }
 tapconductor-midi = { path = "../crates/tapconductor-midi", features = ["midir-backend"] }
+tauri-plugin-opener = "2.5.4"
 
 [target.'cfg(windows)'.dependencies]
 tapconductor-audio = { path = "../crates/tapconductor-audio", features = ["wasapi-cpal-fallback", "asio-backend"] }

@@ -5,6 +5,7 @@ import {
   type IRenderNextResult,
 } from "opensheetmusicdisplay";
 import { autoFollowTarget } from "./auto-follow";
+import { announcementIdentifier, shouldShowAnnouncement } from "./announcement";
 import { planBeatInterval, rationalValue } from "./beat-scheduler";
 import {
   semanticRenderTarget,
@@ -177,7 +178,7 @@ app.innerHTML = `
           </section>
           <section id="privacy" class="legal-disclosure" tabindex="-1">
             <h3>Privacy</h3>
-            <p>TapConductor processes scores and performances locally. If usage and crash sharing is enabled, it sends pseudonymous application usage, coarse system/settings categories, and sanitized error summaries directly to PostHog. PostHog derives approximate country/region from the network connection. TapConductor never sends score contents or names, paths, MIDI messages, device names, precise location, or contact information.</p>
+            <p>TapConductor processes scores and performances locally. At startup it asks GitHub for the public announcement file and, when it contains a message, its latest update timestamp; no score, performance, device, or telemetry identifier is included. If usage and crash sharing is enabled, it also sends pseudonymous application usage, coarse system/settings categories, and sanitized error summaries directly to PostHog. These services receive ordinary network connection information. TapConductor never sends score contents or names, paths, MIDI messages, device names, precise location, or contact information.</p>
             <p>On iPadOS and macOS, a score chosen through the document picker is copied into TapConductor's private app storage so the sandboxed app can read it. Your original document is not changed. The imported copy may remain in app storage until the operating system clears it or you clear or remove the app's data.</p>
             <label class="telemetry-choice"><input id="telemetry-toggle" type="checkbox" /> <span><b>Send anonymous crash and usage data to the developer to help improve TapConductor</b><small id="telemetry-status">Checking…</small></span></label>
             <button id="telemetry-copy-id" class="secondary-button" type="button">Copy telemetry identifier</button>
@@ -191,6 +192,25 @@ app.innerHTML = `
           </section>
         </div>
         <button id="help-done" class="primary-button" type="button">Got it</button>
+      </section>
+    </div>
+
+    <div id="announcement-overlay" class="help-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="announcement-title">
+      <section class="help-card announcement-card">
+        <div class="help-card-header">
+          <div>
+            <span class="help-kicker">TapConductor</span>
+            <h2 id="announcement-title">Announcement</h2>
+          </div>
+        </div>
+        <div id="announcement-content" class="announcement-content"></div>
+        <label class="announcement-dismiss-choice">
+          <input id="announcement-dismiss-permanently" type="checkbox" />
+          <span>Don't show this announcement again</span>
+        </label>
+        <div class="announcement-actions">
+          <button id="announcement-ok" class="primary-button" type="button">Ok</button>
+        </div>
       </section>
     </div>
 
@@ -278,6 +298,10 @@ const elements = {
   telemetryStatus: byId("telemetry-status"),
   telemetryCopyId: byId<HTMLButtonElement>("telemetry-copy-id"),
   telemetryReset: byId<HTMLButtonElement>("telemetry-reset"),
+  announcementOverlay: byId("announcement-overlay"),
+  announcementContent: byId("announcement-content"),
+  announcementDismissPermanently: byId<HTMLInputElement>("announcement-dismiss-permanently"),
+  announcementOk: byId<HTMLButtonElement>("announcement-ok"),
   emptyOpen: byId<HTMLButtonElement>("empty-open"),
   demoChoirOpen: byId<HTMLButtonElement>("demo-choir-open"),
   demoPianoOpen: byId<HTMLButtonElement>("demo-piano-open"),
@@ -383,6 +407,8 @@ const heldTokens = new Set<string>();
 let midiFreePlay = false;
 let selectedAudioDeviceId = "";
 const RELOAD_AUDIO_SYSTEMS_VALUE = "__reload_audio_systems__";
+let currentAnnouncementId: string | null = null;
+let announcementPreviousFocus: HTMLElement | null = null;
 
 function updateMidiFreePlayButton(): void {
   elements.panic.classList.toggle("midi-free-play", midiFreePlay);
@@ -2242,6 +2268,132 @@ function closeHelp(): void {
   helpPreviousFocus?.focus();
   helpPreviousFocus = null;
 }
+
+const ANNOUNCEMENT_URL =
+  "https://raw.githubusercontent.com/saunders77/TapConductor/main/LATEST_ANNOUNCEMENT.md";
+const ANNOUNCEMENT_COMMIT_URL =
+  "https://api.github.com/repos/saunders77/TapConductor/commits?path=LATEST_ANNOUNCEMENT.md&per_page=1";
+const DISMISSED_ANNOUNCEMENT_KEY = "tapconductor.dismissed-announcement-v1";
+
+function safeAnnouncementLink(href: string): string | null {
+  try {
+    const url = new URL(href, "https://github.com/saunders77/TapConductor/");
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function sanitizedAnnouncement(source: string): DocumentFragment {
+  const supportedMarkup = source
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)"']+)\)/g, '<a href="$2">$1</a>')
+    .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+  const parsed = new DOMParser().parseFromString(supportedMarkup, "text/html");
+  const fragment = document.createDocumentFragment();
+  const allowedElements = new Set(["A", "BR", "EM", "H3", "H4", "LI", "OL", "P", "STRONG", "UL"]);
+  const discardedElements = new Set(["IFRAME", "OBJECT", "SCRIPT", "STYLE", "TEMPLATE"]);
+
+  const appendNode = (parent: Node, node: Node): void => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      parent.appendChild(document.createTextNode(node.textContent ?? ""));
+      return;
+    }
+    if (!(node instanceof HTMLElement) || discardedElements.has(node.tagName)) return;
+    if (!allowedElements.has(node.tagName)) {
+      [...node.childNodes].forEach((child) => appendNode(parent, child));
+      return;
+    }
+
+    const clean = document.createElement(node.tagName.toLowerCase());
+    if (node.tagName === "A") {
+      const href = safeAnnouncementLink(node.getAttribute("href") ?? "");
+      if (!href) {
+        [...node.childNodes].forEach((child) => appendNode(parent, child));
+        return;
+      }
+      clean.setAttribute("href", href);
+      clean.setAttribute("target", "_blank");
+      clean.setAttribute("rel", "noopener noreferrer");
+    }
+    [...node.childNodes].forEach((child) => appendNode(clean, child));
+    parent.appendChild(clean);
+  };
+
+  [...parsed.body.childNodes].forEach((node) => appendNode(fragment, node));
+  return fragment;
+}
+
+function dismissedAnnouncementId(): string | null {
+  try {
+    return localStorage.getItem(DISMISSED_ANNOUNCEMENT_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function closeAnnouncement(): void {
+  if (elements.announcementDismissPermanently.checked && currentAnnouncementId) {
+    try {
+      localStorage.setItem(DISMISSED_ANNOUNCEMENT_KEY, currentAnnouncementId);
+    } catch {
+      // A blocked storage area should not prevent the user from closing the dialog.
+    }
+  }
+  elements.announcementOverlay.classList.add("hidden");
+  announcementPreviousFocus?.focus();
+  announcementPreviousFocus = null;
+}
+
+async function showLatestAnnouncement(): Promise<void> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15_000);
+  try {
+    const contentResponse = await fetch(ANNOUNCEMENT_URL, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!contentResponse.ok) return;
+    const content = await contentResponse.text();
+    if (content.trim().length === 0) return;
+
+    const commitResponse = await fetch(ANNOUNCEMENT_COMMIT_URL, {
+      cache: "no-store",
+      headers: { Accept: "application/vnd.github+json" },
+      signal: controller.signal,
+    }).catch(() => null);
+    let updatedAt: string | undefined;
+    if (commitResponse?.ok) {
+      const commits = await commitResponse.json() as Array<{
+        commit?: { committer?: { date?: string } };
+      }>;
+      updatedAt = commits[0]?.commit?.committer?.date;
+    }
+    currentAnnouncementId = announcementIdentifier(
+      content,
+      updatedAt,
+      contentResponse.headers.get("etag"),
+      contentResponse.headers.get("last-modified"),
+    );
+    if (!shouldShowAnnouncement(content, currentAnnouncementId, dismissedAnnouncementId())) return;
+
+    elements.announcementContent.replaceChildren(sanitizedAnnouncement(content));
+    if (!elements.announcementContent.hasChildNodes()) return;
+    elements.announcementDismissPermanently.checked = false;
+    if (!elements.helpOverlay.classList.contains("hidden")) closeHelp();
+    announcementPreviousFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    elements.announcementOverlay.classList.remove("hidden");
+    elements.announcementOk.focus();
+  } catch (error) {
+    if (!(error instanceof DOMException && error.name === "AbortError")) {
+      console.warn("TapConductor could not load the latest announcement.", error);
+    }
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 elements.helpButton.addEventListener("click", () => {
   helpPreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   elements.helpOverlay.classList.remove("hidden");
@@ -2250,6 +2402,43 @@ elements.helpButton.addEventListener("click", () => {
 });
 elements.helpClose.addEventListener("click", closeHelp);
 elements.helpDone.addEventListener("click", closeHelp);
+elements.announcementOk.addEventListener("click", closeAnnouncement);
+elements.announcementContent.addEventListener("click", (event) => {
+  const target = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
+  if (!target) return;
+  event.preventDefault();
+  const href = safeAnnouncementLink(target.href);
+  if (!href) return;
+  if (isWebBuild()) {
+    window.open(href, "_blank", "noopener,noreferrer");
+    return;
+  }
+  void import("@tauri-apps/plugin-opener")
+    .then(({ openUrl }) => openUrl(href))
+    .catch((error: unknown) => {
+      console.warn("TapConductor could not open the announcement link.", error);
+      toast("The announcement link could not be opened.", "warning");
+    });
+});
+elements.announcementOverlay.addEventListener("keydown", (event) => {
+  if (event.key === "Tab") {
+    const focusable = [...elements.announcementOverlay.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )];
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (first && last) {
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  }
+  event.stopPropagation();
+});
 elements.helpDemoChoirOpen.addEventListener("click", (event) => {
   event.preventDefault();
   closeHelp();
@@ -2632,6 +2821,7 @@ elements.zoomRange.addEventListener("change", () => {
 });
 
 void initializeTelemetry();
+window.setTimeout(() => void showLatestAnnouncement(), 1_500);
 
 void installListeners().then(refreshDevices).catch((error: unknown) => {
   setStatus("fault", "Core unavailable");

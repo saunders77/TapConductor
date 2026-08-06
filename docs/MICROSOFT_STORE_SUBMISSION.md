@@ -70,6 +70,8 @@ The privacy policy must describe the release actually shipped. At minimum, confi
 
 - Score contents/paths and audio/MIDI device names are processed locally and are not uploaded.
 - Whether any telemetry, crash reporting, or analytics exists.
+- The startup request for the public GitHub announcement file and, for non-empty announcements, its
+  latest commit timestamp, including GitHub's receipt of ordinary connection data.
 - If an updater is added, what update host is contacted and what ordinary server data is retained,
   including IP address, app version, OS, and architecture.
 - User controls, retention, disclosure, security, and a privacy contact.

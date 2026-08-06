@@ -1,6 +1,6 @@
 # TapConductor Privacy Policy
 
-Effective date: August 5, 2026
+Effective date: August 6, 2026
 
 TapConductor is a local music-performance application with no account system, advertising, sale of
 personal data, or cloud synchronization. Scores and performances stay on the device. During the
@@ -8,6 +8,21 @@ Windows installation flow, a user may enable pseudonymous usage and diagnostic t
 improve the application. The choice can be changed later on the app's Info > Privacy page. Builds
 without that installer keep telemetry off until the user enables it. The app remains fully
 functional when telemetry is off.
+
+## Startup announcements
+
+At startup, TapConductor requests the public `LATEST_ANNOUNCEMENT.md` file from GitHub. When the file
+contains an announcement, it also requests the file's latest commit timestamp. This lets the
+developer display an announcement and ensures that dismissing one announcement permanently does
+not suppress a later announcement. TapConductor sends no score,
+performance, MIDI, device, telemetry identifier, account, or contact data in these requests. GitHub
+receives ordinary connection information such as the source IP address and request headers under
+GitHub's own privacy terms.
+
+If the user selects **Don't show this announcement again**, TapConductor stores only that
+announcement's public update timestamp or content identifier in origin-scoped application storage.
+It is not uploaded. Clearing the app's site/application data clears this preference. The app makes
+no continuing announcement request after the startup check.
 
 ## Data processed on the device
 
@@ -49,10 +64,11 @@ events from the same application instance can be correlated.
 
 ## Sending, processors, and retention
 
-The app stores pending events in bounded origin-scoped application storage and normally sends at
+The app stores pending telemetry events in bounded origin-scoped application storage and normally sends at
 most one batch every five minutes when events exist. First consented install/launch is sent
 immediately, and a graceful close attempts one final batch. A healthy open-but-idle app sends no
-heartbeat or polling request. Repeating handled errors are combined locally before upload.
+telemetry heartbeat or continuing announcement request. Repeating handled errors are combined
+locally before upload.
 
 The app sends consented batches directly to PostHog in the United States; TapConductor operates no
 telemetry intermediary. As with any direct HTTPS service, PostHog receives the connection's source

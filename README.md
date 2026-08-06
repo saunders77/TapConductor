@@ -47,6 +47,9 @@
 
 <p>See [`PRIVACY.md`](PRIVACY.md) for the privacy policy.</p>
 
+<p>Release owners can publish startup messages using the
+[`announcement guide`](docs/ANNOUNCEMENTS.md).</p>
+
 <p>The bundled grand piano is <b>Slender Salamander Grand Piano</b>, Signal Experiments' phase-aligned derivative of Salamander Grand Piano V3. The original Yamaha C5 recordings are by Alexander Holm, with phase alignment and Slender SFZ mappings by Signal Experiments. It is used under the Creative Commons Attribution 3.0 Unported license.</p>
 
 <p>See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for direct dependency licenses. TapConductor

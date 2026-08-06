@@ -13,6 +13,7 @@
     "test:web-runtime": "node tools/smoke-web.mjs",
     "test:web-gate": "node --experimental-strip-types --test src/web-note-gate.test.ts",
     "test:telemetry": "node --experimental-strip-types --test src/telemetry.test.ts",
+    "test:announcement": "node --experimental-strip-types --test src/announcement.test.ts",
     "preview": "vite preview",
     "preview:web": "vite preview --host 127.0.0.1",
     "tauri": "tauri",
@@ -33,6 +34,7 @@
   "dependencies": {
     "@tauri-apps/api": "^2.8.0",
     "@tauri-apps/plugin-dialog": "^2.4.0",
+    "@tauri-apps/plugin-opener": "^2.5.4",
     "opensheetmusicdisplay": "^2.1.0"
   },
   "devDependencies": {

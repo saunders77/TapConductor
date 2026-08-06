@@ -471,7 +471,8 @@ which the process/session remained open. Active duration accrues only while the 
 and has not been idle for five minutes. A score load, tap, score navigation, settings interaction,
 audition, keyboard/pointer input, or MIDI input ends the idle state. Entering the background begins
 idle immediately. This activity detection updates local counters only: leaving the app open idle
-must produce no PostHog heartbeat, event, polling request, or other network traffic.
+must produce no PostHog heartbeat, event, or polling request. The separate public-announcement check
+runs once at startup and does not continue while the app is idle.
 
 Handled and recoverable failures—including malformed XML/MXL/MIDI, missing or incompatible hardware,
 device initialization, and non-blocking application faults—go through `recordError`. The client

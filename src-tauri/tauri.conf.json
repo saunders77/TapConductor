@@ -26,7 +26,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' asset: http://asset.localhost; img-src 'self' asset: http://asset.localhost data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src ipc: http://ipc.localhost https://us.i.posthog.com https://eu.i.posthog.com",
+      "csp": "default-src 'self' asset: http://asset.localhost; img-src 'self' asset: http://asset.localhost data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src ipc: http://ipc.localhost https://us.i.posthog.com https://eu.i.posthog.com https://api.github.com https://raw.githubusercontent.com",
       "capabilities": ["default"]
     }
   },

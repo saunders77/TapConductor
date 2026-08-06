@@ -164,6 +164,8 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .help-close { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 7px; background: #fff; cursor: pointer; font-size: 24px; line-height: 1; }.help-close:hover, .help-close:focus-visible { border-color: #75ffb3; background: #75ffb32e; outline: none; }
 .help-content { display: grid; gap: 16px; padding: 19px 0; }.help-content section { padding-left: 14px; border-left: 3px solid #75ffb3; }
 .help-content p + p { margin-top: 10px; }
+.help-content ul { margin: 8px 0 0; padding-left: 22px; color: #5d5f56; font-size: 13px; line-height: 1.5; }
+.help-content li + li { margin-top: 4px; }
 .help-demo-links { margin-top: 8px !important; }
 .announcement-card { width: min(560px, 100%); }
 .announcement-content { max-height: min(360px, 50vh); overflow: auto; padding: 20px 0; color: #45473f; font-size: 14px; line-height: 1.55; white-space: pre-wrap; }

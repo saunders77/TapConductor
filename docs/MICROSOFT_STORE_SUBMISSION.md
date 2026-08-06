@@ -18,7 +18,7 @@ angle-bracketed value with an owner-approved release input.
 | Category | Music |
 | Privacy policy | `<PRIVACY-POLICY-HTTPS-URL>` |
 | Support | `<SUPPORT-URL-OR-EMAIL>` |
-| Applicable license | GNU GPL version 3 only; full license installed with the app |
+| Applicable license | MIT License; full license installed with the app |
 | Corresponding source | `https://github.com/saunders77/TapConductor` plus `<VERSIONED-SOURCE-ARCHIVE-URL>` |
 
 Microsoft requires a description, at least one screenshot, 1:1 Store art, applicable license

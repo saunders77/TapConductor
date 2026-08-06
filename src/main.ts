@@ -62,7 +62,7 @@ app.innerHTML = `
         <span aria-hidden="true">＋</span> Open score
       </button>
       <button id="help-button" class="help-button" type="button" aria-haspopup="dialog" aria-controls="help-overlay" aria-expanded="false">
-        Help
+        Info
       </button>
       <div class="status-pill loading" id="status-pill"><span></span><b>Starting audio…</b></div>
       <div class="web-edition-badge hidden" id="web-edition-badge">Browser edition</div>
@@ -143,8 +143,8 @@ app.innerHTML = `
         </nav>
         <div class="help-content">
           <section id="about"><h3>About TapConductor</h3>
-            <p>I made TapConductor for musicians like me whose piano skills aren't good enough or who have disabilities. You can use it <strong>with</strong> or <strong>without</strong> a piano for:
-              <ul>
+            <p>I made TapConductor for musicians like me whose piano skills aren't good enough or who have disabilities. You can use it <strong>with</strong> or <strong>without</strong> a piano for:</p>
+            <ul>
                 <li>Leading a rehearsal, especially choirs learning <strong>unaccompanied</strong> or <strong>accompanied</strong> music</li>
                 <li>Accompanying other musicians in auditions or rehearsals</li>
                 <li>Accompanying yourself while you sing</li>
@@ -152,8 +152,7 @@ app.innerHTML = `
                 <li>Performing for an audience</li>
                 <li>Recording with MIDI to capture subtle expression, timing, and dynamics</li>
                 <li>(Caution) Pretending you can play piano music that's actually too difficult for you</li>
-              </ul>
-            </p>
+            </ul>
           </section>
           <section id="help-instructions" tabindex="-1"><h3>1. Open a score</h3><p>Select a MusicXML, compressed MusicXML, or MIDI file (file extensions .musicxml, .xml, .mxl, .mid, or .midi). If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read. If you only have a PDF, you can use a converter program to create a file TapConductor can read (such as Audiveris or MuseScore).</p><p class="help-demo-links">Or open one of the included examples: <a id="help-demo-choir-open" href="#">demo choir score</a> or <a id="help-demo-piano-open" href="#">demo piano score</a>.</p></section>
           <section><h3>2. Configure audio settings</h3>
@@ -178,17 +177,15 @@ app.innerHTML = `
           </section>
           <section id="privacy" class="legal-disclosure" tabindex="-1">
             <h3>Privacy</h3>
-            <p>TapConductor processes scores and performances locally. At startup it asks GitHub for the public announcement file and, when it contains a message, its latest update timestamp; no score, performance, device, or telemetry identifier is included. If usage and crash sharing is enabled, it also sends pseudonymous application usage, coarse system/settings categories, and sanitized error summaries directly to PostHog. These services receive ordinary network connection information. TapConductor never sends score contents or names, paths, MIDI messages, device names, precise location, or contact information.</p>
+            <p>TapConductor processes scores and performances on your computer without sending the information anywhere. If usage and crash sharing is enabled, it also sends pseudonymous application usage, coarse system/settings categories, and sanitized error summaries directly to PostHog. These services receive ordinary network connection information. TapConductor never sends score contents or names, paths, MIDI messages, device names, precise location, or contact information.</p>
             <p>On iPadOS and macOS, a score chosen through the document picker is copied into TapConductor's private app storage so the sandboxed app can read it. Your original document is not changed. The imported copy may remain in app storage until the operating system clears it or you clear or remove the app's data.</p>
             <label class="telemetry-choice"><input id="telemetry-toggle" type="checkbox" /> <span><b>Send anonymous crash and usage data to the developer to help improve TapConductor</b><small id="telemetry-status">Checking…</small></span></label>
-            <button id="telemetry-copy-id" class="secondary-button" type="button">Copy telemetry identifier</button>
-            <button id="telemetry-reset" class="secondary-button" type="button">Reset telemetry identifier</button>
             <p>TapConductor does not request access to your microphone, camera, location, contacts, or photos. The full policy is available in <b>PRIVACY.md</b> and at <span class="legal-url">github.com/saunders77/TapConductor</span>.</p>
           </section>
           <section id="acknowledgements" class="legal-disclosure" tabindex="-1">
             <h3>Acknowledgements</h3>
             <p>The bundled grand piano is <b>Slender Salamander Grand Piano</b>, Signal Experiments' phase-aligned derivative of Salamander Grand Piano V3. The original Yamaha C5 recordings are by Alexander Holm, with phase alignment and Slender SFZ mappings by Signal Experiments. It is used under the Creative Commons Attribution 3.0 Unported license.</p>
-            <p>TapConductor also uses open-source Tauri, OpenSheetMusicDisplay, Rust, TypeScript, and supporting libraries. TapConductor is distributed under the GNU General Public License version 3 only. Complete dependency and instrument notices are in the bundled <b>THIRD_PARTY_NOTICES.md</b>.</p>
+            <p>TapConductor also uses open-source Tauri, OpenSheetMusicDisplay, Rust, TypeScript, and supporting libraries. TapConductor for Windows is distributed under the GNU General Public License version 3. For all other platforms it's distributed under the MIT license. Complete dependency and instrument notices are in the bundled <b>THIRD_PARTY_NOTICES.md</b>.</p>
           </section>
         </div>
         <button id="help-done" class="primary-button" type="button">Got it</button>

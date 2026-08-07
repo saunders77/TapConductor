@@ -430,7 +430,8 @@ let lastUiNativeRoundTripMs: number | null = null;
 let unlisteners: UnlistenFn[] = [];
 const heldTokens = new Set<string>();
 let midiFreePlay = false;
-let selectedAudioDeviceId = "";
+const NONE_AUDIO_OUTPUT_VALUE = "__none_mute__";
+let selectedAudioDeviceId = NONE_AUDIO_OUTPUT_VALUE;
 const RELOAD_AUDIO_SYSTEMS_VALUE = "__reload_audio_systems__";
 let currentAnnouncementId: string | null = null;
 let announcementPreviousFocus: HTMLElement | null = null;
@@ -1903,6 +1904,7 @@ function populateSelect(select: HTMLSelectElement, devices: DeviceDto[], offLabe
 
 function populateAudioSelect(devices: DeviceDto[]): void {
   elements.audioOutput.replaceChildren();
+  elements.audioOutput.add(new Option("None (Mute)", NONE_AUDIO_OUTPUT_VALUE));
   elements.audioOutput.add(new Option("System default", ""));
   for (const device of devices) {
     elements.audioOutput.add(
@@ -2752,7 +2754,7 @@ elements.audioOutput.addEventListener("change", async () => {
       output_kind: "unknown",
       sample_rate_hz: lastDiagnostics?.sampleRate ?? 0,
       buffer_frames: lastDiagnostics?.bufferFrames ?? 0,
-      internal_audio_enabled: true,
+      internal_audio_enabled: requested !== NONE_AUDIO_OUTPUT_VALUE,
       estimated_latency_ms_bucket: millisecondsBucket(lastDiagnostics?.estimatedLatencyMs ?? 0),
     }));
   } catch {

@@ -55,6 +55,7 @@ pub struct AudioManager {
     /// never moves backwards when an output device is rebuilt.
     clock_epoch: u64,
     master_gain: f32,
+    output_muted: bool,
     wasapi_periods: Option<WasapiPeriodsDto>,
     sample_rate: u32,
     instrument: Instrument,
@@ -91,12 +92,13 @@ impl AudioManager {
             backend: new_platform_audio_backend(),
             runtime: None,
             selected_device: None,
-            selected_device_name: "System default".to_owned(),
+            selected_device_name: "None (Mute)".to_owned(),
             last_error: None,
             instrument_message,
             salamander,
             clock_epoch: 0,
             master_gain: 1.0,
+            output_muted: true,
             wasapi_periods: None,
             // This is used only if endpoint discovery fails. A successful
             // restart immediately replaces it with the device's native rate.
@@ -265,7 +267,11 @@ impl AudioManager {
         );
         sender
             .try_send(AudioCommand::SetMasterGain {
-                gain: self.master_gain,
+                gain: if self.output_muted {
+                    0.0
+                } else {
+                    self.master_gain
+                },
                 at: 0,
             })
             .map_err(|_| "Unable to initialize the audio gain command.".to_owned())?;
@@ -290,7 +296,11 @@ impl AudioManager {
         });
         self.clock_epoch = handoff_sample.saturating_sub(new_rendered_frames);
         self.selected_device = selected_device;
-        self.selected_device_name = selected_name;
+        self.selected_device_name = if self.output_muted {
+            "None (Mute)".to_owned()
+        } else {
+            selected_name
+        };
         self.wasapi_periods = wasapi_periods;
         self.sample_rate = sample_rate;
         self.last_error = None;
@@ -427,9 +437,37 @@ impl AudioManager {
             .ok_or_else(|| "Audio is not ready.".to_owned())?;
         runtime
             .sender
-            .try_send(AudioCommand::SetMasterGain { gain, at })
+            .try_send(AudioCommand::SetMasterGain {
+                gain: if self.output_muted { 0.0 } else { gain },
+                at,
+            })
             .map_err(|_| "The real-time audio command queue is full.".to_owned())?;
         self.master_gain = gain;
+        Ok(())
+    }
+
+    pub fn set_output_muted(&mut self, muted: bool) -> Result<(), String> {
+        let at = self.now_sample().saturating_sub(self.clock_epoch);
+        let runtime = self
+            .runtime
+            .as_mut()
+            .ok_or_else(|| "Audio is not ready.".to_owned())?;
+        runtime
+            .sender
+            .try_send(AudioCommand::SetMasterGain {
+                gain: if muted { 0.0 } else { self.master_gain },
+                at,
+            })
+            .map_err(|_| "The real-time audio command queue is full.".to_owned())?;
+        self.output_muted = muted;
+        self.selected_device_name = if muted {
+            "None (Mute)".to_owned()
+        } else {
+            self.selected_device
+                .as_deref()
+                .and_then(display_name_from_device_id)
+                .unwrap_or_else(|| "System default".to_owned())
+        };
         Ok(())
     }
 

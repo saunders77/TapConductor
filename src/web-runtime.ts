@@ -52,6 +52,7 @@ type SinkAudioContext = AudioContext & {
 
 const DEFAULT_VELOCITY = 96;
 const ENABLE_WEB_MIDI_ID = "__enable_web_midi__";
+const NONE_AUDIO_OUTPUT_ID = "__none_mute__";
 // Still far steeper than the held-note decay, but long enough for the
 // key-up tail to remain clearly audible instead of sounding abruptly muted.
 const WEB_RELEASE_SECONDS = 0.4;
@@ -77,6 +78,7 @@ class BrowserAudio {
   private master: GainNode | null = null;
   private pianoWave: PeriodicWave | null = null;
   private volume = 1;
+  private muted = true;
   private instrument: "piano" | "synth" = "piano";
   private readonly voices = new Map<string, Voice>();
   private starts = 0;
@@ -87,7 +89,7 @@ class BrowserAudio {
       const context = new AudioContext() as SinkAudioContext;
       const master = context.createGain();
       const limiter = context.createDynamicsCompressor();
-      master.gain.value = this.volume;
+      master.gain.value = this.muted ? 0 : this.volume;
       limiter.threshold.value = -8;
       limiter.knee.value = 4;
       limiter.ratio.value = 16;
@@ -110,8 +112,20 @@ class BrowserAudio {
   setVolume(value: number): void {
     this.volume = Math.max(0, Math.min(1, value));
     if (this.context && this.master) {
-      this.master.gain.setTargetAtTime(this.volume, this.context.currentTime, 0.01);
+      this.master.gain.setTargetAtTime(this.muted ? 0 : this.volume, this.context.currentTime, 0.01);
     }
+  }
+
+  setMuted(muted: boolean): void {
+    this.muted = muted;
+    this.panic();
+    if (this.context && this.master) {
+      this.master.gain.setTargetAtTime(muted ? 0 : this.volume, this.context.currentTime, 0.01);
+    }
+  }
+
+  isMuted(): boolean {
+    return this.muted;
   }
 
   setInstrument(instrument: string): void {
@@ -452,7 +466,12 @@ export class WebRuntime {
       case "audio_devices":
         return this.audioDevices();
       case "set_audio_device":
-        await this.audio.setSink(String(args.id ?? ""));
+        if (args.id === NONE_AUDIO_OUTPUT_ID) {
+          this.audio.setMuted(true);
+        } else {
+          await this.audio.setSink(String(args.id ?? ""));
+          this.audio.setMuted(false);
+        }
         return undefined;
       case "reload_audio_systems":
         await this.ensureMidi(true);
@@ -734,7 +753,7 @@ export class WebRuntime {
     const ready = state !== "closed";
     return {
       audioBackend: "Web Audio",
-      outputDevice: "Browser / system default",
+      outputDevice: this.audio.isMuted() ? "None (Mute)" : "Browser / system default",
       sampleRate: this.audio.sampleRate(),
       bufferFrames: 128,
       estimatedLatencyMs: this.audio.latencyMs(),

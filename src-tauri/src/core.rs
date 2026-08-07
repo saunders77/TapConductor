@@ -143,7 +143,12 @@ impl AppCore {
         // A rate change is only legal across a safety boundary. Panic first so
         // no deadline expressed in the old device's frames survives.
         let event = self.panic()?;
+        if selected_device.as_deref() == Some("__none_mute__") {
+            self.audio.set_output_muted(true)?;
+            return Ok(event);
+        }
         self.audio.restart(selected_device)?;
+        self.audio.set_output_muted(false)?;
         self.apply_audio_sample_rate()?;
         Ok(event)
     }

@@ -64,13 +64,13 @@ app.innerHTML = `
         <img class="brand-mark" src="${fingerIconUrl}" alt="" aria-hidden="true" />
         <span><strong>Tap</strong>Conductor</span>
       </div>
-      <button id="open-score" class="primary-button" type="button">
+      <button id="open-score" class="primary-button" type="button" aria-keyshortcuts="Control+O Meta+O">
         <span aria-hidden="true">＋</span> Open score
       </button>
-      <button id="help-button" class="help-button" type="button" aria-haspopup="dialog" aria-controls="help-overlay" aria-expanded="false">
+      <button id="help-button" class="help-button" type="button" aria-haspopup="dialog" aria-controls="help-overlay" aria-expanded="false" aria-keyshortcuts="F1">
         Info
       </button>
-      <div class="status-pill loading" id="status-pill"><span></span><b>Starting audio…</b></div>
+      <div class="status-pill loading" id="status-pill" role="status" aria-live="polite" aria-atomic="true"><span aria-hidden="true"></span><b>Starting audio…</b></div>
       <div class="web-edition-badge hidden" id="web-edition-badge">Browser edition</div>
     </header>
 
@@ -107,31 +107,31 @@ app.innerHTML = `
       </label>
       <label class="range-field delay-field" title="Set the delay between notes in a chord when you tap (normally no delay, but a roll can help you hear individual notes better for rehearsal).">
         <span>Tap Roll <output id="regular-roll-value">0 ms</output></span>
-        <input id="regular-roll" type="range" min="0" max="250" value="0" />
+        <input id="regular-roll" type="range" min="0" max="250" value="0" aria-label="Tap roll delay in milliseconds" />
       </label>
       <label class="range-field" title="Set the playback volume.">
         <span>Volume <output id="volume-value">100%</output></span>
-        <input id="volume" type="range" min="0" max="100" value="100" />
+        <input id="volume" type="range" min="0" max="100" value="100" aria-label="Playback volume" />
       </label>
       <label class="range-field delay-field" title="Set the delay between notes when you use the 'Play single chord' button.">
         <span>Chord Roll <output id="audition-roll-value">120 ms</output></span>
-        <input id="audition-roll" type="range" min="0" max="250" value="120" />
+        <input id="audition-roll" type="range" min="0" max="250" value="120" aria-label="Single chord roll delay in milliseconds" />
       </label>
-      <button id="parts-button" class="field deck-menu-button" type="button" title="Choose which score parts (staves) TapConductor plays.">
+      <button id="parts-button" class="field deck-menu-button" type="button" title="Choose which score parts (staves) TapConductor plays." aria-haspopup="dialog" aria-controls="parts-popover" aria-expanded="false">
         <span>Parts</span><strong id="parts-value">—</strong>
       </button>
-        <button id="diagnostics-button" class="field deck-menu-button diagnostics-button" type="button" title="View live audio and MIDI diagnostics." aria-label="Audio diagnostics">
+        <button id="diagnostics-button" class="field deck-menu-button diagnostics-button" type="button" title="View live audio and MIDI diagnostics." aria-label="Audio diagnostics: Starting" aria-haspopup="dialog" aria-controls="diagnostics-popover" aria-expanded="false">
           <span>Diagnostics</span><strong id="diagnostics-value">Starting</strong>
         </button>
-        <button id="panic-button" class="panic-button" type="button" title="Play MIDI input directly" aria-label="Play MIDI input directly">■</button>
+        <button id="panic-button" class="panic-button" type="button" title="Play MIDI input directly" aria-label="Play MIDI input directly" aria-pressed="false" aria-keyshortcuts="Control+. Meta+.">■</button>
     </section>
 
-    <aside id="parts-popover" class="popover hidden" aria-label="Parts">
-      <h3>Parts</h3><p>Choose which staves play when you tap.</p>
+    <aside id="parts-popover" class="popover hidden" role="dialog" aria-modal="false" aria-labelledby="parts-popover-title" tabindex="-1">
+      <h3 id="parts-popover-title">Parts</h3><p>Choose which staves play when you tap.</p>
       <div id="parts-list"></div>
     </aside>
 
-    <aside id="diagnostics-popover" class="popover diagnostics hidden" aria-label="Audio diagnostics"></aside>
+    <aside id="diagnostics-popover" class="popover diagnostics hidden" role="dialog" aria-modal="false" aria-label="Audio diagnostics" tabindex="-1"></aside>
 
     <div id="help-overlay" class="help-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="help-title">
       <section class="help-card">
@@ -148,7 +148,7 @@ app.innerHTML = `
           <a href="#acknowledgements">Acknowledgements</a>
         </nav>
         <div class="help-content">
-          <section id="about"><h3>About TapConductor</h3>
+          <section id="about" tabindex="-1"><h3>About TapConductor</h3>
             <p>I made TapConductor for musicians like me whose piano skills aren't good enough or who have disabilities. You can use it <strong>with</strong> or <strong>without</strong> a piano for:</p>
             <ul>
                 <li>Leading a rehearsal, especially choirs learning <strong>unaccompanied</strong> or <strong>accompanied</strong> music</li>
@@ -188,7 +188,8 @@ app.innerHTML = `
           </section>   
           <section><h3>5. Navigate</h3>
             <p>Use the downward-pointing arrows above each score location to control the green location selector and choose where to start playing when you resume tapping. You can also use the left and right arrow keys to move the selector left and right.</p>
-            <p>The Spacebar replays the last chord, which can be useful in a rehearsal situation. Cmd/Ctrl+Left Arrow returns to the beginning, and Cmd/Ctrl+. toggles direct MIDI play.</p>
+            <p>Press Tab to reach the score actions without stepping through every note. Within the score actions, use Left and Right Arrow to move between actions, Home or End to jump to the first or last action, and Enter or Space to activate the focused action.</p>
+            <p>The Spacebar replays the last chord, which can be useful in a rehearsal situation. Cmd/Ctrl+Left Arrow returns to the beginning, and Cmd/Ctrl+. toggles direct MIDI play. Cmd/Ctrl+O opens a score, F1 opens Info, and Escape stops sounding notes when focus is not in a control.</p>
           </section>
           <section id="privacy" class="legal-disclosure" tabindex="-1">
             <h3>Privacy</h3>
@@ -278,7 +279,7 @@ app.innerHTML = `
             <input id="zoom-range" type="range" min="50" max="175" value="90" step="1" aria-label="Zoom" />
           </div>
         </div>
-        <div id="score-scroll" class="score-scroll">
+        <div id="score-scroll" class="score-scroll" role="region" tabindex="0" aria-label="Score viewer" aria-describedby="score-keyboard-help">
           <div id="empty-state" class="empty-state">
             <h1>Play sheet music by tapping for each chord</h1>
             <p>If your piano skills aren't great or if you don't have a piano, TapConductor can help you accompany other musicians, lead a rehearsal, perform, or make a recording.</p>
@@ -292,6 +293,7 @@ app.innerHTML = `
             </div>
             <p>Every tap on your keyboard, mouse, or piano plays the next written note or chord. You can connect a piano or other MIDI instruments and control dynamics. The key/note you press doesn't matter; TapConductor will always play the right notes.</p>
           </div>
+          <p id="score-keyboard-help" class="visually-hidden">Use Left and Right Arrow to move through score events. When focus is on a score action, use Left and Right Arrow to move between score actions, Home for the first action, and End for the last.</p>
           <div id="score-stage" class="score-stage hidden">
             <div id="score-highlights" class="score-highlights"></div>
             <div id="score-targets" class="score-targets"></div>
@@ -306,14 +308,14 @@ app.innerHTML = `
           <strong id="position-title">Waiting for a score</strong>
           <small id="position-detail">—</small>
         </div>
-        <button id="back-button" class="transport" type="button" disabled aria-label="Previous event">‹</button>
-        <button id="tap-button" class="tap-button" type="button" disabled>
+        <button id="back-button" class="transport" type="button" disabled aria-label="Previous score event" aria-keyshortcuts="ArrowLeft">‹</button>
+        <button id="tap-button" class="tap-button" type="button" disabled aria-label="Tap to play the next score event" aria-keyshortcuts="Enter">
           <span>TAP</span>
           <small>Tap <strong>any key A-Z</strong> to play.</small>
           <small>Hold for longer notes.</small>
           <small><strong>Spacebar</strong> to replay a chord.</small>
         </button>
-        <button id="forward-button" class="transport" type="button" disabled aria-label="Next event">›</button>
+        <button id="forward-button" class="transport" type="button" disabled aria-label="Next score event" aria-keyshortcuts="ArrowRight">›</button>
         <div class="next-readout">
           <span>Next</span>
           <strong id="next-title">—</strong>
@@ -322,7 +324,8 @@ app.innerHTML = `
       </footer>
     </main>
 
-    <div id="toast-region" class="toast-region" aria-live="polite"></div>
+    <div id="toast-region" class="toast-region" aria-label="Notifications" aria-live="polite" aria-relevant="additions"></div>
+    <p id="score-status" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true">No score loaded.</p>
   </div>
 `;
 
@@ -400,11 +403,25 @@ const elements = {
   positionDetail: byId("position-detail"),
   nextTitle: byId("next-title"),
   nextDetail: byId("next-detail"),
+  scoreStatus: byId("score-status"),
   back: byId<HTMLButtonElement>("back-button"),
   tap: byId<HTMLButtonElement>("tap-button"),
   forward: byId<HTMLButtonElement>("forward-button"),
   toasts: byId("toast-region"),
 };
+
+const shell = document.querySelector<HTMLElement>(".shell");
+
+function syncModalIsolation(): void {
+  if (!shell) return;
+  const visibleDialogs = [...shell.querySelectorAll<HTMLElement>('[role="dialog"]')]
+    .filter((dialog) => !dialog.classList.contains("hidden") && dialog.getAttribute("aria-modal") === "true");
+  const activeDialog = visibleDialogs.at(-1) ?? null;
+  [...shell.children].forEach((child) => {
+    if (!(child instanceof HTMLElement)) return;
+    child.inert = activeDialog !== null && child !== activeDialog && child !== elements.toasts;
+  });
+}
 
 const telemetry = new TelemetryClient(createTelemetryConfig(isWebBuild()));
 
@@ -475,10 +492,11 @@ let announcementPreviousFocus: HTMLElement | null = null;
 
 function updateMidiFreePlayButton(): void {
   elements.panic.classList.toggle("midi-free-play", midiFreePlay);
+  elements.panic.setAttribute("aria-pressed", String(midiFreePlay));
   elements.panic.textContent = midiFreePlay ? "☟" : "■";
   elements.panic.title = midiFreePlay
-    ? "Taps start following the score again"
-    : "Stop conducting the score";
+    ? "Return to conducting the score"
+    : "Play MIDI input directly";
   elements.panic.setAttribute("aria-label", elements.panic.title);
 }
 
@@ -500,6 +518,7 @@ async function toggleMidiFreePlay(): Promise<void> {
   await invokeSafe("set_midi_free_play", { enabled: nextMode });
   midiFreePlay = nextMode;
   updateMidiFreePlayButton();
+  toast(midiFreePlay ? "Direct MIDI play on." : "Following the score again.", "info");
   if (tapMode === "beat") resetBeatTap();
 }
 const pendingDowns = new Map<string, Promise<void>>();
@@ -614,6 +633,7 @@ function updateTapButtonLabel(): void {
   } else {
     label.textContent = "READY";
   }
+  elements.tap.setAttribute("aria-label", `${label.textContent}. Play the next score event.`);
 }
 
 function resetBeatTap(): void {
@@ -714,12 +734,24 @@ function toast(message: string, kind: "info" | "warning" | "error" = "info"): vo
 
   const item = document.createElement("div");
   item.className = `toast ${kind}`;
-  item.textContent = message;
-  elements.toasts.append(item);
-  window.setTimeout(() => {
+  item.setAttribute("role", kind === "error" ? "alert" : "status");
+  item.setAttribute("aria-atomic", "true");
+  const text = document.createElement("span");
+  text.textContent = message;
+  item.append(text);
+  const dismiss = document.createElement("button");
+  dismiss.type = "button";
+  dismiss.className = "toast-dismiss";
+  dismiss.setAttribute("aria-label", "Dismiss notification");
+  dismiss.textContent = "×";
+  const remove = (): void => {
     item.remove();
     if (kind === "error") displayedErrorMessages.delete(message);
-  }, 5500);
+  };
+  dismiss.addEventListener("click", remove);
+  item.append(dismiss);
+  elements.toasts.append(item);
+  if (kind !== "error") window.setTimeout(remove, kind === "warning" ? 12_000 : 7_000);
 }
 
 function noteName(midi: number): string {
@@ -747,6 +779,7 @@ function updatePosition(): void {
   elements.positionDetail.textContent = current.detail;
   elements.nextTitle.textContent = next.title;
   elements.nextDetail.textContent = next.detail;
+  elements.scoreStatus.textContent = `Score position ${cursorIndex + 1} of ${score.events.length}. ${current.detail}. ${current.title}. Next: ${next.title}.`;
   elements.back.disabled = cursorIndex <= 0;
   elements.forward.disabled = cursorIndex >= score.events.length - 1;
   const activeGeneration = score.generation;
@@ -1143,6 +1176,10 @@ async function refreshIncrementalGeometry(
 ): Promise<void> {
   await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
   if (generation !== osmdRenderGeneration || activeOsmd !== osmd) return;
+  elements.osmd.querySelectorAll("svg").forEach((svg) => {
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+  });
 
   const contentWidth = Math.max(elements.osmd.scrollWidth, elements.osmd.getBoundingClientRect().width);
   if (contentWidth > 0) {
@@ -1277,6 +1314,54 @@ function scheduleIncrementalScrollAheadCheck(): void {
 
 elements.scoreScroll.addEventListener("scroll", scheduleIncrementalScrollAheadCheck, { passive: true });
 
+const SCORE_ACTION_SELECTOR = ".slice-action, .note-target, .midi-note";
+
+function scoreActionButtons(): HTMLButtonElement[] {
+  return [...elements.scoreStage.querySelectorAll<HTMLButtonElement>(SCORE_ACTION_SELECTOR)];
+}
+
+function normalizeScoreActionTabStops(preferred?: HTMLButtonElement): void {
+  const buttons = scoreActionButtons();
+  if (buttons.length === 0) return;
+  const active = preferred && buttons.includes(preferred)
+    ? preferred
+    : buttons.find((button) => button.tabIndex === 0) ?? buttons[0]!;
+  buttons.forEach((button) => {
+    button.tabIndex = button === active ? 0 : -1;
+  });
+}
+
+elements.scoreStage.addEventListener("focusin", (event) => {
+  const button = event.target instanceof HTMLButtonElement
+    && event.target.matches(SCORE_ACTION_SELECTOR)
+    ? event.target
+    : null;
+  if (button) normalizeScoreActionTabStops(button);
+});
+
+elements.scoreStage.addEventListener("keydown", (event) => {
+  const current = event.target instanceof HTMLButtonElement
+    && event.target.matches(SCORE_ACTION_SELECTOR)
+    ? event.target
+    : null;
+  if (!current || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  const buttons = scoreActionButtons();
+  const currentIndex = buttons.indexOf(current);
+  if (currentIndex < 0) return;
+  const nextIndex = event.key === "Home"
+    ? 0
+    : event.key === "End"
+      ? buttons.length - 1
+      : event.key === "ArrowLeft"
+        ? Math.max(0, currentIndex - 1)
+        : Math.min(buttons.length - 1, currentIndex + 1);
+  event.preventDefault();
+  event.stopPropagation();
+  const next = buttons[nextIndex]!;
+  normalizeScoreActionTabStops(next);
+  next.focus();
+});
+
 function renderMidiRoll(events: TapEventDto[]): void {
   const wrapper = document.createElement("div");
   wrapper.className = "midi-roll";
@@ -1296,6 +1381,8 @@ function renderMidiRoll(events: TapEventDto[]): void {
       noteButton.type = "button";
       noteButton.className = "midi-note";
       noteButton.textContent = noteName(note.midiPitch);
+      noteButton.tabIndex = -1;
+      noteButton.setAttribute("aria-label", `Measure ${event.measureNumber}: Play note ${noteName(note.midiPitch)}`);
       installAuditionHandlers(noteButton, () => event.index, [note.midiPitch]);
       notes.append(noteButton);
     }
@@ -1303,6 +1390,7 @@ function renderMidiRoll(events: TapEventDto[]): void {
     wrapper.append(eventCard);
   }
   elements.osmd.append(wrapper);
+  normalizeScoreActionTabStops();
   window.requestAnimationFrame(() => {
     wrapper.querySelectorAll<HTMLElement>(".midi-event").forEach((eventCard, index) => {
       eventHorizontalPositions[index] = eventCard.offsetLeft;
@@ -1674,11 +1762,16 @@ function buildScoreTargets(renderedThroughMeasure: number): { visualSteps: numbe
     const noteButton = document.createElement("button");
     noteButton.type = "button";
     noteButton.className = "note-target";
+    noteButton.tabIndex = -1;
     noteButton.style.left = `${group.left - 6}px`;
     noteButton.style.top = `${group.top - 6}px`;
     noteButton.style.width = `${Math.max(18, group.right - group.left + 12)}px`;
     noteButton.style.height = `${Math.max(18, group.bottom - group.top + 12)}px`;
-    noteButton.title = midiPitches.length > 1 ? "Play this staff chord" : `Play single note ${noteName(midiPitches[0]!)}`;
+    const event = activeScore.events[group.resolveIndex()];
+    const measurePrefix = event ? `Measure ${event.measureNumber}: ` : "";
+    noteButton.title = midiPitches.length > 1
+      ? `${measurePrefix}Play this staff chord`
+      : `${measurePrefix}Play single note ${noteName(midiPitches[0]!)}`;
     noteButton.setAttribute("aria-label", noteButton.title);
     installAuditionHandlers(noteButton, group.resolveIndex, midiPitches);
     targetFragment.append(noteButton);
@@ -1688,6 +1781,7 @@ function buildScoreTargets(renderedThroughMeasure: number): { visualSteps: numbe
   const targetNodes = targetFragment.childElementCount;
   elements.scoreHighlights.replaceChildren(highlightFragment);
   elements.scoreTargets.replaceChildren(targetFragment);
+  normalizeScoreActionTabStops();
   moveOsmdCursor(highlightIndex);
   osmd.cursor.hide();
   return {
@@ -1756,6 +1850,7 @@ function createSliceControls(resolveIndex: () => number, measureNumber: string):
   const play = document.createElement("button");
   play.type = "button";
   play.className = "slice-action play-chord";
+  play.tabIndex = -1;
   play.title = `Measure ${measureNumber}: Play single chord`;
   play.setAttribute("aria-label", play.title);
   play.append(createSoundIcon());
@@ -1764,6 +1859,7 @@ function createSliceControls(resolveIndex: () => number, measureNumber: string):
   const start = document.createElement("button");
   start.type = "button";
   start.className = "slice-action start-here";
+  start.tabIndex = -1;
   start.title = `Measure ${measureNumber}: Start here`;
   start.setAttribute("aria-label", start.title);
   start.append(createStartIcon());
@@ -1952,6 +2048,9 @@ function renderParts(): void {
     label.append(input, document.createTextNode(part.name));
     elements.partsList.append(label);
   });
+  if (!elements.partsPopover.classList.contains("hidden")) {
+    window.requestAnimationFrame(() => elements.partsList.querySelector<HTMLInputElement>("input")?.focus());
+  }
 }
 
 function populateSelect(select: HTMLSelectElement, devices: DeviceDto[], offLabel?: string): void {
@@ -2064,6 +2163,10 @@ async function reloadAudioSystems(): Promise<void> {
 function showDiagnostics(diagnostics: DiagnosticsDto): void {
   lastDiagnostics = diagnostics;
   elements.diagnosticsValue.textContent = diagnostics.ready ? "Ready" : "Needs attention";
+  elements.diagnosticsButton.setAttribute(
+    "aria-label",
+    `Audio diagnostics: ${diagnostics.ready ? "Ready" : "Needs attention"}`,
+  );
   const rows: Array<[string, string]> = [
     ["State", diagnostics.ready ? "Ready" : diagnostics.message ?? "Unavailable"],
     ["Backend", diagnostics.audioBackend],
@@ -2180,6 +2283,7 @@ async function refreshDiagnostics(): Promise<void> {
     telemetry.recordError({ errorCode: "diagnostics.unavailable", component: "audio", operation: "diagnostics" });
     elements.diagnosticsButton.classList.add("not-ready");
     elements.diagnosticsValue.textContent = "Unavailable";
+    elements.diagnosticsButton.setAttribute("aria-label", "Audio diagnostics: Unavailable");
   }
 }
 
@@ -2271,6 +2375,7 @@ async function initializeTelemetry(): Promise<void> {
       await new Promise<void>((resolve) => {
         finishInitialTelemetryChoice = resolve;
         elements.telemetryConsent.classList.remove("hidden");
+        syncModalIsolation();
         window.requestAnimationFrame(() => elements.telemetryContinue.focus());
       });
       return;
@@ -2292,6 +2397,7 @@ function completeInitialTelemetryChoice(enabled: boolean): void {
   else telemetry.disable();
   void syncNativeTelemetryConsent(enabled);
   elements.telemetryConsent.classList.add("hidden");
+  syncModalIsolation();
   syncTelemetryControls();
   finishInitialTelemetryChoice?.();
   finishInitialTelemetryChoice = null;
@@ -2375,6 +2481,7 @@ let telemetrySettingsPreviousFocus: HTMLElement | null = null;
 
 function closeTelemetrySettings(restoreFocus: boolean = true): void {
   elements.telemetrySettings.classList.add("hidden");
+  syncModalIsolation();
   if (restoreFocus) telemetrySettingsPreviousFocus?.focus();
   telemetrySettingsPreviousFocus = null;
 }
@@ -2385,8 +2492,19 @@ function closeHelp(): void {
   }
   elements.helpOverlay.classList.add("hidden");
   elements.helpButton.setAttribute("aria-expanded", "false");
+  syncModalIsolation();
   helpPreviousFocus?.focus();
   helpPreviousFocus = null;
+}
+
+function openHelp(): void {
+  if (!elements.helpOverlay.classList.contains("hidden")) return;
+  closeAllPopovers(false);
+  helpPreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  elements.helpOverlay.classList.remove("hidden");
+  elements.helpButton.setAttribute("aria-expanded", "true");
+  syncModalIsolation();
+  elements.helpClose.focus();
 }
 
 const ANNOUNCEMENT_URL =
@@ -2460,6 +2578,7 @@ function closeAnnouncement(): void {
     }
   }
   elements.announcementOverlay.classList.add("hidden");
+  syncModalIsolation();
   announcementPreviousFocus?.focus();
   announcementPreviousFocus = null;
 }
@@ -2504,6 +2623,7 @@ async function showLatestAnnouncement(): Promise<void> {
       ? document.activeElement
       : null;
     elements.announcementOverlay.classList.remove("hidden");
+    syncModalIsolation();
     elements.announcementOk.focus();
   } catch (error) {
     if (!(error instanceof DOMException && error.name === "AbortError")) {
@@ -2514,12 +2634,7 @@ async function showLatestAnnouncement(): Promise<void> {
   }
 }
 
-elements.helpButton.addEventListener("click", () => {
-  helpPreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  elements.helpOverlay.classList.remove("hidden");
-  elements.helpButton.setAttribute("aria-expanded", "true");
-  elements.helpClose.focus();
-});
+elements.helpButton.addEventListener("click", openHelp);
 elements.helpClose.addEventListener("click", closeHelp);
 elements.helpDone.addEventListener("click", closeHelp);
 elements.telemetrySettingsLink.addEventListener("click", (event) => {
@@ -2527,6 +2642,7 @@ elements.telemetrySettingsLink.addEventListener("click", (event) => {
   telemetrySettingsPreviousFocus = elements.telemetrySettingsLink;
   syncTelemetryControls();
   elements.telemetrySettings.classList.remove("hidden");
+  syncModalIsolation();
   elements.telemetrySettingsClose.focus();
 });
 elements.telemetrySettingsClose.addEventListener("click", () => closeTelemetrySettings());
@@ -2575,7 +2691,10 @@ elements.announcementContent.addEventListener("click", (event) => {
     });
 });
 elements.announcementOverlay.addEventListener("keydown", (event) => {
-  if (event.key === "Tab") {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeAnnouncement();
+  } else if (event.key === "Tab") {
     const focusable = [...elements.announcementOverlay.querySelectorAll<HTMLElement>(
       'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
     )];
@@ -2592,6 +2711,15 @@ elements.announcementOverlay.addEventListener("keydown", (event) => {
     }
   }
   event.stopPropagation();
+});
+elements.helpOverlay.querySelector(".help-jump-links")?.addEventListener("click", (event) => {
+  const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>('a[href^="#"]') : null;
+  if (!link) return;
+  const target = document.getElementById(link.hash.slice(1));
+  if (!target) return;
+  event.preventDefault();
+  target.focus({ preventScroll: true });
+  target.scrollIntoView({ block: "start" });
 });
 elements.helpDemoChoirOpen.addEventListener("click", (event) => {
   event.preventDefault();
@@ -2716,12 +2844,51 @@ const tapKeyCodes = new Set([
   "Backquote",
 ]);
 
+const INTERACTIVE_SHORTCUT_TARGETS = [
+  "a[href]",
+  "button",
+  "input",
+  "select",
+  "textarea",
+  "[contenteditable]",
+  "[role=button]",
+  "[role=combobox]",
+  "[role=slider]",
+].join(",");
+
+function isInteractiveShortcutTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(INTERACTIVE_SHORTCUT_TARGETS) !== null;
+}
+
+function hasOpenModal(): boolean {
+  return [...document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]')]
+    .some((dialog) => !dialog.classList.contains("hidden"));
+}
+
 document.addEventListener("keydown", (event) => {
-  if (event.code === "Period" && (event.ctrlKey || event.metaKey)) {
+  if (event.defaultPrevented || hasOpenModal()) return;
+  const commandModifier = event.ctrlKey || event.metaKey;
+  if (event.key === "F1" && !event.altKey && !commandModifier) {
+    event.preventDefault();
+    openHelp();
+    return;
+  }
+  if (event.code === "KeyO" && commandModifier && !event.altKey) {
+    event.preventDefault();
+    if (!event.repeat) void chooseScore();
+    return;
+  }
+  if (event.code === "Period" && commandModifier && !event.altKey) {
     event.preventDefault();
     if (!event.repeat) void toggleMidiFreePlay();
     return;
   }
+  if (event.code === "Escape" && closeAllPopovers(true)) {
+    event.preventDefault();
+    return;
+  }
+  if (isInteractiveShortcutTarget(event.target)) return;
+  if (event.altKey) return;
   if (event.code === "ArrowLeft") {
     event.preventDefault();
     if (event.ctrlKey || event.metaKey) {
@@ -2747,25 +2914,25 @@ document.addEventListener("keydown", (event) => {
     });
     return;
   }
-  if (event.code === "Space" && !event.repeat) {
+  if (event.code === "Space" && !commandModifier && !event.repeat) {
     event.preventDefault();
     if (mostRecentChordIndex !== null) {
       void auditionDown("audition:key:Space", mostRecentChordIndex);
     }
     return;
   }
-  if (tapKeyCodes.has(event.code) && !event.repeat) {
+  if (tapKeyCodes.has(event.code) && !commandModifier && !event.repeat) {
     event.preventDefault();
     void performDown(`key:${event.code}`);
   }
 });
 document.addEventListener("keyup", (event) => {
-  if (event.code === "Space") {
+  if (event.code === "Space" && heldTokens.has("audition:key:Space")) {
     event.preventDefault();
     void performUp("audition:key:Space");
     return;
   }
-  if (tapKeyCodes.has(event.code)) {
+  if (tapKeyCodes.has(event.code) && heldTokens.has(`key:${event.code}`)) {
     event.preventDefault();
     void performUp(`key:${event.code}`);
   }
@@ -2808,13 +2975,21 @@ elements.chromeToggle.addEventListener("click", () => {
   elements.chromeToggle.setAttribute("aria-expanded", String(!hidden));
   elements.chromeToggle.setAttribute("aria-label", hidden ? "Show header and footer" : "Hide header and footer");
   elements.chromeToggle.title = hidden ? "Show header and footer" : "Hide header and footer";
-  elements.partsPopover.classList.add("hidden");
-  elements.diagnostics.classList.add("hidden");
+  closeAllPopovers(false);
 });
-function togglePopover(button: HTMLElement, popover: HTMLElement): void {
-  const wasHidden = popover.classList.contains("hidden");
-  popover.classList.toggle("hidden", !wasHidden);
-  if (!wasHidden) return;
+
+function setPopoverOpen(
+  button: HTMLButtonElement,
+  popover: HTMLElement,
+  open: boolean,
+  moveFocus: boolean,
+): void {
+  popover.classList.toggle("hidden", !open);
+  button.setAttribute("aria-expanded", String(open));
+  if (!open) {
+    if (moveFocus) button.focus();
+    return;
+  }
 
   const buttonBounds = button.getBoundingClientRect();
   const popoverWidth = popover.getBoundingClientRect().width;
@@ -2822,6 +2997,31 @@ function togglePopover(button: HTMLElement, popover: HTMLElement): void {
   popover.style.left = `${left}px`;
   popover.style.right = "auto";
   popover.style.top = `${buttonBounds.bottom + 8}px`;
+  if (moveFocus) {
+    window.requestAnimationFrame(() => {
+      const firstControl = popover.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex="0"]');
+      (firstControl ?? popover).focus();
+    });
+  }
+}
+
+function closeAllPopovers(restoreFocus: boolean): boolean {
+  let closed = false;
+  for (const [button, popover] of [
+    [elements.partsButton, elements.partsPopover],
+    [elements.diagnosticsButton, elements.diagnostics],
+  ] as const) {
+    if (popover.classList.contains("hidden")) continue;
+    setPopoverOpen(button, popover, false, restoreFocus && !closed);
+    closed = true;
+  }
+  return closed;
+}
+
+function togglePopover(button: HTMLButtonElement, popover: HTMLElement): void {
+  const wasHidden = popover.classList.contains("hidden");
+  closeAllPopovers(false);
+  setPopoverOpen(button, popover, wasHidden, true);
 }
 
 document.addEventListener("pointerdown", (event) => {
@@ -2832,10 +3032,22 @@ document.addEventListener("pointerdown", (event) => {
     [elements.diagnosticsButton, elements.diagnostics],
   ] as const) {
     if (!popover.classList.contains("hidden") && !popover.contains(target) && !button.contains(target)) {
-      popover.classList.add("hidden");
+      setPopoverOpen(button, popover, false, false);
     }
   }
 });
+
+for (const [button, popover] of [
+  [elements.partsButton, elements.partsPopover],
+  [elements.diagnosticsButton, elements.diagnostics],
+] as const) {
+  popover.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    setPopoverOpen(button, popover, false, true);
+  });
+}
 
 elements.partsButton.addEventListener("click", () => togglePopover(elements.partsButton, elements.partsPopover));
 elements.audioOutput.addEventListener("change", async () => {

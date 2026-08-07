@@ -18,7 +18,7 @@ pub use import::{
     ImportOptions,
 };
 pub use model::{
-    NormalizedScore, NoteAttack, PartInfo, PlaybackMeasureInfo, ScoreFormat, ScoreMetadata,
-    ScorePosition, SourceAnchor, SpelledPitch, Step, TapEvent, TieInfo,
+    NormalizedScore, NoteAttack, PartInfo, PlaybackBeatInfo, PlaybackMeasureInfo, ScoreFormat,
+    ScoreMetadata, ScorePosition, SourceAnchor, SpelledPitch, Step, TapEvent, TieInfo,
 };
 pub use rational::Rational;

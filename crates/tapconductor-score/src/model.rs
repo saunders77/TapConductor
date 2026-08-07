@@ -149,6 +149,19 @@ pub struct PlaybackMeasureInfo {
     pub duration: Rational,
     pub beats: u32,
     pub beat_type: u32,
+    /// MusicXML implicit measures can be shorter than their time signature (for example a pickup).
+    #[serde(default)]
+    pub implicit: bool,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaybackBeatInfo {
+    pub absolute: Rational,
+    pub measure_index: usize,
+    pub beat_index: u32,
+    pub beats_in_measure: u32,
+    pub beat_type: u32,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -186,6 +199,7 @@ impl NormalizedScore {
                 duration: Rational::from_integer(4),
                 beats: 4,
                 beat_type: 4,
+                implicit: false,
             })
             .collect();
         Self {
@@ -223,6 +237,48 @@ impl NormalizedScore {
 
     pub fn all_part_ids(&self) -> BTreeSet<String> {
         self.parts.iter().map(|part| part.id.clone()).collect()
+    }
+
+    /// Build the conducted beat grid without inventing beats beyond a short implicit measure.
+    /// Pickup beats retain their metrical numbers, so a two-quarter pickup in 4/4 is beats 3-4.
+    pub fn playback_beats(&self) -> Vec<PlaybackBeatInfo> {
+        self.playback_measures
+            .iter()
+            .enumerate()
+            .flat_map(|(measure_index, measure)| {
+                let beat_length = Rational::new(4, i64::from(measure.beat_type))
+                    .expect("imported time-signature denominators are positive");
+                let offsets = (0..measure.beats)
+                    .map(|index| {
+                        beat_length
+                            .checked_mul_i64(i64::from(index))
+                            .expect("bounded beat index multiplication")
+                    })
+                    .take_while(|offset| *offset < measure.duration)
+                    .collect::<Vec<_>>();
+                let pickup_offset = if measure.implicit {
+                    measure
+                        .beats
+                        .saturating_sub(u32::try_from(offsets.len()).unwrap_or(measure.beats))
+                } else {
+                    0
+                };
+                offsets
+                    .into_iter()
+                    .enumerate()
+                    .map(move |(local_index, offset)| PlaybackBeatInfo {
+                        absolute: measure
+                            .start
+                            .checked_add(offset)
+                            .expect("validated score beat position"),
+                        measure_index,
+                        beat_index: pickup_offset
+                            .saturating_add(u32::try_from(local_index).unwrap_or(u32::MAX)),
+                        beats_in_measure: measure.beats,
+                        beat_type: measure.beat_type,
+                    })
+            })
+            .collect()
     }
 }
 

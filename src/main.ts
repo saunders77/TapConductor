@@ -6,7 +6,12 @@ import {
 } from "opensheetmusicdisplay";
 import { autoFollowTarget } from "./auto-follow";
 import { announcementIdentifier, shouldShowAnnouncement } from "./announcement";
-import { planBeatInterval, rationalValue } from "./beat-scheduler";
+import {
+  beatIndexAtOrBefore,
+  countInBeatCount,
+  planBeatInterval,
+  rationalValue,
+} from "./beat-scheduler";
 import {
   semanticRenderTarget,
   shouldAdvanceRenderFrontier,
@@ -495,6 +500,7 @@ async function toggleMidiFreePlay(): Promise<void> {
   await invokeSafe("set_midi_free_play", { enabled: nextMode });
   midiFreePlay = nextMode;
   updateMidiFreePlayButton();
+  if (tapMode === "beat") resetBeatTap();
 }
 const pendingDowns = new Map<string, Promise<void>>();
 const DEFAULT_VELOCITY = 96;
@@ -623,13 +629,9 @@ function resetBeatTap(): void {
     beatIndex = 0;
     beatCountRequired = 4;
   } else {
-    const eventPosition = rationalValue(score.events[cursorIndex]!.absolute);
-    beatIndex = score.beats.reduce(
-      (best, beat, index) => rationalValue(beat.absolute) <= eventPosition + 1e-9 ? index : best,
-      0,
-    );
+    beatIndex = beatIndexAtOrBefore(score.beats, score.events[cursorIndex]!.absolute);
     const target = score.beats[beatIndex]!;
-    beatCountRequired = Math.max(2, target.beatsInMeasure + target.beatIndex);
+    beatCountRequired = countInBeatCount(target);
   }
   updateTapButtonLabel();
   if (score) updatePosition();
@@ -2740,7 +2742,9 @@ document.addEventListener("keydown", (event) => {
       closeHelp();
       return;
     }
-    void invokeSafe("panic");
+    void invokeSafe("panic").then(() => {
+      if (tapMode === "beat") resetBeatTap();
+    });
     return;
   }
   if (event.code === "Space" && !event.repeat) {

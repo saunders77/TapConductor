@@ -139,27 +139,14 @@ impl LoadedScoreDto {
             })
             .unwrap_or_else(|| "Untitled score".to_owned());
         let beats = score
-            .playback_measures
-            .iter()
-            .enumerate()
-            .flat_map(|(measure_index, measure)| {
-                let beat_length = Rational::new(4, i64::from(measure.beat_type))
-                    .expect("imported time-signature denominators are positive");
-                (0..measure.beats).map(move |beat_index| BeatDto {
-                    absolute: measure
-                        .start
-                        .checked_add(
-                            beat_length
-                                .checked_mul_i64(i64::from(beat_index))
-                                .expect("bounded beat index multiplication"),
-                        )
-                        .expect("validated score beat position")
-                        .into(),
-                    measure_index,
-                    beat_index,
-                    beats_in_measure: measure.beats,
-                    beat_type: measure.beat_type,
-                })
+            .playback_beats()
+            .into_iter()
+            .map(|beat| BeatDto {
+                absolute: beat.absolute.into(),
+                measure_index: beat.measure_index,
+                beat_index: beat.beat_index,
+                beats_in_measure: beat.beats_in_measure,
+                beat_type: beat.beat_type,
             })
             .collect();
         Self {

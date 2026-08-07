@@ -1,7 +1,12 @@
 // Copyright (c) 2026 Michael Saunders
 import assert from "node:assert/strict";
 import test from "node:test";
-import { planBeatInterval, type RationalPoint } from "./beat-scheduler.ts";
+import {
+  beatIndexAtOrBefore,
+  countInBeatCount,
+  planBeatInterval,
+  type RationalPoint,
+} from "./beat-scheduler.ts";
 
 const at = (numerator: number, denominator = 1): { absolute: RationalPoint } => ({
   absolute: { numerator, denominator },
@@ -74,4 +79,20 @@ test("uses the written beat length for subdivisions after the final beat marker"
     { eventIndex: 1, delayMs: 200 },
   ]);
   assert.equal(plan.nextEventIndex, 2);
+});
+
+test("counts in a full bar plus the elapsed half-bar before a pickup", () => {
+  const pickupBeat = { ...at(0), beatType: 4, beatIndex: 2, beatsInMeasure: 4 };
+  assert.equal(countInBeatCount(pickupBeat), 6);
+});
+
+test("locates the correct beat when restarting at an on-beat or offbeat chord", () => {
+  const beats = [
+    { ...at(0), beatType: 4 },
+    { ...at(1), beatType: 4 },
+    { ...at(2), beatType: 4 },
+    { ...at(3), beatType: 4 },
+  ];
+  assert.equal(beatIndexAtOrBefore(beats, at(2).absolute), 2);
+  assert.equal(beatIndexAtOrBefore(beats, at(5, 2).absolute), 2);
 });

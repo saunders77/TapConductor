@@ -92,25 +92,13 @@ impl WebScore {
             },
             "musicXml": self.music_xml,
             "events": events.iter().enumerate().map(event_json).collect::<Vec<_>>(),
-            "beats": self.score.playback_measures.iter().enumerate().flat_map(|(measure_index, measure)| {
-                let beat_length = Rational::new(4, i64::from(measure.beat_type))
-                    .expect("imported time-signature denominators are positive");
-                (0..measure.beats).map(move |beat_index| {
-                    let absolute = measure.start
-                        .checked_add(
-                            beat_length.checked_mul_i64(i64::from(beat_index))
-                                .expect("bounded beat index multiplication")
-                        )
-                        .expect("validated score beat position");
-                    serde_json::json!({
-                        "absolute": rational_json(absolute),
-                        "measureIndex": measure_index,
-                        "beatIndex": beat_index,
-                        "beatsInMeasure": measure.beats,
-                        "beatType": measure.beat_type,
-                    })
-                })
-            }).collect::<Vec<_>>(),
+            "beats": self.score.playback_beats().into_iter().map(|beat| serde_json::json!({
+                "absolute": rational_json(beat.absolute),
+                "measureIndex": beat.measure_index,
+                "beatIndex": beat.beat_index,
+                "beatsInMeasure": beat.beats_in_measure,
+                "beatType": beat.beat_type,
+            })).collect::<Vec<_>>(),
             "parts": self.score.parts.iter().map(|part| serde_json::json!({
                 "id": part.id,
                 "name": part.name,

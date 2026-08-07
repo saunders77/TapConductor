@@ -437,6 +437,7 @@ struct ParsedPart {
 
 struct ParsedMeasure {
     id: String,
+    implicit: bool,
     duration: Rational,
     time: (u32, u32),
     notes: Vec<RawNote>,
@@ -1211,6 +1212,7 @@ impl<'a> XmlState<'a> {
         }
         part.measures.push(ParsedMeasure {
             id: measure.id,
+            implicit: measure.implicit,
             duration,
             time: part.time.unwrap_or((4, 4)),
             notes: measure.notes,
@@ -1294,6 +1296,7 @@ impl<'a> XmlState<'a> {
                     duration: template.duration,
                     beats: template.time.0,
                     beat_type: template.time.1,
+                    implicit: template.implicit,
                 }
             })
             .collect();
@@ -1347,6 +1350,7 @@ fn unique_id(used: &mut BTreeSet<String>, base: String) -> String {
 #[derive(Clone)]
 struct MeasureTemplate {
     id: String,
+    implicit: bool,
     duration: Rational,
     time: (u32, u32),
     repeat_forward: bool,
@@ -1397,6 +1401,7 @@ fn build_measure_templates(
         }
         templates.push(MeasureTemplate {
             id,
+            implicit: measures.iter().any(|(_, measure)| measure.implicit),
             duration,
             time: measures
                 .first()

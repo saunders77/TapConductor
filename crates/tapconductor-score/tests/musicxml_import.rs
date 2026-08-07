@@ -198,6 +198,60 @@ fn grace_note_groups_are_distinct_tap_moments_before_the_principal_note() {
 }
 
 #[test]
+fn numbers_an_implicit_half_bar_pickup_as_the_last_two_beats() {
+    let xml = br#"
+        <score-partwise>
+          <part-list><score-part id="P"><part-name>Piano</part-name></score-part></part-list>
+          <part id="P">
+            <measure number="0" implicit="yes">
+              <attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
+              <note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration></note>
+              <note><pitch><step>D</step><octave>4</octave></pitch><duration>1</duration></note>
+            </measure>
+            <measure number="1">
+              <note><pitch><step>E</step><octave>4</octave></pitch><duration>4</duration></note>
+            </measure>
+          </part>
+        </score-partwise>"#;
+    let score = import_musicxml(xml, &ImportOptions::default()).unwrap();
+    let beats = score.playback_beats();
+
+    assert_eq!(
+        beats
+            .iter()
+            .take(4)
+            .map(|beat| (beat.absolute, beat.beat_index))
+            .collect::<Vec<_>>(),
+        vec![
+            (Rational::ZERO, 2),
+            (Rational::ONE, 3),
+            (Rational::from_integer(2), 0),
+            (Rational::from_integer(3), 1),
+        ]
+    );
+}
+
+#[test]
+fn bundled_rachmaninoff_starts_on_beat_three_after_a_six_beat_count_in() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("assets")
+        .join("demo")
+        .join("All-Night Vigil - Rachmaninoff 1915.musicxml");
+    let score = import_path(&path, &ImportOptions::default()).unwrap();
+    let beats = score.playback_beats();
+
+    assert_eq!(score.tap_events[0].position.absolute, Rational::ZERO);
+    assert_eq!(beats[0].absolute, Rational::ZERO);
+    assert_eq!(beats[0].beat_index, 2);
+    assert_eq!(beats[0].beats_in_measure + beats[0].beat_index, 6);
+    assert_eq!(beats[1].beat_index, 3);
+    assert_eq!(beats[2].absolute, Rational::from_integer(2));
+    assert_eq!(beats[2].beat_index, 0);
+}
+
+#[test]
 fn imports_staccato_articulation_on_the_attack() {
     let xml = br#"
         <score-partwise>

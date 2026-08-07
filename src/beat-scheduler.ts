@@ -13,6 +13,11 @@ export interface TimelineBeat {
   beatType: number;
 }
 
+export interface ConductedTimelineBeat extends TimelineBeat {
+  beatIndex: number;
+  beatsInMeasure: number;
+}
+
 export interface PlannedBeatEvent {
   eventIndex: number;
   delayMs: number;
@@ -27,6 +32,33 @@ const POSITION_EPSILON = 1e-9;
 
 export const rationalValue = (value: RationalPoint): number =>
   value.denominator === 0 ? 0 : value.numerator / value.denominator;
+
+/** Returns the beat containing a score position on an ordered beat grid. */
+export function beatIndexAtOrBefore(
+  beats: readonly TimelineBeat[],
+  position: RationalPoint,
+): number {
+  if (beats.length === 0) return 0;
+  const target = rationalValue(position);
+  let low = 0;
+  let high = beats.length - 1;
+  let result = 0;
+  while (low <= high) {
+    const middle = low + Math.floor((high - low) / 2);
+    if (rationalValue(beats[middle]!.absolute) <= target + POSITION_EPSILON) {
+      result = middle;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return result;
+}
+
+/** One complete bar, followed by the elapsed beats before the selected starting beat. */
+export function countInBeatCount(beat: ConductedTimelineBeat): number {
+  return Math.max(2, beat.beatsInMeasure + beat.beatIndex);
+}
 
 /**
  * Reserves every score event in [currentBeat, nextBeat) and assigns its delay

@@ -85,11 +85,12 @@ impl ActiveOutputGroup {
 }
 
 /// Tracks MIDI OUT voice groups without confusing overlapping repeated
-/// pitches. MIDI 1.0 has no note IDs, so a Note Off is suppressed until the
-/// last group using a channel/pitch pair is released.
+/// pitches. MIDI 1.0 has no note IDs, so a repeated pitch is explicitly
+/// stopped before it is retriggered and only the newest group owns its later
+/// Note Off.
 pub struct MidiOutState<const GROUPS: usize = 128> {
     groups: [Option<ActiveOutputGroup>; GROUPS],
-    pitch_references: [[u16; 128]; 16],
+    pitch_owners: [[Option<MidiOutGroupId>; 128]; 16],
     used_channels: u16,
 }
 
@@ -98,7 +99,7 @@ impl<const GROUPS: usize> Default for MidiOutState<GROUPS> {
         assert!(GROUPS > 0, "MIDI OUT group capacity must be non-zero");
         Self {
             groups: [None; GROUPS],
-            pitch_references: [[0; 128]; 16],
+            pitch_owners: [[None; 128]; 16],
             used_channels: 0,
         }
     }
@@ -183,6 +184,22 @@ impl<const GROUPS: usize> MidiOutState<GROUPS> {
             return Err(MidiOutError::ChordTooLarge);
         }
         self.used_channels |= 1 << channel.zero_based();
+        let owner = &mut self.pitch_owners[channel.zero_based() as usize][pitch as usize];
+        if owner.is_some() {
+            // A MIDI 1.0 Note Off cannot identify which overlapping instance
+            // it belongs to. Balance the prior Note On before retriggering so
+            // receivers that allocate one voice per Note On cannot retain a
+            // permanently sounding voice. The newest group becomes the sole
+            // owner, so releasing the older group cannot cut it off.
+            output
+                .send(MidiMessage::NoteOff {
+                    channel,
+                    note: note.note,
+                    velocity: Velocity::ZERO,
+                })
+                .map_err(MidiOutError::Backend)?;
+            *owner = None;
+        }
         output
             .send(MidiMessage::NoteOn {
                 channel,
@@ -190,8 +207,7 @@ impl<const GROUPS: usize> MidiOutState<GROUPS> {
                 velocity: note.velocity,
             })
             .map_err(MidiOutError::Backend)?;
-        let reference = &mut self.pitch_references[channel.zero_based() as usize][pitch as usize];
-        *reference = reference.saturating_add(1);
+        *owner = Some(group_id);
         active.pitches[active.len as usize] = pitch;
         active.len += 1;
         Ok(())
@@ -210,10 +226,10 @@ impl<const GROUPS: usize> MidiOutState<GROUPS> {
         let group = self.groups[slot].take().expect("located group");
         let mut first_error = None;
         for pitch in &group.pitches[..group.len as usize] {
-            let reference =
-                &mut self.pitch_references[group.channel.zero_based() as usize][*pitch as usize];
-            *reference = reference.saturating_sub(1);
-            if *reference == 0 {
+            let owner =
+                &mut self.pitch_owners[group.channel.zero_based() as usize][*pitch as usize];
+            if *owner == Some(group.id) {
+                *owner = None;
                 let message = MidiMessage::NoteOff {
                     channel: group.channel,
                     note: MidiNote::new(*pitch).expect("stored valid MIDI pitch"),
@@ -251,7 +267,7 @@ impl<const GROUPS: usize> MidiOutState<GROUPS> {
             }
         }
         self.groups.fill(None);
-        self.pitch_references.fill([0; 128]);
+        self.pitch_owners.fill([None; 128]);
         self.used_channels = 0;
         first_error.map_or(Ok(()), |error| Err(MidiOutError::Backend(error)))
     }
@@ -336,10 +352,49 @@ mod tests {
         state
             .play_group(&mut output, MidiOutGroupId(2), channel, &one_note(60))
             .unwrap();
+        assert!(matches!(output.0[1], MidiMessage::NoteOff { .. }));
+        assert!(matches!(output.0[2], MidiMessage::NoteOn { .. }));
         state.release_group(&mut output, MidiOutGroupId(1)).unwrap();
-        assert_eq!(output.0.len(), 2, "first release must suppress Note Off");
+        assert_eq!(
+            output.0.len(),
+            3,
+            "the superseded group must not turn off the retriggered note"
+        );
         state.release_group(&mut output, MidiOutGroupId(2)).unwrap();
-        assert!(matches!(output.0[2], MidiMessage::NoteOff { .. }));
+        assert!(matches!(output.0[3], MidiMessage::NoteOff { .. }));
+    }
+
+    #[test]
+    fn same_pitch_overlap_does_not_leave_a_voice_sounding() {
+        let mut state = MidiOutState::<4>::default();
+        let mut output = RecordingOutput::default();
+        let channel = MidiChannel::new(0).unwrap();
+
+        state
+            .play_group(&mut output, MidiOutGroupId(1), channel, &one_note(60))
+            .unwrap();
+        state
+            .play_group(&mut output, MidiOutGroupId(2), channel, &one_note(60))
+            .unwrap();
+        state.release_group(&mut output, MidiOutGroupId(1)).unwrap();
+        state.release_group(&mut output, MidiOutGroupId(2)).unwrap();
+        state
+            .play_group(&mut output, MidiOutGroupId(3), channel, &one_note(60))
+            .unwrap();
+        state.release_group(&mut output, MidiOutGroupId(3)).unwrap();
+
+        let note_ons = output
+            .0
+            .iter()
+            .filter(|message| matches!(message, MidiMessage::NoteOn { .. }))
+            .count();
+        let note_offs = output
+            .0
+            .iter()
+            .filter(|message| matches!(message, MidiMessage::NoteOff { .. }))
+            .count();
+        assert_eq!(note_ons, 3);
+        assert_eq!(note_offs, 3);
     }
 
     #[test]

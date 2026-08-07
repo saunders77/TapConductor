@@ -83,6 +83,7 @@ pub fn run() {
             commands::set_cursor,
             commands::panic,
             commands::set_midi_free_play,
+            commands::set_piano_shortcut_pitch,
             commands::audio_devices,
             commands::set_audio_device,
             commands::reload_audio_systems,
@@ -122,6 +123,24 @@ pub fn run() {
                 .name("tapconductor-midi-input".to_owned())
                 .spawn(move || {
                     while let Ok(action) = midi_receiver.recv() {
+                        let action = match action {
+                            MidiInputAction::Shortcut {
+                                command,
+                                token,
+                                pressed,
+                            } => {
+                                let _ = handle.emit(
+                                    "piano-shortcut",
+                                    dto::PianoShortcutInputDto {
+                                        command,
+                                        token,
+                                        pressed,
+                                    },
+                                );
+                                continue;
+                            }
+                            action => action,
+                        };
                         let Some(state) = setup_state.upgrade() else {
                             break;
                         };
@@ -150,6 +169,9 @@ pub fn run() {
                                             Ok(None)
                                         }
                                         MidiInputAction::Panic => core.panic_midi_inputs(),
+                                        MidiInputAction::Shortcut { .. } => unreachable!(
+                                            "shortcuts are emitted before core dispatch"
+                                        ),
                                         MidiInputAction::Shutdown => {
                                             let _ = core.panic();
                                             break;
@@ -170,6 +192,9 @@ pub fn run() {
                                         }
                                         MidiInputAction::Up { token } => core.release_input(&token),
                                         MidiInputAction::Panic => core.panic_midi_inputs(),
+                                        MidiInputAction::Shortcut { .. } => unreachable!(
+                                            "shortcuts are emitted before core dispatch"
+                                        ),
                                         MidiInputAction::Shutdown => {
                                             let _ = core.panic();
                                             break;

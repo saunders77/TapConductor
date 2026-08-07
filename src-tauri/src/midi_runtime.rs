@@ -1,13 +1,18 @@
 // Copyright (c) 2026 Michael Saunders
-use crate::dto::{DeviceDto, MidiPortsDto};
+use crate::dto::{DeviceDto, MidiPortsDto, PianoShortcutCommandDto};
 use std::{
-    sync::mpsc::{self, Receiver, RecvTimeoutError, Sender},
+    collections::{HashMap, HashSet},
+    sync::{
+        Arc,
+        atomic::{AtomicU8, Ordering},
+        mpsc::{self, Receiver, RecvTimeoutError, Sender},
+    },
     thread,
     time::{Duration, Instant},
 };
 use tapconductor_midi::{
-    MidiChannel, MidiInputConfig, MidiInputMapper, MidiNote, MidiOutGroupId, MidiOutNote,
-    MidiOutState, MidiTapEvent, Velocity,
+    MidiChannel, MidiInputConfig, MidiInputMapper, MidiMessage, MidiNote, MidiOutGroupId,
+    MidiOutNote, MidiOutState, MidiTapEvent, Velocity,
     backend::{MidiBackend, MidiInputConnection, MidiOutputConnection, MidirBackend},
 };
 use tapconductor_performance as performance;
@@ -22,8 +27,99 @@ pub enum MidiInputAction {
     Up {
         token: String,
     },
+    Shortcut {
+        command: PianoShortcutCommandDto,
+        token: String,
+        pressed: bool,
+    },
     Panic,
     Shutdown,
+}
+
+enum ShortcutGateOutput {
+    Pass(MidiInputAction),
+    Consume,
+    Shortcut(MidiInputAction),
+}
+
+#[derive(Default)]
+struct PianoShortcutGate {
+    function_tokens: HashSet<String>,
+    consumed_tokens: HashSet<String>,
+    command_tokens: HashMap<String, PianoShortcutCommandDto>,
+}
+
+impl PianoShortcutGate {
+    fn process(
+        &mut self,
+        action: MidiInputAction,
+        function_pitch: u8,
+        function_is_physically_held: bool,
+    ) -> ShortcutGateOutput {
+        match action {
+            MidiInputAction::Down {
+                token,
+                midi_pitch,
+                velocity,
+            } => {
+                if midi_pitch == function_pitch {
+                    self.function_tokens.insert(token);
+                    return ShortcutGateOutput::Consume;
+                }
+                if !function_is_physically_held {
+                    return ShortcutGateOutput::Pass(MidiInputAction::Down {
+                        token,
+                        midi_pitch,
+                        velocity,
+                    });
+                }
+                self.consumed_tokens.insert(token.clone());
+                let Some(command) = command_for_pitch(midi_pitch) else {
+                    return ShortcutGateOutput::Consume;
+                };
+                self.command_tokens.insert(token.clone(), command);
+                ShortcutGateOutput::Shortcut(MidiInputAction::Shortcut {
+                    command,
+                    token,
+                    pressed: true,
+                })
+            }
+            MidiInputAction::Up { token } => {
+                if self.function_tokens.remove(&token) {
+                    return ShortcutGateOutput::Consume;
+                }
+                if !self.consumed_tokens.remove(&token) {
+                    return ShortcutGateOutput::Pass(MidiInputAction::Up { token });
+                }
+                let Some(command) = self.command_tokens.remove(&token) else {
+                    return ShortcutGateOutput::Consume;
+                };
+                ShortcutGateOutput::Shortcut(MidiInputAction::Shortcut {
+                    command,
+                    token,
+                    pressed: false,
+                })
+            }
+            MidiInputAction::Panic => {
+                self.function_tokens.clear();
+                self.consumed_tokens.clear();
+                self.command_tokens.clear();
+                ShortcutGateOutput::Pass(MidiInputAction::Panic)
+            }
+            action => ShortcutGateOutput::Pass(action),
+        }
+    }
+}
+
+fn command_for_pitch(pitch: u8) -> Option<PianoShortcutCommandDto> {
+    match pitch % 12 {
+        4 => Some(PianoShortcutCommandDto::Forward),
+        2 => Some(PianoShortcutCommandDto::Back),
+        3 => Some(PianoShortcutCommandDto::Replay),
+        1 => Some(PianoShortcutCommandDto::Beginning),
+        11 => Some(PianoShortcutCommandDto::ToggleFreePlay),
+        _ => None,
+    }
 }
 
 enum OutputWorkerCommand {
@@ -67,6 +163,7 @@ pub struct MidiManager {
     selected_output_name: Option<String>,
     last_output_error: Option<String>,
     sample_rate: u32,
+    shortcut_function_pitch: Arc<AtomicU8>,
 }
 
 impl MidiManager {
@@ -82,6 +179,7 @@ impl MidiManager {
             selected_output_name: None,
             last_output_error: None,
             sample_rate,
+            shortcut_function_pitch: Arc::new(AtomicU8::new(36)),
         }
     }
 
@@ -140,6 +238,11 @@ impl MidiManager {
         self.sample_rate = sample_rate.max(1);
     }
 
+    pub fn set_shortcut_function_pitch(&self, midi_pitch: u8) {
+        self.shortcut_function_pitch
+            .store(midi_pitch, Ordering::Relaxed);
+    }
+
     pub fn set_input(&mut self, device_id: Option<String>) -> Result<(), String> {
         if let Some(connection) = self.input_connection.take() {
             // Native disconnect has no portable cancellation API. Keep it away
@@ -167,6 +270,7 @@ impl MidiManager {
             .map(|device| device.name)
             .ok_or_else(|| "The selected MIDI input is unavailable.".to_owned())?;
         let sender = self.input_action_sender.clone();
+        let shortcut_function_pitch = self.shortcut_function_pitch.clone();
         // In normal rhythm/free-play modes, keep a MIDI key's input token
         // latched while CC64 sustain is down. The mapper emits its matching
         // Up when the pedal is released, so the existing performance gate
@@ -179,10 +283,34 @@ impl MidiManager {
                 respect_sustain_pedal: true,
                 ..MidiInputConfig::default()
             });
+            let mut shortcut_gate = PianoShortcutGate::default();
+            let mut physical_function_keys = HashSet::<(u8, u8)>::new();
             MidirBackend
                 .connect_input(
                     &connection_id,
                     Box::new(move |message| {
+                        let function_pitch = shortcut_function_pitch.load(Ordering::Relaxed);
+                        match message.message {
+                            MidiMessage::NoteOn {
+                                channel,
+                                note,
+                                velocity,
+                            } if velocity.to_midi1() > 0 && note.get() == function_pitch => {
+                                physical_function_keys.insert((channel.zero_based(), note.get()));
+                            }
+                            MidiMessage::NoteOff { channel, note, .. }
+                            | MidiMessage::NoteOn {
+                                channel,
+                                note,
+                                velocity: _,
+                            } => {
+                                physical_function_keys.remove(&(channel.zero_based(), note.get()));
+                            }
+                            _ => {}
+                        }
+                        let function_is_physically_held = physical_function_keys
+                            .iter()
+                            .any(|(_, pitch)| *pitch == function_pitch);
                         mapper.process(message, |event| {
                             let action = match event {
                                 MidiTapEvent::Down {
@@ -200,7 +328,17 @@ impl MidiManager {
                                 },
                                 MidiTapEvent::Panic { .. } => MidiInputAction::Panic,
                             };
-                            let _ = sender.send(action);
+                            match shortcut_gate.process(
+                                action,
+                                function_pitch,
+                                function_is_physically_held,
+                            ) {
+                                ShortcutGateOutput::Pass(action)
+                                | ShortcutGateOutput::Shortcut(action) => {
+                                    let _ = sender.send(action);
+                                }
+                                ShortcutGateOutput::Consume => {}
+                            }
                         });
                     }),
                 )
@@ -497,6 +635,76 @@ fn output_worker_loop(
                 index += 1;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod piano_shortcut_tests {
+    use super::{MidiInputAction, PianoShortcutGate, ShortcutGateOutput};
+    use crate::dto::PianoShortcutCommandDto;
+
+    fn down(token: &str, pitch: u8) -> MidiInputAction {
+        MidiInputAction::Down {
+            token: token.to_owned(),
+            midi_pitch: pitch,
+            velocity: 96,
+        }
+    }
+
+    #[test]
+    fn maps_command_notes_by_pitch_class_and_swallows_releases() {
+        let mut gate = PianoShortcutGate::default();
+        assert!(matches!(
+            gate.process(down("fn", 36), 36, true),
+            ShortcutGateOutput::Consume
+        ));
+        let ShortcutGateOutput::Shortcut(MidiInputAction::Shortcut {
+            command, pressed, ..
+        }) = gate.process(down("command", 88), 36, true)
+        else {
+            panic!("E in any octave should produce a shortcut");
+        };
+        assert_eq!(command, PianoShortcutCommandDto::Forward);
+        assert!(pressed);
+        assert!(matches!(
+            gate.process(
+                MidiInputAction::Up {
+                    token: "fn".to_owned()
+                },
+                36,
+                false
+            ),
+            ShortcutGateOutput::Consume
+        ));
+        assert!(matches!(
+            gate.process(
+                MidiInputAction::Up {
+                    token: "command".to_owned()
+                },
+                36,
+                false
+            ),
+            ShortcutGateOutput::Shortcut(MidiInputAction::Shortcut { pressed: false, .. })
+        ));
+    }
+
+    #[test]
+    fn passes_notes_when_function_pitch_is_not_held() {
+        let mut gate = PianoShortcutGate::default();
+        assert!(matches!(
+            gate.process(down("note", 64), 36, false),
+            ShortcutGateOutput::Pass(_)
+        ));
+    }
+
+    #[test]
+    fn sustained_function_note_does_not_count_as_physically_held() {
+        let mut gate = PianoShortcutGate::default();
+        gate.process(down("fn", 36), 36, true);
+        assert!(matches!(
+            gate.process(down("note", 64), 36, false),
+            ShortcutGateOutput::Pass(_)
+        ));
     }
 }
 

@@ -300,6 +300,24 @@ pub enum BeatMidiInputDto {
     Up { token: String },
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PianoShortcutCommandDto {
+    Forward,
+    Back,
+    Replay,
+    Beginning,
+    ToggleFreePlay,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PianoShortcutInputDto {
+    pub command: PianoShortcutCommandDto,
+    pub token: String,
+    pub pressed: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::CoreEventDto;

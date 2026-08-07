@@ -224,6 +224,17 @@ pub fn set_midi_free_play(
 }
 
 #[tauri::command]
+pub fn set_piano_shortcut_pitch(
+    state: State<'_, Arc<AppState>>,
+    midi_pitch: u8,
+) -> Result<(), String> {
+    lock_core(&state)?
+        .midi
+        .set_shortcut_function_pitch(midi_pitch);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn audio_devices(state: State<'_, Arc<AppState>>) -> Result<Vec<DeviceDto>, String> {
     lock_core(&state)?.audio.devices()
 }

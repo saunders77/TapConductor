@@ -107,3 +107,9 @@ export type CoreEvent =
 export type BeatMidiInput =
   | { type: "down"; token: string; velocity: number }
   | { type: "up"; token: string };
+
+export interface PianoShortcutInput {
+  command: "forward" | "back" | "replay" | "beginning" | "toggle_free_play";
+  token: string;
+  pressed: boolean;
+}

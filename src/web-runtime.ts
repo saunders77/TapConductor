@@ -9,6 +9,7 @@ import type {
   RationalDto,
 } from "./types";
 import { volumeToMidiVelocity } from "./midi-velocity";
+import { PianoShortcutGate } from "./piano-shortcuts";
 import {
   releaseBoundaryIndex,
   releasesOnInput,
@@ -391,6 +392,7 @@ export class WebRuntime {
   private selectedMidiInput: string | null = null;
   private selectedMidiOutput: string | null = null;
   private midiFreePlay = false;
+  private readonly pianoShortcuts = new PianoShortcutGate();
   private legatoMode = false;
   private volume = 1;
   private readonly midiTokenPitches = new Map<string, number>();
@@ -467,6 +469,9 @@ export class WebRuntime {
       case "set_midi_free_play":
         this.midiFreePlay = Boolean(args.enabled);
         this.panic();
+        return undefined;
+      case "set_piano_shortcut_pitch":
+        this.pianoShortcuts.setFunctionPitch(Number(args.midiPitch));
         return undefined;
       case "audio_devices":
         return this.audioDevices();
@@ -620,6 +625,7 @@ export class WebRuntime {
   private panic(): void {
     this.audio.panic(this.midiOutput());
     this.heldTokens.clear();
+    this.pianoShortcuts.reset();
   }
 
   private soundingPitches(index: number): number[] {
@@ -741,9 +747,19 @@ export class WebRuntime {
     if (kind !== 0x80 && kind !== 0x90) return;
     const token = `midi:${inputId}:${status & 0x0f}:${pitch}`;
     if (kind === 0x90 && velocity > 0) {
+      const shortcut = this.pianoShortcuts.process({ type: "down", token, pitch });
+      if (shortcut.type === "consume") {
+        if (shortcut.event) this.emit("piano-shortcut", shortcut.event);
+        return;
+      }
       this.midiTokenPitches.set(token, pitch);
       this.emit<BeatMidiInput>("beat-midi-input", { type: "down", token, velocity });
     } else {
+      const shortcut = this.pianoShortcuts.process({ type: "up", token });
+      if (shortcut.type === "consume") {
+        if (shortcut.event) this.emit("piano-shortcut", shortcut.event);
+        return;
+      }
       this.emit<BeatMidiInput>("beat-midi-input", { type: "up", token });
       this.midiTokenPitches.delete(token);
     }

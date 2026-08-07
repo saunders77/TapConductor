@@ -35,6 +35,7 @@ import type {
   DiagnosticsDto,
   LoadedScore,
   MidiPortsDto,
+  PianoShortcutInput,
   TapEventDto,
 } from "./types";
 
@@ -159,6 +160,7 @@ app.innerHTML = `
             <p>Use the Audio Out control to select the speakers or sound card to use. On Windows, an option marked (ASIO) has an installed ASIO driver and may provide better latency on supported hardware. A driver such as ASIO4ALL can route to built-in Realtek speakers or headphones after that endpoint is enabled in the driver's control panel. ASIO is not automatically the best choice for every device or configuration; choose the output that is stable and responsive with your hardware.</p>
             <p id="instrument-help">Choose an instrument, either the grand piano or a synthesizer.</p>
             <p>If you want to control TapConductor with a <strong>piano</strong> or another MIDI instrument, then plug in the instrument and select it from the MIDI In menu. You'll still be able to tap using normal mouse and keyboard controls too. When you use a piano, TapConductor will use the dynamics you play for each note, and you can use a sustain pedal. If you connect or reconnect a device while TapConductor is open, choose <b>Reload audio &amp; MIDI devices</b> from Audio Out.</p>
+            <label class="shortcut-pitch-setting" for="piano-shortcut-pitch"><span><b>Piano shortcut function key</b><small>Hold this exact MIDI note, then press E to go forward, D to go back, Dâ™¯ to replay, Câ™¯ to return to the beginning, or B to toggle direct MIDI play. The command note can be in any octave.</small></span><select id="piano-shortcut-pitch" aria-label="Piano shortcut function key"></select></label>
             <p>The MIDI OUT setting is only needed if you want to route your performance to another program for recording or further manipulation. For normal playing, it's not necessary. You can also use it to route back to your piano, which will use your piano's built-in sounds and speakers instead of your computer's speakers.</p>
             <p>By default, all staves (parts) will play during tapping, but you can select specific staves in the PARTS menu.</p>
           </section>
@@ -173,7 +175,7 @@ app.innerHTML = `
           </section>   
           <section><h3>5. Navigate</h3>
             <p>Use the downward-pointing arrows above each score location to control the green location selector and choose where to start playing when you resume tapping. You can also use the left and right arrow keys to move the selector left and right.</p>
-            <p>The Spacebar replays the last chord, which can be useful in a rehearsal situation.</p>
+            <p>The Spacebar replays the last chord, which can be useful in a rehearsal situation. Cmd/Ctrl+Left Arrow returns to the beginning, and Cmd/Ctrl+. toggles direct MIDI play.</p>
           </section>
           <section id="privacy" class="legal-disclosure" tabindex="-1">
             <h3>Privacy</h3>
@@ -335,6 +337,7 @@ const elements = {
   instrument: byId<HTMLSelectElement>("instrument"),
   midiInput: byId<HTMLSelectElement>("midi-input"),
   midiOutput: byId<HTMLSelectElement>("midi-output"),
+  pianoShortcutPitch: byId<HTMLSelectElement>("piano-shortcut-pitch"),
   tapMode: byId<HTMLSelectElement>("tap-mode"),
   legatoMode: byId<HTMLInputElement>("legato-mode"),
   legatoValue: byId<HTMLElement>("legato-value"),
@@ -430,6 +433,9 @@ let lastUiNativeRoundTripMs: number | null = null;
 let unlisteners: UnlistenFn[] = [];
 const heldTokens = new Set<string>();
 let midiFreePlay = false;
+const DEFAULT_PIANO_SHORTCUT_PITCH = 36;
+const PIANO_SHORTCUT_PITCH_KEY = "tapconductor.piano-shortcut-pitch-v1";
+let pianoShortcutPitch = loadPianoShortcutPitch();
 const NONE_AUDIO_OUTPUT_VALUE = "__none_mute__";
 let selectedAudioDeviceId = NONE_AUDIO_OUTPUT_VALUE;
 const RELOAD_AUDIO_SYSTEMS_VALUE = "__reload_audio_systems__";
@@ -443,6 +449,26 @@ function updateMidiFreePlayButton(): void {
     ? "Taps start following the score again"
     : "Stop conducting the score";
   elements.panic.setAttribute("aria-label", elements.panic.title);
+}
+
+function loadPianoShortcutPitch(): number {
+  try {
+    const stored = localStorage.getItem(PIANO_SHORTCUT_PITCH_KEY);
+    if (stored === null) return DEFAULT_PIANO_SHORTCUT_PITCH;
+    const pitch = Number(stored);
+    return Number.isInteger(pitch) && pitch >= 0 && pitch <= 127
+      ? pitch
+      : DEFAULT_PIANO_SHORTCUT_PITCH;
+  } catch {
+    return DEFAULT_PIANO_SHORTCUT_PITCH;
+  }
+}
+
+async function toggleMidiFreePlay(): Promise<void> {
+  const nextMode = !midiFreePlay;
+  await invokeSafe("set_midi_free_play", { enabled: nextMode });
+  midiFreePlay = nextMode;
+  updateMidiFreePlayButton();
 }
 const pendingDowns = new Map<string, Promise<void>>();
 const DEFAULT_VELOCITY = 96;
@@ -672,6 +698,11 @@ function noteName(midi: number): string {
   const names = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
   return `${names[midi % 12] ?? "?"}${Math.floor(midi / 12) - 1}`;
 }
+
+for (let pitch = 0; pitch <= 127; pitch += 1) {
+  elements.pianoShortcutPitch.add(new Option(`${noteName(pitch)} (MIDI ${pitch})`, String(pitch)));
+}
+elements.pianoShortcutPitch.value = String(pianoShortcutPitch);
 
 function describeEvent(event: TapEventDto | undefined): { title: string; detail: string } {
   if (!event) return { title: "End of score", detail: "—" };
@@ -2125,6 +2156,7 @@ async function refreshDiagnostics(): Promise<void> {
 }
 
 async function installListeners(): Promise<void> {
+  await invokeSafe("set_piano_shortcut_pitch", { midiPitch: pianoShortcutPitch });
   unlisteners.push(
     await listen<CoreEvent>("performance-event", ({ payload }) => {
       if (payload.type === "fault") {
@@ -2151,6 +2183,9 @@ async function installListeners(): Promise<void> {
     await listen<BeatMidiInput>("beat-midi-input", ({ payload }) => {
       if (payload.type === "down") void performDown(payload.token, payload.velocity);
       else void performUp(payload.token);
+    }),
+    await listen<PianoShortcutInput>("piano-shortcut", ({ payload }) => {
+      void handlePianoShortcut(payload);
     }),
   );
 }
@@ -2527,7 +2562,7 @@ elements.helpOverlay.addEventListener("keydown", (event) => {
 
   if (event.key === "Tab") {
     const focusable = [...elements.helpOverlay.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      'a[href], button:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
     )].filter((element) => !element.hasAttribute("hidden"));
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
@@ -2546,12 +2581,7 @@ elements.helpOverlay.addEventListener("keydown", (event) => {
   // replay, and conducting shortcuts cannot fire behind it.
   event.stopPropagation();
 });
-elements.panic.addEventListener("click", async () => {
-  const nextMode = !midiFreePlay;
-  await invokeSafe("set_midi_free_play", { enabled: nextMode });
-  midiFreePlay = nextMode;
-  updateMidiFreePlayButton();
-});
+elements.panic.addEventListener("click", () => void toggleMidiFreePlay());
 const tapPointerHolds = new Map<number, PointerHold>();
 elements.tap.addEventListener("pointerdown", (event) => {
   elements.tap.setPointerCapture(event.pointerId);
@@ -2588,6 +2618,24 @@ const setCursorIndex = async (index: number): Promise<void> => {
   updatePosition();
   if (tapMode === "beat") resetBeatTap();
 };
+
+async function handlePianoShortcut(input: PianoShortcutInput): Promise<void> {
+  if (!elements.helpOverlay.classList.contains("hidden")) return;
+  const replayToken = `piano-shortcut:${input.token}`;
+  if (input.command === "replay") {
+    if (input.pressed && mostRecentChordIndex !== null) {
+      await auditionDown(replayToken, mostRecentChordIndex);
+    } else if (!input.pressed) {
+      await performUp(replayToken);
+    }
+    return;
+  }
+  if (!input.pressed) return;
+  if (input.command === "forward") elements.forward.click();
+  else if (input.command === "back") elements.back.click();
+  else if (input.command === "beginning") await setCursorIndex(0);
+  else await toggleMidiFreePlay();
+}
 elements.back.addEventListener("click", async () => {
   if (!score) return;
   await setCursorIndex(Math.max(0, cursorIndex - 1));
@@ -2615,6 +2663,11 @@ const tapKeyCodes = new Set([
 ]);
 
 document.addEventListener("keydown", (event) => {
+  if (event.code === "Period" && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    if (!event.repeat) void toggleMidiFreePlay();
+    return;
+  }
   if (event.code === "ArrowLeft") {
     event.preventDefault();
     if (event.ctrlKey || event.metaKey) {
@@ -2781,6 +2834,15 @@ elements.midiInput.addEventListener("change", () => {
       }));
       if (isWebBuild()) return refreshDevices();
     });
+});
+elements.pianoShortcutPitch.addEventListener("change", () => {
+  pianoShortcutPitch = Number(elements.pianoShortcutPitch.value);
+  try {
+    localStorage.setItem(PIANO_SHORTCUT_PITCH_KEY, String(pianoShortcutPitch));
+  } catch {
+    // The active setting still works when persistent browser storage is unavailable.
+  }
+  void invokeSafe("set_piano_shortcut_pitch", { midiPitch: pianoShortcutPitch });
 });
 elements.midiOutput.addEventListener("change", () => {
   fitSelect(elements.midiOutput);

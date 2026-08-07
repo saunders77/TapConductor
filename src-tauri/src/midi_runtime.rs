@@ -638,6 +638,15 @@ fn output_worker_loop(
     }
 }
 
+fn command_due(command: &OutputWorkerCommand) -> Option<Instant> {
+    match command {
+        OutputWorkerCommand::Play { due, .. } | OutputWorkerCommand::Release { due, .. } => {
+            Some(*due)
+        }
+        OutputWorkerCommand::Panic | OutputWorkerCommand::Shutdown => None,
+    }
+}
+
 #[cfg(test)]
 mod piano_shortcut_tests {
     use super::{MidiInputAction, PianoShortcutGate, ShortcutGateOutput};
@@ -705,14 +714,5 @@ mod piano_shortcut_tests {
             gate.process(down("note", 64), 36, false),
             ShortcutGateOutput::Pass(_)
         ));
-    }
-}
-
-fn command_due(command: &OutputWorkerCommand) -> Option<Instant> {
-    match command {
-        OutputWorkerCommand::Play { due, .. } | OutputWorkerCommand::Release { due, .. } => {
-            Some(*due)
-        }
-        OutputWorkerCommand::Panic | OutputWorkerCommand::Shutdown => None,
     }
 }

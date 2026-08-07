@@ -27,5 +27,8 @@ export default defineConfig({
     target: process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari13",
     minify: process.env.TAURI_ENV_DEBUG ? false : "esbuild",
     sourcemap: Boolean(process.env.TAURI_ENV_DEBUG),
+    // Release packaging handles compression; recompressing every asset merely
+    // to print size estimates adds work after an otherwise complete build.
+    reportCompressedSize: false,
   },
 });

@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Michael Saunders
-import { readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const dist = resolve(root, "dist");
@@ -25,7 +25,29 @@ function dataUrl(mimeType, filePath) {
   return `data:${mimeType};base64,${readFileSync(filePath).toString("base64")}`;
 }
 
-const applicationScript = readFileSync(distFile(scriptMatch[1]), "utf8")
+function inlineModuleImports(source, sourcePath, ancestry = new Set()) {
+  return source.replace(/(["'])(\.\.?\/[^"']+\.js)\1/g, (match, quote, relativePath) => {
+    const importedPath = resolve(dirname(sourcePath), relativePath);
+    if (!existsSync(importedPath)) return match;
+    if (ancestry.has(importedPath)) {
+      throw new Error(`Standalone web build found a circular module import at ${importedPath}.`);
+    }
+    const importedSource = inlineModuleImports(
+      readFileSync(importedPath, "utf8"),
+      importedPath,
+      new Set([...ancestry, importedPath]),
+    );
+    const importedUrl = `data:text/javascript;base64,${Buffer.from(importedSource).toString("base64")}`;
+    return `${quote}${importedUrl}${quote}`;
+  });
+}
+
+const applicationPath = distFile(scriptMatch[1]);
+const applicationScript = inlineModuleImports(
+  readFileSync(applicationPath, "utf8"),
+  applicationPath,
+  new Set([applicationPath]),
+)
   .replace(/<\/script/gi, "<\\\\/script");
 const stylesheet = readFileSync(distFile(styleMatch[1]), "utf8")
   .replace(/<\/style/gi, "<\\\\/style");

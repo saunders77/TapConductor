@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Michael Saunders
 import "./styles.css";
-import {
+import type {
+  IRenderNextResult,
   OpenSheetMusicDisplay,
-  type IRenderNextResult,
 } from "opensheetmusicdisplay";
 import { autoFollowTarget } from "./auto-follow";
 import { announcementIdentifier, shouldShowAnnouncement } from "./announcement";
@@ -160,11 +160,14 @@ app.innerHTML = `
                 <li>(Caution) Pretending you can play piano music that's actually too difficult for you</li>
             </ul>
           </section>
-          <section id="help-instructions" tabindex="-1"><h3>1. Open a score</h3><p>Select a MusicXML, compressed MusicXML, or MIDI file (file extensions .musicxml, .xml, .mxl, .mid, or .midi). If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read. If you only have a PDF, you can use a converter program to create a file TapConductor can read (such as Audiveris or MuseScore).</p><p class="help-demo-links">Or open one of the included examples: <a id="help-demo-choir-open" href="#">demo choir score</a> or <a id="help-demo-piano-open" href="#">demo piano score</a>.</p></section>
-          <section><h3>2. Configure audio settings</h3>
-            <p>Use the Audio Out control to select the speakers or sound card to use. On Windows, an option marked (ASIO) has an installed ASIO driver and may provide better latency on supported hardware. A driver such as ASIO4ALL can route to built-in Realtek speakers or headphones after that endpoint is enabled in the driver's control panel. ASIO is not automatically the best choice for every device or configuration; choose the output that is stable and responsive with your hardware.</p>
+          <section id="help-instructions" tabindex="-1"><h3>Open a sheet music score</h3><p>Select a MusicXML, compressed MusicXML, or MIDI file (file extensions .musicxml, .xml, .mxl, .mid, or .midi). If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read. If you only have a PDF, you can use a converter program to create a file TapConductor can read (such as Audiveris or MuseScore).</p><p class="help-demo-links">Or open one of the included examples: <a id="help-demo-choir-open" href="#">demo choir score</a> or <a id="help-demo-piano-open" href="#">demo piano score</a>.</p></section>
+          <section><h3>Configure audio settings</h3>
+            <p>Use the Audio Out control in TapConductor's header area to select the speakers or sound card to use. On Windows, an option marked (ASIO) has an installed ASIO driver and may provide better latency on supported hardware. A driver such as ASIO4ALL can route to built-in Realtek speakers or headphones after that endpoint is enabled in the driver's control panel. ASIO is not automatically the best choice for every device or configuration; choose the output that is stable and responsive with your hardware. If you don't see the audio device you're looking for, first make sure that it's connected and turned on, then select <strong>AUDIO > Reload Audio</strong>.</p>
             <p id="instrument-help">Choose an instrument, either the grand piano or a synthesizer.</p>
-            <p>If you want to control TapConductor with a <strong>piano</strong> or another MIDI instrument, then plug in the instrument and select it from the MIDI In menu. You'll still be able to tap using normal mouse and keyboard controls too. When you use a piano, TapConductor will use the dynamics you play for each note, and you can use a sustain pedal. If you connect or reconnect a device while TapConductor is open, choose <b>Reload audio &amp; MIDI devices</b> from Audio Out.</p>
+          </section>
+          <section><h3>Connect your piano (optional)</h3>
+            <p>If you want to control TapConductor with a <strong>piano</strong> or another MIDI instrument, then plug in the instrument and turn it on, select <strong>AUDIO > Reload audio & MIDI devices</strong>, then select it from the <strong>MIDI IN</strong> menu. You'll still be able to tap using normal mouse and keyboard controls too. When you use a piano, TapConductor will use the dynamics you play for each note, and you can use a sustain pedal.</p>
+            <p>If you also want TapConductor to play using your piano's speakers and built-in sounds instead of playing sounds from your computer, select your piano in the <strong>MIDI OUT</strong> menu.</p>
             <label class="shortcut-pitch-setting" for="piano-shortcut-pitch"><span><b>Piano key shortcuts</b><small>When using TapConductor with your piano via MIDI IN, you can control TapConductor using shortcuts with your piano keys instead of your keyboard or mouse. First press and hold your piano key shortcut note (C2 by default), then while holding it, tap one of the following notes on your piano to trigger the corresponding command:
             <ul>
               <li><b>E</b> to go forward one rhythm step without playing anything</li>
@@ -455,6 +458,18 @@ let mostRecentChordIndex: number | null = null;
 let zoom = 0.9;
 const ZOOM_STEPS = [50, 75, 90, 100, 110, 125, 150, 175];
 let osmd: OpenSheetMusicDisplay | null = null;
+type OsmdConstructor = typeof import("opensheetmusicdisplay")["OpenSheetMusicDisplay"];
+let osmdConstructorPromise: Promise<OsmdConstructor> | null = null;
+
+function loadOsmdConstructor(): Promise<OsmdConstructor> {
+  osmdConstructorPromise ??= import("opensheetmusicdisplay")
+    .then((module) => module.OpenSheetMusicDisplay)
+    .catch((error: unknown) => {
+      osmdConstructorPromise = null;
+      throw error;
+    });
+  return osmdConstructorPromise;
+}
 let osmdEventSteps: number[] = [];
 let osmdBeatSteps: number[] = [];
 let osmdCurrentStep = 0;
@@ -983,9 +998,16 @@ async function loadScore(
   let loaded: LoadedScore | null = null;
   try {
     scorePerformance = {};
+    // Core score parsing and loading the notation renderer are independent.
+    // Overlap them so lazy-loading OSMD does not add a new wait when opening
+    // MusicXML, while MIDI scores never download or parse OSMD at all.
+    const osmdConstructor = telemetryContext.fileFormat === "midi"
+      ? null
+      : loadOsmdConstructor();
     const coreLoadStarted = performance.now();
     loaded = await loader();
     recordScorePhase("coreLoadMs", coreLoadStarted);
+    if (loaded.format === "music_xml") await osmdConstructor;
     await displayScore(loaded);
     const fileName = loaded.path.split(/[\\/]/).pop() || loaded.displayName;
     setAppWindowTitle(fileName);
@@ -1102,6 +1124,7 @@ async function displayScore(loaded: LoadedScore, preserved?: ScoreViewState): Pr
   elements.scoreStage.style.removeProperty("width");
   if (!preserveView) elements.scoreScroll.scrollLeft = 0;
   if (loaded.format === "music_xml" && loaded.musicXml) {
+    const OpenSheetMusicDisplay = await loadOsmdConstructor();
     osmd = new OpenSheetMusicDisplay(elements.osmd, {
       autoResize: false,
       backend: "svg",
@@ -1553,6 +1576,20 @@ function buildScoreTargets(renderedThroughMeasure: number): { visualSteps: numbe
       .sort((left, right) => left.step - right.step);
   };
 
+  // Index grace ordinals once per rebuild. Previously each rendered event
+  // rescanned the full score, making grace-heavy target construction quadratic.
+  const graceOrdersByPosition = new Map<string, Set<number>>();
+  for (const event of activeScore.events) {
+    if (!event.notes.some((note) => note.isGrace)) continue;
+    const key = rationalKey(event.measureIndex, event.offset.numerator, event.offset.denominator);
+    const orders = graceOrdersByPosition.get(key) ?? new Set<number>();
+    orders.add(event.positionOrder);
+    graceOrdersByPosition.set(key, orders);
+  }
+  const sortedGraceOrdersByPosition = new Map(
+    [...graceOrdersByPosition].map(([key, orders]) => [key, [...orders].sort((left, right) => left - right)]),
+  );
+
   osmdBeatSteps = [];
   beatHorizontalPositions = [];
   beatHighlightVisuals = [];
@@ -1584,16 +1621,9 @@ function buildScoreTargets(renderedThroughMeasure: number): { visualSteps: numbe
     );
     const eventIsGrace = event.notes.length > 0 && event.notes.every((note) => note.isGrace);
     const gracePositionOrders = eventIsGrace
-      ? [...new Set(
-          activeScore.events
-            .filter((candidate) =>
-              candidate.measureIndex === event.measureIndex
-              && candidate.offset.numerator * event.offset.denominator
-                === event.offset.numerator * candidate.offset.denominator
-              && candidate.notes.some((note) => note.isGrace),
-            )
-            .map((candidate) => candidate.positionOrder),
-        )].sort((left, right) => left - right)
+      ? sortedGraceOrdersByPosition.get(
+          rationalKey(event.measureIndex, event.offset.numerator, event.offset.denominator),
+        ) ?? []
       : [];
     const eventGraceOrdinal = Math.max(0, gracePositionOrders.indexOf(event.positionOrder));
     const typedCandidates = candidates.filter((candidate) =>
@@ -1620,10 +1650,11 @@ function buildScoreTargets(renderedThroughMeasure: number): { visualSteps: numbe
       eventNotes = clusters[eventGraceOrdinal] ?? eventNotes;
     }
     const expectedPitches = new Set(event.notes.map((note) => note.midiPitch));
+    const expectedPitchClasses = new Set(event.notes.map((note) => note.midiPitch % 12));
     const matchingNotes = eventNotes.filter((note) =>
       note.candidates.some((candidate) =>
         expectedPitches.has(candidate)
-        || [...expectedPitches].some((pitch) => pitch % 12 === candidate % 12),
+        || expectedPitchClasses.has(candidate % 12),
       ),
     );
     if (matchingNotes.length > 0) eventNotes = matchingNotes;
@@ -2160,13 +2191,16 @@ async function reloadAudioSystems(): Promise<void> {
   }
 }
 
-function showDiagnostics(diagnostics: DiagnosticsDto): void {
+function showDiagnostics(diagnostics: DiagnosticsDto, renderDetails = !elements.diagnostics.classList.contains("hidden")): void {
   lastDiagnostics = diagnostics;
   elements.diagnosticsValue.textContent = diagnostics.ready ? "Ready" : "Needs attention";
   elements.diagnosticsButton.setAttribute(
     "aria-label",
     `Audio diagnostics: ${diagnostics.ready ? "Ready" : "Needs attention"}`,
   );
+  // Health polling remains active during a performance, but a hidden panel
+  // does not need twenty-plus DOM nodes rebuilt every second.
+  if (!renderDetails) return;
   const rows: Array<[string, string]> = [
     ["State", diagnostics.ready ? "Ready" : diagnostics.message ?? "Unavailable"],
     ["Backend", diagnostics.audioBackend],
@@ -2289,8 +2323,8 @@ async function refreshDiagnostics(): Promise<void> {
 
 async function installListeners(): Promise<void> {
   await invokeSafe("set_piano_shortcut_pitch", { midiPitch: pianoShortcutPitch });
-  unlisteners.push(
-    await listen<CoreEvent>("performance-event", ({ payload }) => {
+  const listeners = await Promise.all([
+    listen<CoreEvent>("performance-event", ({ payload }) => {
       if (payload.type === "fault") {
         telemetry.recordError({ errorCode: "performance.fault", component: "performance", operation: "core_event" });
         elements.diagnosticsButton.classList.add("not-ready");
@@ -2306,20 +2340,21 @@ async function installListeners(): Promise<void> {
       if (payload.type === "ended") toast("End of score", "info");
       updatePosition();
     }),
-    await listen<DiagnosticsDto>("audio-diagnostics", ({ payload }) => showDiagnostics(payload)),
-    await listen<string>("audio-lifecycle-error", ({ payload }) => {
+    listen<DiagnosticsDto>("audio-diagnostics", ({ payload }) => showDiagnostics(payload)),
+    listen<string>("audio-lifecycle-error", ({ payload }) => {
       telemetry.recordError({ errorCode: "audio.lifecycle_error", component: "audio", operation: "lifecycle" });
       elements.diagnosticsButton.classList.add("not-ready");
       toast(`${payload} Reload devices from Audio Out.`, "error");
     }),
-    await listen<BeatMidiInput>("beat-midi-input", ({ payload }) => {
+    listen<BeatMidiInput>("beat-midi-input", ({ payload }) => {
       if (payload.type === "down") void performDown(payload.token, payload.velocity);
       else void performUp(payload.token);
     }),
-    await listen<PianoShortcutInput>("piano-shortcut", ({ payload }) => {
+    listen<PianoShortcutInput>("piano-shortcut", ({ payload }) => {
       void handlePianoShortcut(payload);
     }),
-  );
+  ]);
+  unlisteners.push(...listeners);
 }
 
 function syncTelemetryControls(): void {
@@ -3164,8 +3199,10 @@ elements.legatoMode.addEventListener("change", () => {
   });
 });
 elements.diagnosticsButton.addEventListener("click", () => {
-  if (lastDiagnostics) showDiagnostics(lastDiagnostics);
   togglePopover(elements.diagnosticsButton, elements.diagnostics);
+  if (lastDiagnostics && !elements.diagnostics.classList.contains("hidden")) {
+    showDiagnostics(lastDiagnostics, true);
+  }
 });
 
 function showZoomPercent(percent: number): number {

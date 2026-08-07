@@ -12,9 +12,11 @@ import { volumeToMidiVelocity } from "./midi-velocity";
 import { PianoShortcutGate } from "./piano-shortcuts";
 import {
   releaseBoundaryIndex,
+  releaseBoundaryTimeline,
   releasesOnInput,
   type ScoreReleasePlan,
 } from "./web-note-gate";
+import { AsyncSerialQueue } from "./async-serial-queue";
 
 type EventHandler<T> = (event: { payload: T }) => void;
 type Listener = EventHandler<unknown>;
@@ -397,6 +399,8 @@ export class WebRuntime {
   private volume = 1;
   private readonly midiTokenPitches = new Map<string, number>();
   private lastMidiError: string | undefined;
+  private releaseTimeline: RationalDto[] = [];
+  private readonly performanceQueue = new AsyncSerialQueue();
 
   async invoke<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
     const value = await this.dispatch(command, args);
@@ -436,7 +440,9 @@ export class WebRuntime {
         });
         return undefined;
       case "performance_input_down":
-        return this.performanceDown(String(args.token), Number(args.velocity ?? DEFAULT_VELOCITY));
+        return this.performanceQueue.run(
+          () => this.performanceDown(String(args.token), Number(args.velocity ?? DEFAULT_VELOCITY)),
+        );
       case "release_input":
         return this.release(String(args.token));
       case "audition_event":
@@ -529,6 +535,7 @@ export class WebRuntime {
     const module = await this.getWasm();
     this.wasmScore = new module.WebScore(bytes, fileName);
     this.score = JSON.parse(this.wasmScore.dto_json()) as LoadedScore;
+    this.releaseTimeline = releaseBoundaryTimeline(this.score.events);
     this.cursor = 0;
     this.emit<CoreEvent>("performance-event", {
       type: "ready",
@@ -542,6 +549,7 @@ export class WebRuntime {
     this.panic();
     this.wasmScore.set_part_enabled(partId, enabled);
     this.score = JSON.parse(this.wasmScore.dto_json()) as LoadedScore;
+    this.releaseTimeline = releaseBoundaryTimeline(this.score.events);
     this.cursor = 0;
     this.emit<CoreEvent>("performance-event", {
       type: "ready",
@@ -651,6 +659,7 @@ export class WebRuntime {
         playedIndex,
         note.end,
         note.isStaccato,
+        this.releaseTimeline,
       ),
       originalInputOnly: note.isStaccato,
     }));

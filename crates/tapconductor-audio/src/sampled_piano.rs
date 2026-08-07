@@ -127,7 +127,7 @@ impl SalamanderBank {
         let sfz = fs::read_to_string(&sfz_path)
             .map_err(|error| SalamanderLoadError::io(&sfz_path, error))?;
         let mut regions = Box::new([SILENT_REGION; PITCHES * VELOCITIES]);
-        let mut samples = Vec::with_capacity(90);
+        let mut sample_paths = Vec::with_capacity(90);
         let mut sample_indices = HashMap::<PathBuf, u16>::with_capacity(90);
         let mut group = GroupSettings::default();
         let mut default_path = PathBuf::new();
@@ -159,9 +159,9 @@ impl SalamanderBank {
             let sample_index = if let Some(index) = sample_indices.get(&sample_path) {
                 *index
             } else {
-                let index = u16::try_from(samples.len())
+                let index = u16::try_from(sample_paths.len())
                     .map_err(|_| SalamanderLoadError::InvalidSfz("too many samples".to_owned()))?;
-                samples.push(load_pcm16_wave(&sample_path)?);
+                sample_paths.push(sample_path.clone());
                 sample_indices.insert(sample_path, index);
                 index
             };
@@ -203,6 +203,37 @@ impl SalamanderBank {
                 )));
             }
         }
+        // Independent WAV reads dominate native startup. A small worker set
+        // retains deterministic sample ordering while using SSD throughput
+        // more effectively than ninety serial reads.
+        let worker_count = std::thread::available_parallelism()
+            .map_or(1, usize::from)
+            .min(4)
+            .min(sample_paths.len().max(1));
+        let chunk_size = sample_paths.len().div_ceil(worker_count);
+        let samples = std::thread::scope(|scope| {
+            let workers: Vec<_> = sample_paths
+                .chunks(chunk_size)
+                .map(|paths| {
+                    scope.spawn(move || {
+                        paths
+                            .iter()
+                            .map(|path| load_pcm16_wave(path))
+                            .collect::<Result<Vec<_>, _>>()
+                    })
+                })
+                .collect();
+            let mut samples = Vec::with_capacity(sample_paths.len());
+            for worker in workers {
+                let chunk = worker.join().map_err(|_| {
+                    SalamanderLoadError::InvalidSfz(
+                        "a sample-loading worker stopped unexpectedly".to_owned(),
+                    )
+                })??;
+                samples.extend(chunk);
+            }
+            Ok::<_, SalamanderLoadError>(samples)
+        })?;
         let pcm_bytes = samples
             .iter()
             .map(|sample| (sample.frames * sample.channels * 2) as u64)

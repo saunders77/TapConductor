@@ -181,11 +181,7 @@ app.innerHTML = `
             <h3>Privacy</h3>
             <p>TapConductor processes scores and performances on your computer without sending the information anywhere. If usage and crash sharing is enabled, it also sends pseudonymous application usage, coarse system/settings categories, and sanitized error summaries directly to PostHog. These services receive ordinary network connection information. TapConductor never sends score contents or names, paths, MIDI messages, device names, precise location, or contact information.</p>
             <p>On iPadOS and macOS, a score chosen through the document picker is copied into TapConductor's private app storage so the sandboxed app can read it. Your original document is not changed. The imported copy may remain in app storage until the operating system clears it or you clear or remove the app's data.</p>
-            <label class="telemetry-choice"><input id="telemetry-toggle" type="checkbox" /> <span><b>Send pseudonymous crash and usage data to the developer to help improve TapConductor</b><small id="telemetry-status">Checking…</small></span></label>
-            <div class="telemetry-management-actions">
-              <button id="telemetry-copy-id" class="secondary-button" type="button">Copy telemetry identifier</button>
-              <button id="telemetry-reset" class="secondary-button" type="button">Reset telemetry identifier</button>
-            </div>
+            <p><a id="telemetry-settings-link" href="#">Configure telemetry settings</a></p>
             <p>TapConductor does not request access to your microphone, camera, location, contacts, or photos. The full policy is available in <b>PRIVACY.md</b> and at <span class="legal-url">github.com/saunders77/TapConductor</span>.</p>
           </section>
           <section id="acknowledgements" class="legal-disclosure" tabindex="-1">
@@ -195,6 +191,26 @@ app.innerHTML = `
           </section>
         </div>
         <button id="help-done" class="primary-button" type="button">Got it</button>
+      </section>
+    </div>
+
+    <div id="telemetry-settings" class="help-overlay telemetry-settings hidden" role="dialog" aria-modal="true" aria-labelledby="telemetry-settings-title">
+      <section class="help-card telemetry-settings-card">
+        <div class="help-card-header">
+          <div>
+            <span class="help-kicker">Privacy</span>
+            <h2 id="telemetry-settings-title">Telemetry settings</h2>
+          </div>
+          <button id="telemetry-settings-close" class="help-close" type="button" aria-label="Close telemetry settings">×</button>
+        </div>
+        <div class="help-content">
+          <section>
+            <h3>Optional usage and crash data</h3>
+            <p>When enabled, TapConductor sends pseudonymous application usage, coarse system and settings categories, and sanitized error summaries directly to PostHog. It never sends score contents or names, paths, MIDI messages, device names, precise location, or contact information.</p>
+            <label class="telemetry-choice"><input id="telemetry-toggle" type="checkbox" /> <span><b>Send pseudonymous crash and usage data to the developer to help improve TapConductor</b><small id="telemetry-status">Checking…</small></span></label>
+          </section>
+        </div>
+        <button id="telemetry-settings-done" class="primary-button" type="button">Done</button>
       </section>
     </div>
 
@@ -318,13 +334,15 @@ const elements = {
   helpDone: byId<HTMLButtonElement>("help-done"),
   helpDemoChoirOpen: byId<HTMLAnchorElement>("help-demo-choir-open"),
   helpDemoPianoOpen: byId<HTMLAnchorElement>("help-demo-piano-open"),
+  telemetrySettingsLink: byId<HTMLAnchorElement>("telemetry-settings-link"),
+  telemetrySettings: byId("telemetry-settings"),
+  telemetrySettingsClose: byId<HTMLButtonElement>("telemetry-settings-close"),
+  telemetrySettingsDone: byId<HTMLButtonElement>("telemetry-settings-done"),
   telemetryConsent: byId("telemetry-consent"),
   telemetryContinue: byId<HTMLButtonElement>("telemetry-continue"),
   telemetryDecline: byId<HTMLButtonElement>("telemetry-decline"),
   telemetryToggle: byId<HTMLInputElement>("telemetry-toggle"),
   telemetryStatus: byId("telemetry-status"),
-  telemetryCopyId: byId<HTMLButtonElement>("telemetry-copy-id"),
-  telemetryReset: byId<HTMLButtonElement>("telemetry-reset"),
   announcementOverlay: byId("announcement-overlay"),
   announcementContent: byId("announcement-content"),
   announcementDismissPermanently: byId<HTMLInputElement>("announcement-dismiss-permanently"),
@@ -2194,8 +2212,6 @@ function syncTelemetryControls(): void {
   const configured = telemetry.isConfigured();
   const consent = telemetry.getConsent();
   elements.telemetryToggle.disabled = !configured;
-  elements.telemetryReset.disabled = !configured || consent !== "enabled";
-  elements.telemetryCopyId.disabled = !configured || consent !== "enabled";
   elements.telemetryToggle.checked = configured && consent === "enabled";
   elements.telemetryStatus.textContent = !configured
     ? "Not configured in this build"
@@ -2298,23 +2314,6 @@ elements.telemetryToggle.addEventListener("change", () => {
   }
   syncTelemetryControls();
 });
-elements.telemetryReset.addEventListener("click", () => {
-  telemetry.resetIdentifiers();
-  syncTelemetryControls();
-  toast("Telemetry identifiers and pending data were reset.", "info");
-});
-elements.telemetryCopyId.addEventListener("click", () => {
-  const identifier = telemetry.getDeviceInstanceId();
-  if (!identifier) return;
-  if (!navigator.clipboard) {
-    toast("Clipboard access is unavailable in this build.", "warning");
-    return;
-  }
-  void navigator.clipboard.writeText(identifier).then(
-    () => toast("Telemetry identifier copied.", "info"),
-    () => toast("The telemetry identifier could not be copied.", "warning"),
-  );
-});
 
 type PendingSettingsEvent = {
   eventName: string;
@@ -2362,7 +2361,18 @@ elements.emptyOpen.addEventListener("click", () => void chooseScore());
 elements.demoChoirOpen.addEventListener("click", () => void loadDemoScore("choir"));
 elements.demoPianoOpen.addEventListener("click", () => void loadDemoScore("piano"));
 let helpPreviousFocus: HTMLElement | null = null;
+let telemetrySettingsPreviousFocus: HTMLElement | null = null;
+
+function closeTelemetrySettings(restoreFocus: boolean = true): void {
+  elements.telemetrySettings.classList.add("hidden");
+  if (restoreFocus) telemetrySettingsPreviousFocus?.focus();
+  telemetrySettingsPreviousFocus = null;
+}
+
 function closeHelp(): void {
+  if (!elements.telemetrySettings.classList.contains("hidden")) {
+    closeTelemetrySettings(false);
+  }
   elements.helpOverlay.classList.add("hidden");
   elements.helpButton.setAttribute("aria-expanded", "false");
   helpPreviousFocus?.focus();
@@ -2502,6 +2512,40 @@ elements.helpButton.addEventListener("click", () => {
 });
 elements.helpClose.addEventListener("click", closeHelp);
 elements.helpDone.addEventListener("click", closeHelp);
+elements.telemetrySettingsLink.addEventListener("click", (event) => {
+  event.preventDefault();
+  telemetrySettingsPreviousFocus = elements.telemetrySettingsLink;
+  syncTelemetryControls();
+  elements.telemetrySettings.classList.remove("hidden");
+  elements.telemetrySettingsClose.focus();
+});
+elements.telemetrySettingsClose.addEventListener("click", () => closeTelemetrySettings());
+elements.telemetrySettingsDone.addEventListener("click", () => closeTelemetrySettings());
+elements.telemetrySettings.addEventListener("pointerdown", (event) => {
+  if (event.target === elements.telemetrySettings) closeTelemetrySettings();
+});
+elements.telemetrySettings.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeTelemetrySettings();
+  } else if (event.key === "Tab") {
+    const focusable = [...elements.telemetrySettings.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )];
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (first && last) {
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  }
+  event.stopPropagation();
+});
 elements.announcementOk.addEventListener("click", closeAnnouncement);
 elements.announcementContent.addEventListener("click", (event) => {
   const target = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;

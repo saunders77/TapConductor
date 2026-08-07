@@ -347,7 +347,7 @@ Telemetry is enabled by default only after a clear first-run disclosure has been
 explains what is collected, links to the privacy policy, and offers **Continue** and **Do not share**
 with equal prominence. Until it is dismissed, the sink is a no-op and no install/launch event is
 sent. Settings must always expose **Share usage and crash data**, the current state, a
-plain-language data inventory, and **Reset telemetry identifier**.
+plain-language data inventory, and a clear path from the Info page to those telemetry settings.
 
 If the user chooses **Continue** on the initial run, enqueue exactly one `app_installed` (or
 `browser_instance_created`) event and exactly one `session_started` event for that same initial
@@ -362,9 +362,9 @@ The consent state is read synchronously before either analytics or crash SDK ini
   Do not send an `opted_out` event. Any optional Sentry native-crash adapter must also close/disable.
 - On later opt-in, create fresh installation and device-instance IDs; do not upload events from the
   opted-out period.
-- Resetting the identifier purges the spool and rotates both IDs. Because there is no account, the
-  app cannot reliably perform server-side deletion without keeping another identifying secret;
-  document a support-assisted deletion route and retention period in the privacy policy.
+- Because there is no account and the identifier is not exposed in the UI, the app cannot reliably
+  match a user to already-sent telemetry. Document local deletion behavior and the server retention
+  period in the privacy policy.
 - Make the compile-time default configurable by distribution/territory so a release can be opt-in
   where local law or store policy requires prior consent. The product preference may be opt-out, but
   it does not override applicable consent law.

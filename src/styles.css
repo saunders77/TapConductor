@@ -174,6 +174,8 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .announcement-dismiss-choice { display: flex; gap: 9px; align-items: center; margin-bottom: 16px; color: #45473f; font-size: 13px; cursor: pointer; }
 .announcement-dismiss-choice input { accent-color: var(--accent); }
 .announcement-actions { display: flex; justify-content: flex-end; padding-top: 16px; border-top: 1px solid #e7e6dc; }
+.telemetry-settings { z-index: 250; }
+.telemetry-settings-card { width: min(620px, 100%); }
 .telemetry-consent { z-index: 260; }
 .telemetry-consent-card { width: min(560px, 100%); }
 .telemetry-consent-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -186,7 +188,6 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .shortcut-pitch-setting > span { display: grid; flex: 1; gap: 3px; color: #26271f; font-size: 13px; }
 .shortcut-pitch-setting small { color: #64665d; line-height: 1.4; }
 .shortcut-pitch-setting select { max-width: 150px; }
-.telemetry-management-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
 .toast-region { position: fixed; right: 18px; bottom: 118px; z-index: 100; display: flex; flex-direction: column; gap: 8px; }.toast { max-width: 420px; padding: 11px 14px; border-left: 4px solid #869918; border-radius: 5px; background: #292a23; color: #f4f4e9; box-shadow: 0 8px 24px #2224; font-size: 12px; }.toast.warning { border-color: #d3a32f; }.toast.error { border-color: #d55b54; }
 .midi-roll { display: flex; align-items: end; gap: 5px; min-height: 480px; padding: 60px 12px 40px; }.midi-event { position: relative; width: 70px; min-height: calc(50px + var(--event-height) * 20px); flex: 0 0 auto; border: 1px solid #c5cf87; border-radius: 5px; opacity: .78; display: flex; flex-direction: column; gap: 4px; padding: 7px; background: #dfe99d; }.midi-event.current { opacity: 1; border-color: #788a11; box-shadow: 0 0 0 2px #e7ff5566; }.midi-event > .slice-controls { top: -70px; left: 50%; }.midi-event b { font-size: 9px; }.midi-notes { display: flex; flex-direction: column; gap: 2px; }.midi-note { padding: 2px 3px; border: 0; border-radius: 3px; background: #fff9; cursor: pointer; font-size: 9px; }.midi-note:hover { background: var(--accent); }
 .hidden { display: none !important; }

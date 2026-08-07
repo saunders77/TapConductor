@@ -91,12 +91,12 @@ not provide the same customizable installer finish page, a fresh Apple installat
 equivalent choice inside the app before telemetry starts. Turning sharing off stops capture
 immediately and removes local pending events and telemetry identifiers without sending an opt-out
 event. Turning it on later creates fresh identifiers and does not upload activity from the off
-period. **Reset telemetry identifier** removes the local queue and rotates the identifiers.
+period.
 
-Because TapConductor has no account, a server-side deletion request needs the pseudonymous device
-identifier. Before turning sharing off or resetting it, use **Copy telemetry identifier** in Help >
-Privacy and submit it through the support channel below. Data that has reached its configured
-retention limit is deleted automatically.
+Because TapConductor has no account and does not expose its random telemetry identifier, it cannot
+reliably match a user to telemetry that has already been sent. Turning sharing off deletes pending
+events and identifiers stored by the app; data already sent is deleted automatically when it reaches
+the configured retention limit.
 
 ## Contact
 

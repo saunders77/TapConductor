@@ -15,3 +15,12 @@ test("every required UI element is present in the application markup", () => {
   assert.deepEqual(requiredIds.filter((id) => !markupIds.has(id)), []);
 });
 
+test("the Info privacy section links to a separate telemetry settings view", () => {
+  const privacySection = source.match(/<section id="privacy"[\s\S]*?<\/section>/)?.[0] ?? "";
+  const settingsView = source.match(/<div id="telemetry-settings"[\s\S]*?<div id="telemetry-consent"/)?.[0] ?? "";
+
+  assert.match(privacySection, /id="telemetry-settings-link"/);
+  assert.doesNotMatch(privacySection, /id="telemetry-toggle"/);
+  assert.match(settingsView, /id="telemetry-toggle"/);
+  assert.doesNotMatch(settingsView, /telemetry-(?:copy-id|reset)/);
+});

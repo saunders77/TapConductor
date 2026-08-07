@@ -25,12 +25,11 @@ impl NativeTelemetryState {
 
     pub fn set_enabled(&self, enabled: bool) -> Result<(), String> {
         self.enabled.store(enabled, Ordering::Release);
-        if !enabled {
-            if let Some(marker_path) = &self.marker_path {
-                if marker_path.exists() {
-                    fs::remove_file(marker_path).map_err(|error| error.to_string())?;
-                }
-            }
+        if !enabled
+            && let Some(marker_path) = &self.marker_path
+            && marker_path.exists()
+        {
+            fs::remove_file(marker_path).map_err(|error| error.to_string())?;
         }
         Ok(())
     }
@@ -53,12 +52,12 @@ impl NativeTelemetryState {
 pub fn install_panic_marker(state: Arc<NativeTelemetryState>) {
     let previous_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
-        if state.enabled.load(Ordering::Acquire) {
-            if let Some(marker_path) = &state.marker_path {
-                // The fixed marker deliberately excludes panic text,
-                // locations, backtraces, paths, and application/user data.
-                let _ = fs::write(marker_path, MARKER_CONTENT);
-            }
+        if state.enabled.load(Ordering::Acquire)
+            && let Some(marker_path) = &state.marker_path
+        {
+            // The fixed marker deliberately excludes panic text,
+            // locations, backtraces, paths, and application/user data.
+            let _ = fs::write(marker_path, MARKER_CONTENT);
         }
         previous_hook(panic_info);
     }));

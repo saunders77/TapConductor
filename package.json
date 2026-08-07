@@ -14,6 +14,7 @@
     "test:web-gate": "node --experimental-strip-types --test src/web-note-gate.test.ts",
     "test:telemetry": "node --experimental-strip-types --test src/telemetry.test.ts",
     "test:announcement": "node --experimental-strip-types --test src/announcement.test.ts",
+    "test:unit": "node --experimental-strip-types --test src/*.test.ts",
     "preview": "vite preview",
     "preview:web": "vite preview --host 127.0.0.1",
     "tauri": "tauri",

@@ -4,10 +4,10 @@ Effective date: August 6, 2026
 
 TapConductor is a local music-performance application with no account system, advertising, sale of
 personal data, or cloud synchronization. Scores and performances stay on the device. During the
-Windows installation flow, a user may enable pseudonymous usage and diagnostic telemetry to help
-improve the application. The choice can be changed later on the app's Info > Privacy page. Builds
-without that installer keep telemetry off until the user enables it. The app remains fully
-functional when telemetry is off.
+Windows installation flow, or on first launch after a fresh macOS or iPadOS installation, a user may
+enable pseudonymous usage and diagnostic telemetry to help improve the application. No telemetry is
+sent before that choice is applied. The choice can be changed later on the app's Info > Privacy
+page, and the app remains fully functional when telemetry is off.
 
 ## Startup announcements
 
@@ -41,7 +41,7 @@ permission. Class-compliant MIDI devices are accessed through operating-system M
 
 ## Optional usage and diagnostic data
 
-When **Send anonymous crash and usage data to the developer to help improve TapConductor** is on,
+When **Send pseudonymous crash and usage data to the developer to help improve TapConductor** is on,
 TapConductor may send:
 
 - first consented use, application launches, updates, closes, and the application/build version;
@@ -86,11 +86,12 @@ service, download, or crash information under their own policies.
 
 ## User choices and deletion
 
-The Windows installer choice is applied on first launch. If no installer choice is available,
-telemetry starts off. Turning sharing off stops capture immediately and removes local pending events
-and telemetry identifiers without sending an opt-out event. Turning it on later creates fresh
-identifiers and does not upload activity from the off period. **Reset telemetry identifier** removes
-the local queue and rotates the identifiers.
+The Windows installer choice is applied on first launch. Because macOS and iPadOS distributions do
+not provide the same customizable installer finish page, a fresh Apple installation presents the
+equivalent choice inside the app before telemetry starts. Turning sharing off stops capture
+immediately and removes local pending events and telemetry identifiers without sending an opt-out
+event. Turning it on later creates fresh identifiers and does not upload activity from the off
+period. **Reset telemetry identifier** removes the local queue and rotates the identifiers.
 
 Because TapConductor has no account, a server-side deletion request needs the pseudonymous device
 identifier. Before turning sharing off or resetting it, use **Copy telemetry identifier** in Help >

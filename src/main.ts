@@ -19,7 +19,7 @@ import {
   setAppWindowTitle,
   type UnlistenFn,
 } from "./platform";
-import { detectAppleUiPlatform } from "./ui-platform";
+import { detectAppleUiPlatform, initialTelemetryAction } from "./ui-platform";
 import {
   TelemetryClient,
   countBucket,
@@ -179,7 +179,11 @@ app.innerHTML = `
             <h3>Privacy</h3>
             <p>TapConductor processes scores and performances on your computer without sending the information anywhere. If usage and crash sharing is enabled, it also sends pseudonymous application usage, coarse system/settings categories, and sanitized error summaries directly to PostHog. These services receive ordinary network connection information. TapConductor never sends score contents or names, paths, MIDI messages, device names, precise location, or contact information.</p>
             <p>On iPadOS and macOS, a score chosen through the document picker is copied into TapConductor's private app storage so the sandboxed app can read it. Your original document is not changed. The imported copy may remain in app storage until the operating system clears it or you clear or remove the app's data.</p>
-            <label class="telemetry-choice"><input id="telemetry-toggle" type="checkbox" /> <span><b>Send anonymous crash and usage data to the developer to help improve TapConductor</b><small id="telemetry-status">Checking…</small></span></label>
+            <label class="telemetry-choice"><input id="telemetry-toggle" type="checkbox" /> <span><b>Send pseudonymous crash and usage data to the developer to help improve TapConductor</b><small id="telemetry-status">Checking…</small></span></label>
+            <div class="telemetry-management-actions">
+              <button id="telemetry-copy-id" class="secondary-button" type="button">Copy telemetry identifier</button>
+              <button id="telemetry-reset" class="secondary-button" type="button">Reset telemetry identifier</button>
+            </div>
             <p>TapConductor does not request access to your microphone, camera, location, contacts, or photos. The full policy is available in <b>PRIVACY.md</b> and at <span class="legal-url">github.com/saunders77/TapConductor</span>.</p>
           </section>
           <section id="acknowledgements" class="legal-disclosure" tabindex="-1">
@@ -189,6 +193,27 @@ app.innerHTML = `
           </section>
         </div>
         <button id="help-done" class="primary-button" type="button">Got it</button>
+      </section>
+    </div>
+
+    <div id="telemetry-consent" class="help-overlay telemetry-consent hidden" role="dialog" aria-modal="true" aria-labelledby="telemetry-consent-title" aria-describedby="telemetry-consent-summary">
+      <section class="help-card telemetry-consent-card">
+        <div class="help-card-header">
+          <div>
+            <span class="help-kicker">Privacy choice</span>
+            <h2 id="telemetry-consent-title">Help improve TapConductor?</h2>
+          </div>
+        </div>
+        <div class="help-content">
+          <section>
+            <p id="telemetry-consent-summary">You can share pseudonymous installs, launches, score type and length, settings categories, session totals, and sanitized errors directly with PostHog. PostHog derives an approximate country or region from the network connection. Scores, filenames, paths, device names, MIDI notes, and precise location are never sent.</p>
+          </section>
+          <p>Sharing is optional. TapConductor works the same either way, and you can change this later in Info &gt; Privacy.</p>
+        </div>
+        <div class="telemetry-consent-actions">
+          <button id="telemetry-continue" class="secondary-button large" type="button">Continue and share</button>
+          <button id="telemetry-decline" class="secondary-button large" type="button">Do not share</button>
+        </div>
       </section>
     </div>
 
@@ -291,6 +316,9 @@ const elements = {
   helpDone: byId<HTMLButtonElement>("help-done"),
   helpDemoChoirOpen: byId<HTMLAnchorElement>("help-demo-choir-open"),
   helpDemoPianoOpen: byId<HTMLAnchorElement>("help-demo-piano-open"),
+  telemetryConsent: byId("telemetry-consent"),
+  telemetryContinue: byId<HTMLButtonElement>("telemetry-continue"),
+  telemetryDecline: byId<HTMLButtonElement>("telemetry-decline"),
   telemetryToggle: byId<HTMLInputElement>("telemetry-toggle"),
   telemetryStatus: byId("telemetry-status"),
   telemetryCopyId: byId<HTMLButtonElement>("telemetry-copy-id"),
@@ -2171,10 +2199,19 @@ async function initializeTelemetry(): Promise<void> {
   }
   if (telemetry.getConsent() === "unknown") {
     const installerConsent = isWebBuild()
-      ? false
+      ? null
       : await invoke<boolean | null>("get_installer_telemetry_consent").catch(() => null);
-    if (installerConsent === true) telemetry.enable();
-    else telemetry.disable();
+    const action = initialTelemetryAction(installerConsent, isWebBuild(), appleUiPlatform);
+    if (action === "enable") telemetry.enable();
+    else if (action === "disable") telemetry.disable();
+    else {
+      await new Promise<void>((resolve) => {
+        finishInitialTelemetryChoice = resolve;
+        elements.telemetryConsent.classList.remove("hidden");
+        window.requestAnimationFrame(() => elements.telemetryContinue.focus());
+      });
+      return;
+    }
     syncTelemetryControls();
   }
   if (telemetry.getConsent() === "enabled") {
@@ -2184,6 +2221,35 @@ async function initializeTelemetry(): Promise<void> {
     void syncNativeTelemetryConsent(false);
   }
 }
+
+let finishInitialTelemetryChoice: (() => void) | null = null;
+
+function completeInitialTelemetryChoice(enabled: boolean): void {
+  if (enabled) telemetry.enable();
+  else telemetry.disable();
+  void syncNativeTelemetryConsent(enabled);
+  elements.telemetryConsent.classList.add("hidden");
+  syncTelemetryControls();
+  finishInitialTelemetryChoice?.();
+  finishInitialTelemetryChoice = null;
+}
+
+elements.telemetryContinue.addEventListener("click", () => completeInitialTelemetryChoice(true));
+elements.telemetryDecline.addEventListener("click", () => completeInitialTelemetryChoice(false));
+elements.telemetryConsent.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+  } else if (event.key === "Tab") {
+    const focusable = [elements.telemetryContinue, elements.telemetryDecline];
+    const currentIndex = focusable.indexOf(document.activeElement as HTMLButtonElement);
+    const nextIndex = event.shiftKey
+      ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
+      : (currentIndex + 1) % focusable.length;
+    event.preventDefault();
+    focusable[nextIndex]!.focus();
+  }
+  event.stopPropagation();
+});
 
 elements.telemetryToggle.addEventListener("change", () => {
   if (elements.telemetryToggle.checked) {
@@ -2819,8 +2885,9 @@ elements.zoomRange.addEventListener("change", () => {
   commitZoomPercent(Number(elements.zoomRange.value));
 });
 
-void initializeTelemetry();
-window.setTimeout(() => void showLatestAnnouncement(), 1_500);
+void initializeTelemetry().finally(() => {
+  window.setTimeout(() => void showLatestAnnouncement(), 1_500);
+});
 
 void installListeners().then(refreshDevices).catch((error: unknown) => {
   setStatus("fault", "Core unavailable");

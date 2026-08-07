@@ -222,7 +222,10 @@ mod cpal_impl {
             // negotiated system default there. macOS and Windows retain the
             // existing low-latency fixed-buffer preference.
             #[cfg(target_os = "ios")]
-            let buffer_frames = None;
+            let buffer_frames = {
+                let _ = buffer_range;
+                None
+            };
             #[cfg(not(target_os = "ios"))]
             let buffer_frames =
                 buffer_range.map(|(minimum, maximum)| 128_u32.clamp(minimum, maximum));

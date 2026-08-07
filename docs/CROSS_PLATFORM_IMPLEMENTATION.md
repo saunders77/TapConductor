@@ -194,7 +194,8 @@ npm run apple:mac:store
 ```
 
 This generates concrete sandbox entitlements without committing identity values, embeds the profile,
-signs the app, and uses `productbuild` to create the `.pkg`.
+signs the app, and uses `productbuild` to create the `.pkg`. The sandbox entitlement allows outbound
+HTTPS so consented telemetry and the public startup-announcement check work in the Store build.
 
 ### iPad
 
@@ -256,7 +257,9 @@ The privacy manifest declares no tracking and lists the pseudonymous device iden
 interaction, crash/diagnostic/performance data, and PostHog-derived coarse country/region used by
 opted-in telemetry, plus required-reason API categories for local files, timing, and preferences.
 App Store Connect privacy answers must match it. Inspect Xcode's generated privacy report before
-every upload.
+every upload. Since Apple distribution has no customizable installer finish page, fresh macOS and
+iPadOS installations show the equivalent telemetry choice on first launch before any telemetry is
+captured or sent.
 
 ## Verification matrix
 

@@ -227,10 +227,12 @@ impl AudioManager {
             .and_then(display_name_from_device_id)
             .unwrap_or_else(|| "System default".to_owned());
 
-        let mut output_config = self
+        let output_config = self
             .backend
             .preferred_output_config(selected_device.as_deref())
             .map_err(|error| error.to_string())?;
+        #[cfg(not(target_os = "ios"))]
+        let mut output_config = output_config;
         let sample_rate = output_config.sample_rate;
         // CPAL's iOS backend deliberately leaves this unset because
         // AVAudioSession negotiates the physical I/O duration. In particular,
@@ -487,12 +489,14 @@ impl AudioManager {
             midi_output,
             midi_output_error,
             ready: self.runtime.is_some() && snapshot.backend_errors == 0,
-            message: self.last_error.clone().or_else(|| {
-                (snapshot.backend_errors > 0).then(|| {
-                    "Please select or reselect an AUDIO OUT device."
-                        .to_owned()
+            message: self
+                .last_error
+                .clone()
+                .or_else(|| {
+                    (snapshot.backend_errors > 0)
+                        .then(|| "Please select or reselect an AUDIO OUT device.".to_owned())
                 })
-            }).or_else(|| self.instrument_message.clone()),
+                .or_else(|| self.instrument_message.clone()),
         }
     }
 

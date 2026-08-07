@@ -37,6 +37,12 @@ validate_apple_files() {
       'src-tauri/tauri.appstore.conf.json'
     ]) JSON.parse(require('fs').readFileSync(path, 'utf8'));
   "
+
+  [[ "$(plutil -extract 'com\.apple\.security\.network\.client' raw \
+    "${ROOT}/src-tauri/apple/MacAppStore.entitlements.template")" == "true" ]] || {
+    echo "Mac App Store builds require the outbound network client entitlement." >&2
+    exit 1
+  }
 }
 
 quality_checks() {
@@ -46,10 +52,7 @@ quality_checks() {
   fi
   npm ci
   npm run build
-  npm run test:auto-follow
-  npm run test:beat
-  npm run test:incremental-render
-  npm run test:web-gate
+  npm run test:unit
   cargo test --locked --workspace
   cargo fmt --all -- --check
   cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
@@ -59,6 +62,16 @@ initialize_ios() {
   if [[ ! -d "${ROOT}/src-tauri/gen/apple" ]]; then
     npm run tauri -- ios init --ci
   fi
+  mkdir -p "${ROOT}/src-tauri/gen/apple/assets"
+  cp \
+    "${ROOT}/src-tauri/apple/PrivacyInfo.xcprivacy" \
+    "${ROOT}/src-tauri/gen/apple/assets/PrivacyInfo.xcprivacy"
+  cmp -s \
+    "${ROOT}/src-tauri/apple/PrivacyInfo.xcprivacy" \
+    "${ROOT}/src-tauri/gen/apple/assets/PrivacyInfo.xcprivacy" || {
+    echo "Could not synchronize the generated iOS privacy manifest." >&2
+    exit 1
+  }
 }
 
 clean_ios_output() {

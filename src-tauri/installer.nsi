@@ -423,7 +423,7 @@ Var AppStartMenuFolder
 Var TelemetryCheckbox
 
 Function FinishPageShow
-  ${NSD_CreateCheckbox} 120u 142u 195u 25u "Send anonymous crash and usage data to the developer to help improve TapConductor"
+  ${NSD_CreateCheckbox} 120u 142u 195u 25u "Send pseudonymous crash and usage data to the developer to help improve TapConductor"
   Pop $TelemetryCheckbox
   SetCtlColors $TelemetryCheckbox "${MUI_TEXTCOLOR}" "${MUI_BGCOLOR}"
   SendMessage $TelemetryCheckbox ${BM_SETCHECK} ${BST_CHECKED} 0

@@ -8,6 +8,7 @@ import type {
   MidiPortsDto,
   RationalDto,
 } from "./types";
+import { volumeToMidiVelocity } from "./midi-velocity";
 import {
   releaseBoundaryIndex,
   releasesOnInput,
@@ -151,6 +152,7 @@ class BrowserAudio {
     velocity: number,
     rollMs: number,
     output?: MIDIOutput,
+    midiVelocity = velocity,
     releasePlans?: readonly ScoreReleasePlan[],
     releaseOnNextPlay = false,
   ): Promise<void> {
@@ -224,10 +226,12 @@ class BrowserAudio {
         boundaryReached: false,
         releasing: false,
       });
-      output?.send(
-        new Uint8Array([0x90, pitch, Math.max(1, Math.min(127, velocity))]),
-        performance.now() + index * rollMs,
-      );
+      if (midiVelocity > 0) {
+        output?.send(
+          new Uint8Array([0x90, pitch, Math.max(1, Math.min(127, midiVelocity))]),
+          performance.now() + index * rollMs,
+        );
+      }
     });
 
     this.voices.set(token, {
@@ -388,6 +392,7 @@ export class WebRuntime {
   private selectedMidiOutput: string | null = null;
   private midiFreePlay = false;
   private legatoMode = false;
+  private volume = 1;
   private readonly midiTokenPitches = new Map<string, number>();
   private lastMidiError: string | undefined;
 
@@ -481,7 +486,8 @@ export class WebRuntime {
         this.audio.setInstrument(String(args.instrument));
         return undefined;
       case "set_volume":
-        this.audio.setVolume(Number(args.value));
+        this.volume = Math.max(0, Math.min(1, Number(args.value)));
+        this.audio.setVolume(this.volume);
         return undefined;
       case "set_roll_delays":
         this.rollRegularMs = Number(args.regularMs);
@@ -560,6 +566,7 @@ export class WebRuntime {
       velocity,
       this.rollRegularMs,
       midiOutput,
+      midiPitch === undefined ? volumeToMidiVelocity(this.volume) : velocity,
       this.legatoMode ? this.releaseBoundaries(event.notes, playedIndex) : undefined,
     );
     const atEnd = playedIndex >= this.score.events.length - 1;
@@ -595,6 +602,7 @@ export class WebRuntime {
       velocity,
       this.rollAuditionMs,
       this.midiOutput(),
+      volumeToMidiVelocity(this.volume),
       undefined,
       true,
     );

@@ -265,6 +265,7 @@ impl MidiManager {
         command: performance::AudioCommand,
         now_sample: u64,
         now_instant: Instant,
+        output_velocity: Option<u8>,
     ) {
         if self.output_worker.is_none() {
             return;
@@ -278,6 +279,14 @@ impl MidiManager {
                 roll_interval_frames,
                 roll_order,
             } => {
+                if output_velocity == Some(0) {
+                    return;
+                }
+                let velocity = output_velocity
+                    .map(|value| {
+                        Velocity::from_midi1(value).expect("velocity is clamped to MIDI 1")
+                    })
+                    .unwrap_or_else(|| Velocity::new(velocity.get()));
                 let mut notes = Vec::with_capacity(chord.pitches().len());
                 for pitch in chord.pitches() {
                     let note = match MidiNote::new(pitch.get()) {
@@ -289,10 +298,7 @@ impl MidiManager {
                             return;
                         }
                     };
-                    notes.push(MidiOutNote {
-                        note,
-                        velocity: Velocity::new(velocity.get()),
-                    });
+                    notes.push(MidiOutNote { note, velocity });
                 }
                 if roll_order == performance::ChordRollOrder::AscendingPitch {
                     notes.sort_by_key(|note| note.note.get());

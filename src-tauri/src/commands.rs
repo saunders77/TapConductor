@@ -257,7 +257,7 @@ pub fn set_instrument(
 
 #[tauri::command]
 pub fn set_volume(state: State<'_, Arc<AppState>>, value: f32) -> Result<(), String> {
-    lock_core(&state)?.audio.set_volume(value)
+    lock_core(&state)?.set_volume(value)
 }
 
 #[tauri::command]

@@ -49,6 +49,7 @@ pub struct AppCore {
     beat_tap_mode: bool,
     midi_free_play: bool,
     direct_midi_tokens: HashSet<String>,
+    non_midi_output_velocity: u8,
 }
 
 impl AppCore {
@@ -80,6 +81,7 @@ impl AppCore {
             beat_tap_mode: false,
             midi_free_play: false,
             direct_midi_tokens: HashSet::new(),
+            non_midi_output_velocity: 127,
         })
     }
 
@@ -218,6 +220,15 @@ impl AppCore {
         Ok(event)
     }
 
+    pub fn set_volume(&mut self, gain: f32) -> Result<(), String> {
+        if !gain.is_finite() {
+            return Err("Volume must be a finite number.".to_owned());
+        }
+        self.audio.set_volume(gain)?;
+        self.non_midi_output_velocity = volume_to_midi_velocity(gain);
+        Ok(())
+    }
+
     pub fn set_roll_delays(&mut self, regular_ms: u16, audition_ms: u16) -> Result<(), String> {
         self.performance.set_roll_delays(regular_ms, audition_ms);
         Ok(())
@@ -259,6 +270,8 @@ impl AppCore {
         self.ensure_audio_ready()?;
         let generation = self.current_generation()?;
         let velocity = velocity_from_midi1(midi_velocity)?;
+        let output_velocity =
+            (!token.starts_with("midi:")).then_some(self.non_midi_output_velocity);
         // A repeated down for an already-held physical input remains the
         // performance engine's responsibility. It is ignored there and must
         // not restart the receiver's suppression window.
@@ -278,7 +291,7 @@ impl AppCore {
         if result.is_err() && inserted {
             self.input_ids.remove(&token);
         }
-        self.apply_transition(result?)
+        self.apply_transition_with_midi_velocity(result?, output_velocity)
     }
 
     /// Play incoming MIDI keys directly, without reading or advancing the score.
@@ -348,7 +361,7 @@ impl AppCore {
         if result.is_err() && inserted {
             self.input_ids.remove(&token);
         }
-        self.apply_transition(result?)
+        self.apply_transition_with_midi_velocity(result?, Some(self.non_midi_output_velocity))
     }
 
     pub fn audition_note(
@@ -380,7 +393,7 @@ impl AppCore {
         if result.is_err() && inserted {
             self.input_ids.remove(&token);
         }
-        self.apply_transition(result?)
+        self.apply_transition_with_midi_velocity(result?, Some(self.non_midi_output_velocity))
     }
 
     pub fn audition_chord(
@@ -411,7 +424,7 @@ impl AppCore {
         if result.is_err() && inserted {
             self.input_ids.remove(&token);
         }
-        self.apply_transition(result?)
+        self.apply_transition_with_midi_velocity(result?, Some(self.non_midi_output_velocity))
     }
 
     pub fn release_input(&mut self, token: &str) -> Result<Option<CoreEventDto>, String> {
@@ -546,6 +559,14 @@ impl AppCore {
     }
 
     fn apply_transition(&mut self, transition: Transition) -> Result<Option<CoreEventDto>, String> {
+        self.apply_transition_with_midi_velocity(transition, None)
+    }
+
+    fn apply_transition_with_midi_velocity(
+        &mut self,
+        transition: Transition,
+        output_velocity: Option<u8>,
+    ) -> Result<Option<CoreEventDto>, String> {
         let retry_target = match transition.event().copied() {
             Some(PerformanceEvent::Triggered {
                 generation,
@@ -580,8 +601,12 @@ impl AppCore {
                     }
                 ));
             }
-            self.midi
-                .send_performance_command(command, midi_clock_sample, midi_clock_instant);
+            self.midi.send_performance_command(
+                command,
+                midi_clock_sample,
+                midi_clock_instant,
+                output_velocity,
+            );
         }
         let event = match transition.event().copied() {
             Some(PerformanceEvent::ScoreReady { generation, .. }) => Some(CoreEventDto::Ready {
@@ -632,8 +657,12 @@ impl AppCore {
         let midi_clock_instant = Instant::now();
         for command in transition.audio_commands().copied() {
             self.audio.send_performance_command(command)?;
-            self.midi
-                .send_performance_command(command, midi_clock_sample, midi_clock_instant);
+            self.midi.send_performance_command(
+                command,
+                midi_clock_sample,
+                midi_clock_instant,
+                None,
+            );
         }
         Ok(None)
     }
@@ -657,8 +686,12 @@ impl AppCore {
             // Recovery transitions contain a dedicated atomic panic command;
             // it cannot be lost even when the ordinary audio queue is full.
             let _ = self.audio.send_performance_command(command);
-            self.midi
-                .send_performance_command(command, midi_clock_sample, midi_clock_instant);
+            self.midi.send_performance_command(
+                command,
+                midi_clock_sample,
+                midi_clock_instant,
+                None,
+            );
         }
     }
 }
@@ -675,6 +708,10 @@ fn velocity_from_midi1(value: u8) -> Result<Velocity, String> {
     }
     Velocity::new(((u32::from(value) * u32::from(u16::MAX)) / 127) as u16)
         .ok_or_else(|| "Tap velocity must be non-zero.".to_owned())
+}
+
+fn volume_to_midi_velocity(gain: f32) -> u8 {
+    (gain.clamp(0.0, 1.0) * 127.0).round() as u8
 }
 
 fn sequence_from_events(events: &[tapconductor_score::TapEvent]) -> Result<ScoreSequence, String> {
@@ -769,7 +806,7 @@ fn rhythm_release_boundary(
 
 #[cfg(test)]
 mod tests {
-    use super::{MIN_TAP_INTERVAL, TapInputGate, rhythm_release_boundary};
+    use super::{MIN_TAP_INTERVAL, TapInputGate, rhythm_release_boundary, volume_to_midi_velocity};
     use std::time::{Duration, Instant};
     use tapconductor_performance::{EventId, SliceReleaseBoundary};
     use tapconductor_score::{Rational, ScorePosition, TapEvent};
@@ -795,6 +832,14 @@ mod tests {
         let mut event = event_at(position);
         event.release_boundaries = ends.iter().copied().map(Rational::from_integer).collect();
         event
+    }
+
+    #[test]
+    fn volume_maps_to_the_full_midi_velocity_range() {
+        assert_eq!(volume_to_midi_velocity(0.0), 0);
+        assert_eq!(volume_to_midi_velocity(0.5), 64);
+        assert_eq!(volume_to_midi_velocity(1.0), 127);
+        assert_eq!(volume_to_midi_velocity(2.0), 127);
     }
 
     #[test]

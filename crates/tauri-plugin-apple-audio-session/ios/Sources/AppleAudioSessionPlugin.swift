@@ -41,7 +41,9 @@ final class AppleAudioSessionPlugin: Plugin {
 
     private func configureAndActivate() throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playback, mode: .default, options: [.allowAirPlay])
+        // Playback sessions support AirPlay without an explicit category option.
+        // Some physical iPad routes reject `.allowAirPlay` here with paramErr (-50).
+        try session.setCategory(.playback, mode: .default, options: [])
         try session.setPreferredSampleRate(preferredSampleRate)
         try session.setPreferredIOBufferDuration(preferredBufferDuration)
         try session.setActive(true)

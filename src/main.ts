@@ -422,6 +422,28 @@ const elements = {
 
 const shell = document.querySelector<HTMLElement>(".shell");
 
+function isInsideDialog(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('[role="dialog"]') !== null;
+}
+
+// Safari's selection loupe and page-zoom gestures are particularly easy to
+// trigger while conducting. Keep them off the performance UI without changing
+// the behavior of Info, settings, and other dialogs.
+if (appleUiPlatform === "ipados" && shell) {
+  shell.addEventListener("selectstart", (event) => {
+    if (!isInsideDialog(event.target)) event.preventDefault();
+  });
+  shell.addEventListener("dblclick", (event) => {
+    if (!isInsideDialog(event.target)) event.preventDefault();
+  });
+  shell.addEventListener("gesturestart", (event) => {
+    if (!isInsideDialog(event.target)) event.preventDefault();
+  }, { passive: false });
+  shell.addEventListener("touchmove", (event) => {
+    if (event.touches.length > 1 && !isInsideDialog(event.target)) event.preventDefault();
+  }, { passive: false });
+}
+
 function syncModalIsolation(): void {
   if (!shell) return;
   const visibleDialogs = [...shell.querySelectorAll<HTMLElement>('[role="dialog"]')]

@@ -32,3 +32,20 @@ test("iPad transient dialogs stay content-sized", () => {
     /\.platform-ipados \.telemetry-consent,\s*\.platform-ipados #announcement-overlay\s*{[^}]*align-items:\s*center;/,
   );
 });
+
+test("iPad performance UI suppresses browser gestures but leaves dialogs alone", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(styles, /\.platform-ipados \.shell > :not\(\[role="dialog"\]\)\s*{[^}]*-webkit-user-select:\s*none;[^}]*touch-action:\s*pan-x pan-y;/s);
+  assert.match(source, /appleUiPlatform === "ipados"[\s\S]*?"selectstart"[\s\S]*?"gesturestart"[\s\S]*?event\.touches\.length > 1/);
+  assert.match(source, /target\.closest\('\[role="dialog"\]'\)/);
+});
+
+test("iPad TAP button is wider and its transport buttons use adjacent columns", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(styles, /\.platform-ipados \.performance-strip\s*{[^}]*grid-template-columns:[^;]*420px/s);
+  assert.match(styles, /\.platform-ipados \.tap-button\s*{[^}]*grid-column:\s*3;[^}]*width:\s*min\(420px, 100%\);/s);
+  assert.match(styles, /\.platform-ipados #back-button\s*{[^}]*grid-column:\s*2;/s);
+  assert.match(styles, /\.platform-ipados #forward-button\s*{[^}]*grid-column:\s*4;/s);
+});

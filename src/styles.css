@@ -23,6 +23,19 @@ body { overscroll-behavior: none; }
 button, select, input { font: inherit; }
 button { color: inherit; }
 
+/*
+ * Keep repeated performance gestures from turning into browser gestures on
+ * iPad. Dialogs are direct children of .shell and are deliberately excluded,
+ * so their longer-form content remains selectable and normally zoomable.
+ */
+.platform-ipados .shell > :not([role="dialog"]) {
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: pan-x pan-y;
+}
+
 .visually-hidden,
 .status-pill {
   position: absolute !important;
@@ -300,11 +313,17 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
     padding: 8px max(14px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px));
     gap: 6px 10px;
   }
+  .platform-ipados .performance-strip {
+    grid-template-columns: minmax(0, 1fr) 44px minmax(150px, 420px) 44px minmax(0, 1fr);
+  }
   .footer-brand { display: none; }
   .transport { width: 44px; height: 44px; }
   #back-button { grid-column: 1; grid-row: 1; justify-self: center; }
   .tap-button { grid-column: 2; grid-row: 1; width: min(280px, 100%); height: 92px; justify-self: center; }
   #forward-button { grid-column: 3; grid-row: 1; justify-self: center; }
+  .platform-ipados #back-button { grid-column: 2; }
+  .platform-ipados .tap-button { grid-column: 3; width: min(420px, 100%); }
+  .platform-ipados #forward-button { grid-column: 4; }
   .bottom-controls {
     position: static;
     grid-column: 1 / -1;

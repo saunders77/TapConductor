@@ -4,6 +4,7 @@ mod commands;
 mod core;
 mod crash_marker;
 mod dto;
+mod macos_menu;
 mod midi_runtime;
 mod session;
 
@@ -32,6 +33,12 @@ pub fn run() {
 
     builder
         .plugin(tauri_plugin_dialog::init())
+        .on_menu_event(|app, event| {
+            let id: &str = event.id().as_ref();
+            if id.starts_with("macos-menu:") {
+                let _ = app.emit("macos-menu-action", id);
+            }
+        })
         .on_window_event(move |_window, event| {
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 let _ = midi_shutdown_sender.send(MidiInputAction::Shutdown);
@@ -96,8 +103,11 @@ pub fn run() {
             commands::set_native_telemetry_consent,
             commands::take_native_crash_marker,
             commands::get_installer_telemetry_consent,
+            macos_menu::sync_macos_menu,
         ])
         .setup(move |app| {
+            #[cfg(target_os = "macos")]
+            macos_menu::install(app.handle(), &macos_menu::MacosMenuState::default())?;
             let marker_path = app.path().app_data_dir().ok().and_then(|app_data_dir| {
                 std::fs::create_dir_all(&app_data_dir)
                     .ok()

@@ -512,6 +512,56 @@ const RELOAD_AUDIO_SYSTEMS_VALUE = "__reload_audio_systems__";
 let currentAnnouncementId: string | null = null;
 let announcementPreviousFocus: HTMLElement | null = null;
 
+type MacosMenuOption = { label: string; selected: boolean };
+type MacosMenuState = {
+  audioOutputs: MacosMenuOption[];
+  instruments: MacosMenuOption[];
+  midiInputs: MacosMenuOption[];
+  midiOutputs: MacosMenuOption[];
+  parts: MacosMenuOption[];
+  legato: boolean;
+  midiFreePlay: boolean;
+  pianoShortcutPitch: number;
+  scoreLoaded: boolean;
+  canReplay: boolean;
+};
+
+function menuOptions(
+  select: HTMLSelectElement,
+  excludedValues: ReadonlySet<string> = new Set(),
+): MacosMenuOption[] {
+  return [...select.options]
+    .filter((option) => !option.disabled && !excludedValues.has(option.value))
+    .map((option) => ({
+      label: option.textContent ?? option.label,
+      selected: option.value === select.value,
+    }));
+}
+
+function macosMenuState(): MacosMenuState {
+  return {
+    audioOutputs: menuOptions(elements.audioOutput, new Set([RELOAD_AUDIO_SYSTEMS_VALUE])),
+    instruments: menuOptions(elements.instrument),
+    midiInputs: menuOptions(elements.midiInput),
+    midiOutputs: menuOptions(elements.midiOutput),
+    parts: score?.parts.map((part) => ({ label: part.name, selected: part.enabled })) ?? [],
+    legato: elements.legatoMode.checked,
+    midiFreePlay,
+    pianoShortcutPitch,
+    scoreLoaded: score !== null,
+    canReplay: mostRecentChordIndex !== null,
+  };
+}
+
+async function syncMacosMenu(): Promise<void> {
+  if (appleUiPlatform !== "macos" || isWebBuild()) return;
+  try {
+    await invoke("sync_macos_menu", { state: macosMenuState() });
+  } catch (error) {
+    console.warn("The macOS menu bar could not be updated.", error);
+  }
+}
+
 function updateMidiFreePlayButton(): void {
   elements.panic.classList.toggle("midi-free-play", midiFreePlay);
   elements.panic.setAttribute("aria-pressed", String(midiFreePlay));
@@ -520,6 +570,7 @@ function updateMidiFreePlayButton(): void {
     ? "Return to conducting the score"
     : "Play MIDI input directly";
   elements.panic.setAttribute("aria-label", elements.panic.title);
+  void syncMacosMenu();
 }
 
 function loadPianoShortcutPitch(): number {
@@ -2094,6 +2145,7 @@ function renderParts(): void {
   if (!elements.partsPopover.classList.contains("hidden")) {
     window.requestAnimationFrame(() => elements.partsList.querySelector<HTMLInputElement>("input")?.focus());
   }
+  void syncMacosMenu();
 }
 
 function populateSelect(select: HTMLSelectElement, devices: DeviceDto[], offLabel?: string): void {
@@ -2187,6 +2239,7 @@ async function refreshDevices(): Promise<void> {
     elements.diagnosticsButton.classList.add("not-ready");
     toast(errors.join(" "), "error");
   }
+  void syncMacosMenu();
 }
 
 async function reloadAudioSystems(): Promise<void> {
@@ -2320,7 +2373,7 @@ async function refreshDiagnostics(): Promise<void> {
         context: { backend: telemetryAudioBackend(diagnostics.audioBackend) },
       });
       toast(
-        `${diagnostics.message ?? "The audio output is unavailable."} Reload devices from Audio Out.`,
+        `${diagnostics.message ?? "The audio output is unavailable."} Reload devices from the AUDIO menu.`,
         "error",
       );
     }
@@ -2345,9 +2398,11 @@ async function installListeners(): Promise<void> {
       }
       if (!score || payload.generation !== score.generation) return;
       if (payload.type === "cursor") {
+        const replayWasUnavailable = mostRecentChordIndex === null;
         cursorIndex = payload.index;
         highlightIndex = payload.playedIndex ?? payload.index;
         if (payload.playedIndex !== undefined) mostRecentChordIndex = payload.playedIndex;
+        if (replayWasUnavailable && mostRecentChordIndex !== null) void syncMacosMenu();
       }
       if (payload.type === "ended") toast("End of score", "info");
       updatePosition();
@@ -2356,7 +2411,7 @@ async function installListeners(): Promise<void> {
     listen<string>("audio-lifecycle-error", ({ payload }) => {
       telemetry.recordError({ errorCode: "audio.lifecycle_error", component: "audio", operation: "lifecycle" });
       elements.diagnosticsButton.classList.add("not-ready");
-      toast(`${payload} Reload devices from AUDIO.`, "error");
+      toast(`${payload} Reload devices from the AUDIO menu.`, "error");
     }),
     listen<BeatMidiInput>("beat-midi-input", ({ payload }) => {
       if (payload.type === "down") void performDown(payload.token, payload.velocity);
@@ -2364,6 +2419,9 @@ async function installListeners(): Promise<void> {
     }),
     listen<PianoShortcutInput>("piano-shortcut", ({ payload }) => {
       void handlePianoShortcut(payload);
+    }),
+    listen<string>("macos-menu-action", ({ payload }) => {
+      void handleMacosMenuAction(payload);
     }),
   ]);
   unlisteners.push(...listeners);
@@ -2874,6 +2932,78 @@ async function handlePianoShortcut(input: PianoShortcutInput): Promise<void> {
   else if (input.command === "beginning") await setCursorIndex(0);
   else await toggleMidiFreePlay();
 }
+
+function selectableOptions(
+  select: HTMLSelectElement,
+  excludedValues: ReadonlySet<string> = new Set(),
+): HTMLOptionElement[] {
+  return [...select.options]
+    .filter((option) => !option.disabled && !excludedValues.has(option.value));
+}
+
+function chooseMenuOption(
+  select: HTMLSelectElement,
+  indexText: string,
+  excludedValues: ReadonlySet<string> = new Set(),
+): void {
+  const index = Number(indexText);
+  const option = Number.isInteger(index) ? selectableOptions(select, excludedValues)[index] : undefined;
+  if (!option) return;
+  select.value = option.value;
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+async function handleMacosMenuAction(id: string): Promise<void> {
+  if (!id.startsWith("macos-menu:")) return;
+  const action = id.slice("macos-menu:".length);
+  if (action === "open-score") {
+    await chooseScore();
+  } else if (action === "refresh-devices") {
+    await reloadAudioSystems();
+  } else if (action === "toggle-legato") {
+    elements.legatoMode.click();
+  } else if (action === "toggle-midi-free-play") {
+    await toggleMidiFreePlay();
+  } else if (action === "tap") {
+    elements.tap.click();
+  } else if (action === "back") {
+    elements.back.click();
+  } else if (action === "forward") {
+    elements.forward.click();
+  } else if (action === "beginning") {
+    await setCursorIndex(0);
+  } else if (action === "replay") {
+    if (mostRecentChordIndex === null) return;
+    const token = `audition:menu:${crypto.randomUUID()}`;
+    await auditionDown(token, mostRecentChordIndex);
+    window.setTimeout(() => void performUp(token), MINIMUM_POINTER_NOTE_HOLD_MS);
+  } else if (action === "info") {
+    openHelp();
+  } else if (action.startsWith("audio-output:")) {
+    chooseMenuOption(
+      elements.audioOutput,
+      action.slice("audio-output:".length),
+      new Set([RELOAD_AUDIO_SYSTEMS_VALUE]),
+    );
+  } else if (action.startsWith("instrument:")) {
+    chooseMenuOption(elements.instrument, action.slice("instrument:".length));
+  } else if (action.startsWith("midi-input:")) {
+    chooseMenuOption(elements.midiInput, action.slice("midi-input:".length));
+  } else if (action.startsWith("midi-output:")) {
+    chooseMenuOption(elements.midiOutput, action.slice("midi-output:".length));
+  } else if (action.startsWith("part:")) {
+    const index = Number(action.slice("part:".length));
+    const input = Number.isInteger(index)
+      ? elements.partsList.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')[index]
+      : undefined;
+    input?.click();
+  } else if (action.startsWith("piano-pitch:")) {
+    const pitch = Number(action.slice("piano-pitch:".length));
+    if (!Number.isInteger(pitch) || pitch < 0 || pitch > 127) return;
+    elements.pianoShortcutPitch.value = String(pitch);
+    elements.pianoShortcutPitch.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+}
 elements.back.addEventListener("click", async () => {
   if (!score) return;
   await setCursorIndex(Math.max(0, cursorIndex - 1));
@@ -3117,6 +3247,7 @@ elements.audioOutput.addEventListener("change", async () => {
     });
     selectedAudioDeviceId = requested;
     fitSelect(elements.audioOutput);
+    void syncMacosMenu();
     scheduleSettingsTelemetry("audio", "audio_settings_changed", () => ({
       backend: telemetryAudioBackend(lastDiagnostics?.audioBackend),
       output_kind: "unknown",
@@ -3132,7 +3263,8 @@ elements.audioOutput.addEventListener("change", async () => {
 });
 elements.instrument.addEventListener("change", () => {
   fitSelect(elements.instrument);
-  void invokeSafe("set_instrument", { instrument: elements.instrument.value });
+  void invokeSafe("set_instrument", { instrument: elements.instrument.value })
+    .then(() => syncMacosMenu());
 });
 elements.midiInput.addEventListener("change", () => {
   fitSelect(elements.midiInput);
@@ -3147,6 +3279,7 @@ elements.midiInput.addEventListener("change", () => {
         velocity_curve: "device",
         sustain_enabled: true,
       }));
+      void syncMacosMenu();
       if (isWebBuild()) return refreshDevices();
     });
 });
@@ -3158,6 +3291,7 @@ elements.pianoShortcutPitch.addEventListener("change", () => {
     // The active setting still works when persistent browser storage is unavailable.
   }
   void invokeSafe("set_piano_shortcut_pitch", { midiPitch: pianoShortcutPitch });
+  void syncMacosMenu();
 });
 elements.midiOutput.addEventListener("change", () => {
   fitSelect(elements.midiOutput);
@@ -3172,6 +3306,7 @@ elements.midiOutput.addEventListener("change", () => {
         velocity_curve: "device",
         sustain_enabled: true,
       }));
+      void syncMacosMenu();
       if (isWebBuild()) return refreshDevices();
     });
 });
@@ -3199,6 +3334,7 @@ elements.tapMode.addEventListener("change", () => {
 elements.legatoMode.addEventListener("change", () => {
   const enabled = elements.legatoMode.checked;
   elements.legatoValue.textContent = enabled ? "On" : "Off";
+  void syncMacosMenu();
   void invokeSafe("set_legato_mode", { enabled }).then(() => {
     scheduleSettingsTelemetry("rhythm", "rhythm_settings_changed", () => ({
       performance_mode: tapMode,

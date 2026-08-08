@@ -128,7 +128,7 @@ impl AudioManager {
         match self.runtime.as_ref() {
             Some(runtime) if runtime.diagnostics.snapshot().backend_errors == 0 => Ok(()),
             Some(_) => Err(
-                "The audio backend reported an output-stream error. Choose Reload audio & MIDI devices from Audio Out before performing."
+                "The audio backend reported an output-stream error. Choose 'Reload audio & MIDI devices' from the AUDIO menu."
                     .to_owned(),
             ),
             None => Err(self
@@ -532,7 +532,7 @@ impl AudioManager {
                 .clone()
                 .or_else(|| {
                     (snapshot.backend_errors > 0)
-                        .then(|| "Please select or reselect an AUDIO OUT device.".to_owned())
+                        .then(|| "Please select or reselect an AUDIO device.".to_owned())
                 })
                 .or_else(|| self.instrument_message.clone()),
         }

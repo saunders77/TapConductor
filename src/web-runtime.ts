@@ -672,7 +672,7 @@ export class WebRuntime {
       .filter((device) => device.kind === "audiooutput")
       .map((device, index) => ({
         id: device.deviceId,
-        name: device.label || `Audio output ${index + 1}`,
+        name: device.label || `Audio ${index + 1}`,
         isDefault: device.deviceId === "default",
       }));
   }

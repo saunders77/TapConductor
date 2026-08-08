@@ -76,7 +76,7 @@ app.innerHTML = `
 
     <section class="control-deck" aria-label="Performance controls">
       <label class="field" title="Choose the audio device that TapConductor plays through.">
-        <span>Audio out</span>
+        <span>Audio</span>
         <select id="audio-output" aria-label="Audio output"><option>System default</option></select>
       </label>
       <label class="field instrument-field" title="Choose the sound used for score playback.">
@@ -165,12 +165,12 @@ app.innerHTML = `
           </section>
           <section id="help-instructions" tabindex="-1"><h3>Open a sheet music score</h3><p>Select a MusicXML, compressed MusicXML, or MIDI file (file extensions .musicxml, .xml, .mxl, .mid, or .midi). If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read. If you only have a PDF, you can use a converter program to create a file TapConductor can read (such as Audiveris or MuseScore).</p><p class="help-demo-links">Or open one of the included examples: <a id="help-demo-choir-open" href="#">demo choir score</a> or <a id="help-demo-piano-open" href="#">demo piano score</a>.</p></section>
           <section><h3>Configure audio settings</h3>
-            <p>Use the Audio Out control in TapConductor's header area to select the speakers or sound card to use. On Windows, an option marked (ASIO) has an installed ASIO driver and may provide better latency on supported hardware. A driver such as ASIO4ALL can route to built-in Realtek speakers or headphones after that endpoint is enabled in the driver's control panel. ASIO is not automatically the best choice for every device or configuration; choose the output that is stable and responsive with your hardware. If you don't see the audio device you're looking for, first make sure that it's connected and turned on, then select <strong>AUDIO > Reload Audio</strong>.</p>
+            <p>Use the AUDIO control in TapConductor's header area to select the speakers or sound card to use. On Windows, an option marked (ASIO) has an installed ASIO driver and may provide better latency on supported hardware. A driver such as ASIO4ALL can route to built-in Realtek speakers or headphones after that endpoint is enabled in the driver's control panel. ASIO is not automatically the best choice for every device or configuration; choose the output that is stable and responsive with your hardware. If you don't see the audio device you're looking for, first make sure that it's connected and turned on, then select <strong>AUDIO > Reload Audio</strong>.</p>
             <p id="instrument-help">Choose an instrument, either the grand piano or a synthesizer.</p>
           </section>
           <section><h3>Connect your piano (optional)</h3>
             <p>For the best experience with TapConductor, I recommend using it with a digital piano or keyboard. It's easiest to connect a piano with USB MIDI to your computer or iPad.</p>
-            <p>If you want to control TapConductor with a <strong>piano</strong> or another MIDI instrument, then plug in the instrument and turn it on, select <strong>AUDIO > Reload audio & MIDI devices</strong>, then select it from the <strong>MIDI IN</strong> menu. You'll still be able to tap using normal mouse and keyboard controls too. When you use a piano, TapConductor will use the dynamics you play for each note, and you can use a sustain pedal.</p>
+            <p>If you want to control TapConductor with a piano or another MIDI instrument, then plug in the instrument and turn it on, select <strong>AUDIO > Reload audio & MIDI devices</strong>, then select it from the <strong>MIDI IN</strong> menu. You'll still be able to tap using normal mouse and keyboard controls too. When you use a piano, TapConductor will use the dynamics you play for each note, and you can use a sustain pedal.</p>
             <p>If you also want TapConductor to play using your piano's speakers and built-in sounds instead of playing sounds from your computer, select your piano in the <strong>MIDI OUT</strong> menu. You'll want to disable the sounds originating directly from the piano keys you tap, which is a setting most pianos call "Local Off" or "Local Control Off".</p>
             <label class="shortcut-pitch-setting" for="piano-shortcut-pitch"><span><b>Piano key shortcuts</b><small>When using TapConductor with your piano via MIDI IN, you can control TapConductor using shortcuts with your piano keys instead of your keyboard or mouse. First press and hold your piano key shortcut note (C2 by default), then while holding it, tap one of the following notes on your piano to trigger the corresponding command:
             <ul>
@@ -181,22 +181,22 @@ app.innerHTML = `
               <li><b>B</b> to turn on direct MIDI playing mode to play the piano normally (or to switch back)</li>
             </ul>
             </small></span><select id="piano-shortcut-pitch" aria-label="Piano key shortcut note"></select></label>
-            <p>The MIDI OUT setting is only needed if you want to route your performance to another program for recording or further manipulation. For normal playing, it's not necessary. You can also use it to route back to your piano, which will use your piano's built-in sounds and speakers instead of your computer's speakers.</p>
-            <p>By default, all staves (parts) will play during tapping, but you can select specific staves in the PARTS menu.</p>
+            <p>The <b>MIDI OUT</b> setting can also be used to route your performance to another program on your computer for recording or further manipulation.</p>
           </section>
           <section><h3>Conduct the score</h3>
             <p>Press the large <b>TAP</b> button, a supported keyboard key (A-Z, numbers, Shift, or punctuation), or your MIDI instrument/piano to play the next written note or chord, starting from the beginning. The location marker will automatically progress to the next note or chord. If you do nothing further, playing does not continue; every note waits for your tap. With Legato off, each note follows the key that struck it. Turn Legato on to use written durations, rests, staccato marks, and later note gestures to connect and release notes automatically. This mode is useful for rehearsals with a choir, performance, or recording. If you want each tap to roll each chord, you can use the ROLL slider at the bottom of the window.</p>
+            <p>By default, all staves (parts) will play during tapping, but you can select specific staves in the PARTS menu.</p>
             <p>If you don't want to play a note/chord on every tap, but you instead want to use the program for normal conducting, keeping a steady beat while the notes play, then switch from the Rhythm mode to the Beat mode in the TAP MODE menu. Then you'll need to start by counting in with taps, and each tap will be interpreted as one beat in the music.</p>
             <p>The Stop button on the top right switches to a mode where TapConductor ignores your taps, except for MIDI IN, which it plays directly. Use this mode if you want to play on your piano as you would normally.</p>
-          </section>
+            </section>
           <section><h3>Hear specific notes and chords</h3>
             <p>Click a note on the score to hear it played at any time - the position indicator doesn't need to be on that note, and the click won't move the position indicator.</p>
-            <p>Use the speaker buttons above the score system to hear any chord at any time. It will play a rolled chord from bottom to top if there are multiple notes. You can configure how long time time between rolled notes is with the CHORD slider at the bottom.</p>
+            <p>Use the speaker buttons above the score system to hear any chord at any time. It will play a rolled chord from bottom to top if there are multiple notes. You can configure how long the time delay is between rolled notes with the <b>CHORD ROLL</b> slider at the bottom.</p>
           </section>   
-          <section><h3>Navigate</h3>
-            <p>Use the downward-pointing arrows above each score location to control the green location selector and choose where to start playing when you resume tapping. You can also use the left and right arrow keys to move the selector left and right.</p>
-            <p>Press Tab to reach the score actions without stepping through every note. Within the score actions, use Left and Right Arrow to move between actions, Home or End to jump to the first or last action, and Enter or Space to activate the focused action.</p>
-            <p>The Spacebar replays the last chord, which can be useful in a rehearsal situation. Cmd/Ctrl+Left Arrow returns to the beginning, and Cmd/Ctrl+. toggles direct MIDI play. Cmd/Ctrl+O opens a score, F1 opens Info, and Escape stops sounding notes when focus is not in a control.</p>
+          <section><h3>Navigation and keyboard shortcuts</h3>
+            <p>Use the downward-pointing arrows above each score location to control the green location selector and choose where to start playing when you resume tapping. You can also use the <b>Left</b> and <b>Right</b> arrow keys to move the selector left and right or <b>Ctrl/Cmd</b> + <b>left-arrow-key</b></p>
+            <p>Press Tab to reach the score actions without stepping through every note. Within the score actions, use <b>Left</b> and <b>Right</b> arrows to move between actions, Home or End to jump to the first or last action, and Enter or Space to activate the focused action.</p>
+            <p>The <b>Spacebar</b> replays the last chord, which can be useful in a rehearsal situation. <b>Ctrl/Cmd</b>+<b>.</b> toggles direct play from your MIDI keyboard (same as the Stop button). Cmd/Ctrl+O opens a score, F1 opens Info, and Escape stops sounding notes when focus is not in a control.</p>
           </section>
           <section id="privacy" class="legal-disclosure" tabindex="-1">
             <h3>Privacy</h3>
@@ -2351,7 +2351,7 @@ async function installListeners(): Promise<void> {
     listen<string>("audio-lifecycle-error", ({ payload }) => {
       telemetry.recordError({ errorCode: "audio.lifecycle_error", component: "audio", operation: "lifecycle" });
       elements.diagnosticsButton.classList.add("not-ready");
-      toast(`${payload} Reload devices from Audio Out.`, "error");
+      toast(`${payload} Reload devices from AUDIO.`, "error");
     }),
     listen<BeatMidiInput>("beat-midi-input", ({ payload }) => {
       if (payload.type === "down") void performDown(payload.token, payload.velocity);

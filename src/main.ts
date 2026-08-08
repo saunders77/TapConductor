@@ -81,9 +81,9 @@ app.innerHTML = `
         <select id="audio-output" aria-label="Audio output"><option>System default</option></select>
       </label>
       <label class="field instrument-field" title="Choose the sound used for score playback.">
-        <span>Instrument</span>
+        <span>Sound</span>
         <select id="instrument" aria-label="Instrument">
-          <option value="piano">Grand piano</option>
+          <option value="piano">Piano</option>
           <option value="synth">Synthesizer</option>
         </select>
       </label>
@@ -167,7 +167,7 @@ app.innerHTML = `
           <section id="help-instructions" tabindex="-1"><h3>Open a sheet music score</h3><p>Select a MusicXML, compressed MusicXML, or MIDI file (file extensions .musicxml, .xml, .mxl, .mid, or .midi). If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read. If you only have a PDF, you can use a converter program to create a file TapConductor can read (such as Audiveris or MuseScore).</p><p class="help-demo-links">Or open one of the included examples: <a id="help-demo-choir-open" href="#">demo choir score</a> or <a id="help-demo-piano-open" href="#">demo piano score</a>.</p></section>
           <section><h3>Configure audio settings</h3>
             <p>Use the AUDIO control in TapConductor's header area to select the speakers or sound card to use. On Windows, an option marked (ASIO) has an installed ASIO driver and may provide better latency on supported hardware. A driver such as ASIO4ALL can route to built-in Realtek speakers or headphones after that endpoint is enabled in the driver's control panel. ASIO is not automatically the best choice for every device or configuration; choose the output that is stable and responsive with your hardware. If you don't see the audio device you're looking for, first make sure that it's connected and turned on, then select <strong>AUDIO > Reload Audio</strong>.</p>
-            <p id="instrument-help">Choose an instrument, either the grand piano or a synthesizer.</p>
+            <p id="instrument-help">Choose an instrument on the <b>Sound</b> menu, either the grand piano or a synthesizer.</p>
           </section>
           <section><h3>Connect your piano (optional)</h3>
             <p>For the best experience with TapConductor, I recommend using it with a digital piano or keyboard. It's easiest to connect a piano with USB MIDI to your computer or iPad.</p>

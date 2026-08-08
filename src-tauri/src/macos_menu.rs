@@ -34,7 +34,7 @@ impl Default for MacosMenuState {
             }],
             instruments: vec![
                 MacosMenuOption {
-                    label: "Grand piano".to_owned(),
+                    label: "Piano".to_owned(),
                     selected: true,
                 },
                 MacosMenuOption {

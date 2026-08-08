@@ -22,6 +22,7 @@ import {
   isWebBuild,
   openScoreDialog,
   setAppWindowTitle,
+  syncAppWindowThemeWithSystem,
   type UnlistenFn,
 } from "./platform";
 import { detectAppleUiPlatform, initialTelemetryAction } from "./ui-platform";
@@ -523,6 +524,9 @@ let scorePerformance: ScorePerformance | null = null;
 let lastDiagnostics: DiagnosticsDto | null = null;
 let lastUiNativeRoundTripMs: number | null = null;
 let unlisteners: UnlistenFn[] = [];
+if (appleUiPlatform === "macos") {
+  unlisteners.push(syncAppWindowThemeWithSystem());
+}
 const heldTokens = new Set<string>();
 let midiFreePlay = false;
 const DEFAULT_PIANO_SHORTCUT_PITCH = 36;

@@ -233,7 +233,7 @@ app.innerHTML = `
           <section>
             <h3>Usage and crash data</h3>
             <p>When enabled, TapConductor sends pseudonymous application usage, coarse system and settings categories, and sanitized error summaries directly to PostHog. It never sends score contents or names, paths, MIDI messages, device names, precise location, or contact information.</p>
-            <label class="telemetry-choice"><input id="telemetry-toggle" type="checkbox" /> <span><b>Send pseudonymous crash and usage data to the developer to help improve TapConductor</b><small id="telemetry-status">Checking…</small></span></label>
+            <label class="telemetry-choice"><input id="telemetry-toggle" type="checkbox" /> <span><b>Send anonymous crash and usage data to the developer to help improve TapConductor</b><small id="telemetry-status">Checking…</small></span></label>
           </section>
         </div>
         <button id="telemetry-settings-done" class="primary-button" type="button">Done</button>
@@ -245,14 +245,13 @@ app.innerHTML = `
         <div class="help-card-header">
           <div>
             <span class="help-kicker">Privacy choice</span>
-            <h2 id="telemetry-consent-title">Help improve TapConductor?</h2>
+            <h2 id="telemetry-consent-title">Thanks for trying TapConductor!</h2>
           </div>
         </div>
         <div class="help-content">
           <section>
-            <p id="telemetry-consent-summary">You can share pseudonymous installs, launches, score type and length, settings categories, session totals, and sanitized errors directly with PostHog. PostHog derives an approximate country or region from the network connection. Scores, filenames, paths, device names, MIDI notes, and precise location are never sent.</p>
+            <p id="telemetry-consent-summary">To help improve the app, TapConductor would like to share anonymous info with the developer (like crashes and how often TapConductor gets launched).</p>
           </section>
-          <p>Sharing is optional. TapConductor works the same either way, and you can change this later in Info &gt; Privacy.</p>
         </div>
         <div class="telemetry-consent-actions">
           <button id="telemetry-continue" class="secondary-button large" type="button">Continue and share</button>

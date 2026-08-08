@@ -194,9 +194,9 @@ app.innerHTML = `
             <p>Use the speaker buttons above the score system to hear any chord at any time. It will play a rolled chord from bottom to top if there are multiple notes. You can configure how long the time delay is between rolled notes with the <b>CHORD ROLL</b> slider at the bottom.</p>
           </section>   
           <section><h3>Navigation and keyboard shortcuts</h3>
-            <p>Use the downward-pointing arrows above each score location to control the green location selector and choose where to start playing when you resume tapping. You can also use the <b>Left</b> and <b>Right</b> arrow keys to move the selector left and right or <b>Ctrl/Cmd</b> + <b>left-arrow-key</b></p>
-            <p>Press Tab to reach the score actions without stepping through every note. Within the score actions, use <b>Left</b> and <b>Right</b> arrows to move between actions, Home or End to jump to the first or last action, and Enter or Space to activate the focused action.</p>
-            <p>The <b>Spacebar</b> replays the last chord, which can be useful in a rehearsal situation. <b>Ctrl/Cmd</b>+<b>.</b> toggles direct play from your MIDI keyboard (same as the Stop button). Cmd/Ctrl+O opens a score, F1 opens Info, and Escape stops sounding notes when focus is not in a control.</p>
+            <p>Use the downward-pointing arrows above each score location to control the green location selector and choose where to start playing when you resume tapping. You can also use the <b>Left</b> and <b>Right</b> arrow keys to move the selector left and right, or <b>Ctrl/Cmd</b> + <b>Left Arrow</b> to return to the beginning.</p>
+            <p>Press Tab to reach the score actions without stepping through every note. Within the score actions, use <b>Up</b> and <b>Down</b> arrows to move between actions, Home or End to jump to the first or last action, and Enter to activate the focused action. Left and Right Arrow always move through score events, and Spacebar always replays the last chord.</p>
+            <p>The <b>Spacebar</b> replays the last chord, which can be useful in a rehearsal situation. <b>Ctrl/Cmd</b>+<b>.</b> toggles direct play from your MIDI keyboard (same as the Stop button). Cmd/Ctrl+O opens a score, F1 opens Info, and Escape stops sounding notes when focus is not in a control. Performance and navigation shortcuts take priority wherever focus is in the app; use Tab, Enter, and Up or Down Arrow to operate focused controls without triggering a note.</p>
           </section>
           <section id="privacy" class="legal-disclosure" tabindex="-1">
             <h3>Privacy</h3>
@@ -303,7 +303,7 @@ app.innerHTML = `
             </div>
             <p>Every tap on your keyboard, mouse, or piano plays the next written note or chord. You can connect a piano or other MIDI instruments and control dynamics. The key/note you press doesn't matter; TapConductor will always play the right notes.</p>
           </div>
-          <p id="score-keyboard-help" class="visually-hidden">Use Left and Right Arrow to move through score events. When focus is on a score action, use Left and Right Arrow to move between score actions, Home for the first action, and End for the last.</p>
+          <p id="score-keyboard-help" class="visually-hidden">Left and Right Arrow always move through score events. When focus is on a score action, use Up and Down Arrow to move between score actions, Home for the first action, and End for the last.</p>
           <div id="score-stage" class="score-stage hidden">
             <div id="score-highlights" class="score-highlights"></div>
             <div id="score-targets" class="score-targets"></div>
@@ -1374,7 +1374,7 @@ elements.scoreStage.addEventListener("keydown", (event) => {
     && event.target.matches(SCORE_ACTION_SELECTOR)
     ? event.target
     : null;
-  if (!current || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  if (!current || !["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
   const buttons = scoreActionButtons();
   const currentIndex = buttons.indexOf(current);
   if (currentIndex < 0) return;
@@ -1382,7 +1382,7 @@ elements.scoreStage.addEventListener("keydown", (event) => {
     ? 0
     : event.key === "End"
       ? buttons.length - 1
-      : event.key === "ArrowLeft"
+      : event.key === "ArrowUp"
         ? Math.max(0, currentIndex - 1)
         : Math.min(buttons.length - 1, currentIndex + 1);
   event.preventDefault();
@@ -2066,6 +2066,11 @@ function renderParts(): void {
     input.type = "checkbox";
     input.checked = part.enabled;
     input.setAttribute("aria-label", `Staff ${part.name}`);
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      input.click();
+    });
     input.addEventListener("change", async () => {
       if (!score) return;
       const previousEvent = score.events[cursorIndex];
@@ -2472,6 +2477,16 @@ elements.telemetryToggle.addEventListener("change", () => {
   }
   syncTelemetryControls();
 });
+elements.telemetryToggle.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  elements.telemetryToggle.click();
+});
+elements.announcementDismissPermanently.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  elements.announcementDismissPermanently.click();
+});
 
 type PendingSettingsEvent = {
   eventName: string;
@@ -2844,7 +2859,6 @@ const setCursorIndex = async (index: number): Promise<void> => {
 };
 
 async function handlePianoShortcut(input: PianoShortcutInput): Promise<void> {
-  if (!elements.helpOverlay.classList.contains("hidden")) return;
   const replayToken = `piano-shortcut:${input.token}`;
   if (input.command === "replay") {
     if (input.pressed && mostRecentChordIndex !== null) {
@@ -2870,7 +2884,6 @@ elements.forward.addEventListener("click", async () => {
 });
 
 const tapKeyCodes = new Set([
-  "Enter",
   "ShiftLeft",
   "ShiftRight",
   ...Array.from({ length: 26 }, (_, index) => `Key${String.fromCharCode(65 + index)}`),
@@ -2886,29 +2899,14 @@ const tapKeyCodes = new Set([
   "Backquote",
 ]);
 
-const INTERACTIVE_SHORTCUT_TARGETS = [
-  "a[href]",
-  "button",
-  "input",
-  "select",
-  "textarea",
-  "[contenteditable]",
-  "[role=button]",
-  "[role=combobox]",
-  "[role=slider]",
-].join(",");
-
-function isInteractiveShortcutTarget(target: EventTarget | null): boolean {
-  return target instanceof Element && target.closest(INTERACTIVE_SHORTCUT_TARGETS) !== null;
-}
-
-function hasOpenModal(): boolean {
+function hasBlockingModal(): boolean {
   return [...document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]')]
-    .some((dialog) => !dialog.classList.contains("hidden"));
+    .some((dialog) => dialog !== elements.helpOverlay && !dialog.classList.contains("hidden"));
 }
 
 document.addEventListener("keydown", (event) => {
-  if (event.defaultPrevented || hasOpenModal()) return;
+  if (event.defaultPrevented) return;
+  if (event.code === "Escape" && hasBlockingModal()) return;
   const commandModifier = event.ctrlKey || event.metaKey;
   if (event.key === "F1" && !event.altKey && !commandModifier) {
     event.preventDefault();
@@ -2929,7 +2927,6 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
     return;
   }
-  if (isInteractiveShortcutTarget(event.target)) return;
   if (event.altKey) return;
   if (event.code === "ArrowLeft") {
     event.preventDefault();
@@ -2967,7 +2964,7 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
     void performDown(`key:${event.code}`);
   }
-});
+}, { capture: true });
 document.addEventListener("keyup", (event) => {
   if (event.code === "Space" && heldTokens.has("audition:key:Space")) {
     event.preventDefault();
@@ -3204,6 +3201,11 @@ elements.legatoMode.addEventListener("change", () => {
       tempo_source: tapMode === "beat" ? "conducted_taps" : "individual_taps",
     }));
   });
+}, { capture: true });
+elements.legatoMode.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  elements.legatoMode.click();
 });
 elements.diagnosticsButton.addEventListener("click", () => {
   togglePopover(elements.diagnosticsButton, elements.diagnostics);

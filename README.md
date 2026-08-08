@@ -41,8 +41,8 @@
    
 <h3>Navigation</h3>
         <p>Use the downward-pointing arrows above each score location to control the green location selector and choose where to start playing when you resume tapping. You can also use the left and right arrow keys to move the selector left and right. Cmd/Ctrl+Left-arrow-key takes you back to the start of the piece.</p>
-        <p>Press Tab to reach the score actions without stepping through every note. Within the score actions, use Left and Right Arrow to move between actions, Home or End to jump to the first or last action, and Enter or Space to activate the focused action.</p>
-        <p>The Spacebar replays the last chord, which can be useful in a rehearsal situation. Cmd/Ctrl+O opens a score, F1 opens Info, Cmd/Ctrl+. toggles direct MIDI play, and Escape stops sounding notes when focus is not in a control. When a button, menu, or slider has focus, its standard keyboard behavior takes priority.</p>
+        <p>Press Tab to reach the score actions without stepping through every note. Within the score actions, use Up and Down Arrow to move between actions, Home or End to jump to the first or last action, and Enter to activate the focused action. Left and Right Arrow always move through score events, and Spacebar always replays the last chord.</p>
+        <p>The Spacebar replays the last chord, which can be useful in a rehearsal situation. Cmd/Ctrl+O opens a score, F1 opens Info, Cmd/Ctrl+. toggles direct MIDI play, and Escape stops sounding notes when focus is not in a control. Performance and navigation shortcuts take priority wherever focus is in the app, including header controls and Info; use Tab, Enter, and Up or Down Arrow to operate focused controls without triggering a note.</p>
 
 
 <h2>Other info</h2>

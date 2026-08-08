@@ -23,11 +23,22 @@ test("interactive controls have labels and connected disclosure state", () => {
   assert.match(source, /id="score-status"[^>]+role="status"[^>]+aria-live="polite"/);
 });
 
-test("global performance commands preserve native control keyboard behavior", () => {
-  assert.match(source, /function isInteractiveShortcutTarget/);
-  assert.match(source, /if \(isInteractiveShortcutTarget\(event\.target\)\) return;/);
+test("global performance commands work regardless of focused app control", () => {
+  assert.doesNotMatch(source, /isInteractiveShortcutTarget/);
   assert.match(source, /tapKeyCodes\.has\(event\.code\) && !commandModifier/);
   assert.match(source, /heldTokens\.has\(`key:\$\{event\.code\}`\)/);
+  assert.match(source, /if \(event\.code === "ArrowLeft"\)/);
+  assert.match(source, /if \(event\.code === "ArrowRight"\)/);
+  assert.match(source, /event\.code === "Space" && !commandModifier/);
+  assert.match(source, /event\.code === "Period" && commandModifier/);
+  assert.doesNotMatch(source, /const tapKeyCodes = new Set\(\[\s*"Enter"/);
+  assert.match(source, /elements\.legatoMode\.addEventListener\("keydown"/);
+  assert.match(source, /document\.addEventListener\("keydown",[\s\S]+?\}, \{ capture: true \}\);/);
+  assert.match(source, /dialog !== elements\.helpOverlay/);
+  assert.match(source, /event\.code === "Escape" && hasBlockingModal\(\)/);
+  assert.doesNotMatch(source, /event\.defaultPrevented \|\| hasBlockingModal\(\)/);
+  const pianoShortcutHandler = source.match(/async function handlePianoShortcut[\s\S]*?\n\}/)?.[0] ?? "";
+  assert.doesNotMatch(pianoShortcutHandler, /helpOverlay|activeElement|:focus/);
 });
 
 test("modal and score navigation manage focus without enormous tab sequences", () => {
@@ -35,7 +46,7 @@ test("modal and score navigation manage focus without enormous tab sequences", (
   assert.match(source, /child\.inert = activeDialog !== null/);
   assert.match(source, /const SCORE_ACTION_SELECTOR/);
   assert.match(source, /button\.tabIndex = button === active \? 0 : -1/);
-  assert.match(source, /\["ArrowLeft", "ArrowRight", "Home", "End"\]/);
+  assert.match(source, /\["ArrowUp", "ArrowDown", "Home", "End"\]/);
 });
 
 test("cross-platform visual accessibility preferences are honored", () => {

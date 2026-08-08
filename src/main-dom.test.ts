@@ -24,3 +24,8 @@ test("the Info privacy section links to a separate telemetry settings view", () 
   assert.match(settingsView, /id="telemetry-toggle"/);
   assert.doesNotMatch(settingsView, /telemetry-(?:copy-id|reset)/);
 });
+
+test("the iPad telemetry consent dialog stays content-sized", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+  assert.match(styles, /\.platform-ipados \.telemetry-consent\s*{[^}]*align-items:\s*center;/);
+});

@@ -62,6 +62,9 @@ initialize_ios() {
   if [[ ! -d "${ROOT}/src-tauri/gen/apple" ]]; then
     npm run tauri -- ios init --ci
   fi
+  cp \
+    "${ROOT}"/src-tauri/icons/ios/*.png \
+    "${ROOT}/src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset/"
   mkdir -p "${ROOT}/src-tauri/gen/apple/assets"
   cp \
     "${ROOT}/src-tauri/apple/PrivacyInfo.xcprivacy" \

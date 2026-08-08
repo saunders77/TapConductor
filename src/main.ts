@@ -44,6 +44,7 @@ import type {
   PianoShortcutInput,
   TapEventDto,
 } from "./types";
+import { audioDeviceOptions } from "./audio-device-options";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing #app");
@@ -2198,11 +2199,8 @@ function populateSelect(select: HTMLSelectElement, devices: DeviceDto[], offLabe
 function populateAudioSelect(devices: DeviceDto[]): void {
   elements.audioOutput.replaceChildren();
   elements.audioOutput.add(new Option("None (Mute)", NONE_AUDIO_OUTPUT_VALUE));
-  elements.audioOutput.add(new Option("System default", ""));
-  for (const device of devices) {
-    elements.audioOutput.add(
-      new Option(`${device.name}${device.isDefault ? " (default)" : ""}`, device.id),
-    );
+  for (const option of audioDeviceOptions(devices)) {
+    elements.audioOutput.add(new Option(option.label, option.value));
   }
   const separator = new Option("────────────", "");
   separator.disabled = true;

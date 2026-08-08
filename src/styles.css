@@ -334,7 +334,8 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
     padding: max(10px, env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-right, 0px)) max(10px, env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px));
   }
   .help-card { max-height: 100%; }
-  .platform-ipados .telemetry-consent {
+  .platform-ipados .telemetry-consent,
+  .platform-ipados #announcement-overlay {
     align-items: center;
   }
 }

@@ -25,7 +25,10 @@ test("the Info privacy section links to a separate telemetry settings view", () 
   assert.doesNotMatch(settingsView, /telemetry-(?:copy-id|reset)/);
 });
 
-test("the iPad telemetry consent dialog stays content-sized", () => {
+test("iPad transient dialogs stay content-sized", () => {
   const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
-  assert.match(styles, /\.platform-ipados \.telemetry-consent\s*{[^}]*align-items:\s*center;/);
+  assert.match(
+    styles,
+    /\.platform-ipados \.telemetry-consent,\s*\.platform-ipados #announcement-overlay\s*{[^}]*align-items:\s*center;/,
+  );
 });

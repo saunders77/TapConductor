@@ -82,7 +82,7 @@ The shared build contains:
 
 - MusicXML, compressed MusicXML, and type 0/1 MIDI import.
 - Exact rational event grouping across parts, staves, and voices.
-- Rhythm Tap and Beat Tap/count-in modes.
+- Rhythm and Beat/count-in modes.
 - Pointer/touch, keyboard, and MIDI conducting with velocity.
 - Rolled score chords and independently configured rolled auditions.
 - Whole-chord, staff-chord, and single-note audition.

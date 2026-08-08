@@ -98,8 +98,8 @@ app.innerHTML = `
       <label class="field tap-mode-field" title="Choose whether each tap plays a written event or conducts whole beats.">
         <span>Tap mode</span>
         <select id="tap-mode" aria-label="Tap mode">
-          <option value="rhythm">Rhythm Tap</option>
-          <option value="beat">Beat Tap</option>
+          <option value="rhythm">Rhythm</option>
+          <option value="beat">Beat</option>
         </select>
       </label>
       <label class="field legato-field" title="Enabling Legato will hold notes until the next tap, according to the score.">
@@ -187,7 +187,7 @@ app.innerHTML = `
           <section><h3>Conduct the score</h3>
             <p>Press the large <b>TAP</b> button, a supported keyboard key (A-Z, numbers, Shift, or punctuation), or your MIDI instrument/piano to play the next written note or chord, starting from the beginning. The location marker will automatically progress to the next note or chord. If you do nothing further, playing does not continue; every note waits for your tap. With Legato off, each note follows the key that struck it. Turn Legato on to use written durations, rests, staccato marks, and later note gestures to connect and release notes automatically. This mode is useful for rehearsals with a choir, performance, or recording. If you want each tap to roll each chord, you can use the ROLL slider at the bottom of the window.</p>
             <p>By default, all staves (parts) will play during tapping, but you can select specific staves in the PARTS menu.</p>
-            <p>If you don't want to play a note/chord on every tap, but you instead want to use the program for normal conducting, keeping a steady beat while the notes play, then switch from the Rhythm mode to the Beat mode in the TAP MODE menu. Then you'll need to start by counting in with taps, and each tap will be interpreted as one beat in the music.</p>
+            <p>If you don't want to play a note/chord on every tap, but you instead want to use the program for normal conducting, keeping a steady beat while the notes play, then switch from the <b>Rhythm</b> mode to the <b>Beat</b> mode in the TAP MODE menu. Then you'll need to start by counting in with taps, and each tap will be interpreted as one beat in the music.</p>
             <p>The Stop button on the top right switches to a mode where TapConductor ignores your taps, except for MIDI IN, which it plays directly. Use this mode if you want to play on your piano as you would normally.</p>
             </section>
           <section><h3>Hear specific notes and chords</h3>

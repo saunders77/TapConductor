@@ -54,7 +54,7 @@ import warnings before relying on an unfamiliar score in performance.
 - Performer-controlled MusicXML, MXL, and MIDI playback
 - Included sampled grand piano
 - Exact simultaneous-note grouping across staves and parts
-- Rhythm Tap and Beat Tap performance modes
+- Rhythm and Beat performance modes
 - Keyboard, pointer, touch, and optional MIDI input
 - Note, chord, and score-position audition controls
 - Windows audio plus optional installed ASIO devices

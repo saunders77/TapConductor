@@ -92,13 +92,13 @@ impl AudioManager {
             backend: new_platform_audio_backend(),
             runtime: None,
             selected_device: None,
-            selected_device_name: "None (Mute)".to_owned(),
+            selected_device_name: "System default".to_owned(),
             last_error: None,
             instrument_message,
             salamander,
             clock_epoch: 0,
             master_gain: 1.0,
-            output_muted: true,
+            output_muted: false,
             wasapi_periods: None,
             // This is used only if endpoint discovery fails. A successful
             // restart immediately replaces it with the device's native rate.

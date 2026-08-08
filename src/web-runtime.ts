@@ -82,7 +82,7 @@ class BrowserAudio {
   private master: GainNode | null = null;
   private pianoWave: PeriodicWave | null = null;
   private volume = 1;
-  private muted = true;
+  private muted = false;
   private instrument: "piano" | "synth" = "piano";
   private readonly voices = new Map<string, Voice>();
   private starts = 0;

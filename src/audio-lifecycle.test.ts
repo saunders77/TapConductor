@@ -13,3 +13,14 @@ test("a successful audio reconnection dismisses the inactive-audio error", () =>
   assert.match(source, /const displayedErrorToasts = new Map<string, HTMLElement>\(\)/);
   assert.match(source, /displayedErrorToasts\.set\(message, item\)/);
 });
+
+test("changing audio output releases the native selector before performance input resumes", () => {
+  assert.match(
+    source,
+    /function releaseAudioOutputFocus\(\)[\s\S]*?elements\.audioOutput\.blur\(\)[\s\S]*?requestAnimationFrame[\s\S]*?document\.activeElement === elements\.audioOutput[\s\S]*?elements\.audioOutput\.blur\(\)/,
+  );
+  assert.match(
+    source,
+    /elements\.audioOutput\.addEventListener\("change", async \(\) => \{\s*releaseAudioOutputFocus\(\);/,
+  );
+});

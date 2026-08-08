@@ -3267,7 +3267,18 @@ for (const control of controlDeck?.querySelectorAll<HTMLInputElement | HTMLSelec
   control.addEventListener("pointerdown", () => control.classList.remove("selection-committed"));
 }
 
+function releaseAudioOutputFocus(): void {
+  // On macOS, the native select can retain a committed menu interaction and
+  // consume the next key or pointer activation. Relinquish it immediately,
+  // then again after WebKit/AppKit has finished closing the native menu.
+  elements.audioOutput.blur();
+  window.requestAnimationFrame(() => {
+    if (document.activeElement === elements.audioOutput) elements.audioOutput.blur();
+  });
+}
+
 elements.audioOutput.addEventListener("change", async () => {
+  releaseAudioOutputFocus();
   const requested = elements.audioOutput.value;
   if (requested === RELOAD_AUDIO_SYSTEMS_VALUE) {
     elements.audioOutput.value = selectedAudioDeviceId;

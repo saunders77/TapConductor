@@ -3089,6 +3089,14 @@ for (const [button, popover] of [
 }
 
 elements.partsButton.addEventListener("click", () => togglePopover(elements.partsButton, elements.partsPopover));
+
+for (const control of controlDeck?.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select") ?? []) {
+  control.addEventListener("change", () => control.classList.add("selection-committed"));
+  control.addEventListener("blur", () => control.classList.remove("selection-committed"));
+  control.addEventListener("keydown", () => control.classList.remove("selection-committed"));
+  control.addEventListener("pointerdown", () => control.classList.remove("selection-committed"));
+}
+
 elements.audioOutput.addEventListener("change", async () => {
   const requested = elements.audioOutput.value;
   if (requested === RELOAD_AUDIO_SYSTEMS_VALUE) {

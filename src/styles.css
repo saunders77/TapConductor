@@ -87,7 +87,7 @@ button { color: inherit; }
 .switch-control > span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 11px; height: 11px; border-radius: 50%; background: #fff; transition: transform .15s ease; }
 .switch-control input:checked + span { border-color: var(--accent); background: var(--accent); }
 .switch-control input:checked + span::after { transform: translateX(13px); }
-.switch-control input:focus-visible + span { outline: 2px solid #fff; outline-offset: 2px; }
+.switch-control input:focus-visible + span { outline: 1px solid #fff; outline-offset: 2px; }
 .switch-control strong { font-weight: 600; }
 .range-field { min-width: 130px; }.range-field > span { display: flex; justify-content: space-between; }.range-field output { color: #3c3d36; }
 .delay-field { min-width: 105px; }
@@ -126,7 +126,7 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .score-targets { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
 .slice-controls { position: absolute; display: flex; flex-direction: column; align-items: center; width: 24px; transform: translateX(-12px); pointer-events: auto; z-index: 3; }
 .score-position-highlight { position: absolute; pointer-events: none; opacity: 0; background: #75ffb3; transition: opacity .1s ease; }
-.score-position-highlight.current { opacity: 1; outline: 2px solid #17683f; }
+.score-position-highlight.current { opacity: 1; }
 .slice-action { position: relative; z-index: 1; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #505248; cursor: pointer; line-height: 1; transition: background .1s, box-shadow .1s, transform .1s; }
 .slice-action:hover, .slice-action:focus-visible { background: #75ffb370; box-shadow: 0 0 0 3px #75ffb366; outline: none; transform: scale(1.12); }
 .play-chord { margin-top: -10px; margin-bottom: 6px; }
@@ -135,7 +135,7 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .start-here svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 .slice-controls.current .slice-action { color: #17683f; }
 .slice-ghost { position: absolute; pointer-events: none; opacity: 0; background: #75ffb3; transition: opacity .1s ease; }
-.slice-ghost.current { opacity: 1; outline: 2px solid #17683f; }
+.slice-ghost.current { opacity: 1; }
 .note-target { position: absolute; min-width: 24px; min-height: 24px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: transparent; cursor: pointer; pointer-events: auto; z-index: 2; }
 .note-target:hover, .note-target:focus-visible { border-color: #75ffb3; outline: 2px solid #75ffb3aa; background: #75ffb32e; }
 .empty-state { height: 100%; min-height: 420px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 35px; text-align: center; }
@@ -206,13 +206,23 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .hidden { display: none !important; }
 
 *:focus-visible {
-  outline: 3px solid var(--focus-ring) !important;
+  outline: 1px solid var(--focus-ring) !important;
   outline-offset: 2px;
 }
 .topbar *:focus-visible,
 .performance-strip *:focus-visible,
 .toast *:focus-visible {
   outline-color: var(--accent) !important;
+}
+.control-deck .selection-committed:focus-visible,
+.control-deck .switch-control input.selection-committed:focus-visible + span {
+  outline: none !important;
+}
+.platform-ipados *:focus-visible {
+  outline-width: 3px !important;
+}
+.platform-ipados .switch-control input:focus-visible + span {
+  outline-width: 3px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -230,7 +240,6 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
   .score-position-highlight.current,
   .slice-ghost.current {
     background: Highlight;
-    outline-color: Highlight;
   }
   .slice-controls.current .slice-action {
     color: Highlight;

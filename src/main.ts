@@ -122,7 +122,7 @@ app.innerHTML = `
         <span>Parts</span><strong id="parts-value">—</strong>
       </button>
         <button id="diagnostics-button" class="field deck-menu-button diagnostics-button" type="button" title="View live audio and MIDI diagnostics." aria-label="Audio diagnostics: Starting" aria-haspopup="dialog" aria-controls="diagnostics-popover" aria-expanded="false">
-          <span>Diagnostics</span><strong id="diagnostics-value">Starting</strong>
+          <span>Status</span><strong id="diagnostics-value">Starting</strong>
         </button>
         <button id="panic-button" class="panic-button" type="button" title="Play MIDI input directly" aria-label="Play MIDI input directly" aria-pressed="false" aria-keyshortcuts="Control+. Meta+.">■</button>
     </section>

@@ -244,18 +244,17 @@ app.innerHTML = `
       <section class="help-card telemetry-consent-card">
         <div class="help-card-header">
           <div>
-            <span class="help-kicker">Privacy choice</span>
             <h2 id="telemetry-consent-title">Thanks for trying TapConductor!</h2>
           </div>
         </div>
         <div class="help-content">
           <section>
-            <p id="telemetry-consent-summary">To help improve the app, TapConductor would like to share anonymous info with the developer (like crashes and how often TapConductor gets launched).</p>
+            <p id="telemetry-consent-summary">To help improve the app, TapConductor would like to send anonymous usage info with the developer (like crashes and how often TapConductor gets launched).</p>
           </section>
         </div>
         <div class="telemetry-consent-actions">
-          <button id="telemetry-continue" class="secondary-button large" type="button">Continue and share</button>
-          <button id="telemetry-decline" class="secondary-button large" type="button">Do not share</button>
+          <button id="telemetry-continue" class="secondary-button large" type="button">Continue</button>
+          <button id="telemetry-decline" class="secondary-button large" type="button">Block anonymous usage info</button>
         </div>
       </section>
     </div>

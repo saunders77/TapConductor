@@ -3126,9 +3126,9 @@ document.addEventListener("keydown", (event) => {
     });
     return;
   }
-  if (event.code === "Space" && !commandModifier && !event.repeat) {
+  if (event.code === "Space" && !commandModifier) {
     event.preventDefault();
-    if (mostRecentChordIndex !== null) {
+    if (!event.repeat && mostRecentChordIndex !== null) {
       void auditionDown("audition:key:Space", mostRecentChordIndex);
     }
     return;

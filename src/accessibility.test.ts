@@ -30,6 +30,10 @@ test("global performance commands work regardless of focused app control", () =>
   assert.match(source, /if \(event\.code === "ArrowLeft"\)/);
   assert.match(source, /if \(event\.code === "ArrowRight"\)/);
   assert.match(source, /event\.code === "Space" && !commandModifier/);
+  assert.match(
+    source,
+    /if \(event\.code === "Space" && !commandModifier\) \{\s+event\.preventDefault\(\);\s+if \(!event\.repeat && mostRecentChordIndex !== null\)/,
+  );
   assert.match(source, /event\.code === "Period" && commandModifier/);
   assert.doesNotMatch(source, /const tapKeyCodes = new Set\(\[\s*"Enter"/);
   assert.match(source, /elements\.legatoMode\.addEventListener\("keydown"/);

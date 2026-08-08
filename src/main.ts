@@ -524,6 +524,7 @@ type MacosMenuState = {
   pianoShortcutPitch: number;
   scoreLoaded: boolean;
   canReplay: boolean;
+  headerFooterVisible: boolean;
 };
 
 function menuOptions(
@@ -550,6 +551,7 @@ function macosMenuState(): MacosMenuState {
     pianoShortcutPitch,
     scoreLoaded: score !== null,
     canReplay: mostRecentChordIndex !== null,
+    headerFooterVisible: !shell?.classList.contains("chrome-hidden"),
   };
 }
 
@@ -2960,6 +2962,8 @@ async function handleMacosMenuAction(id: string): Promise<void> {
     await chooseScore();
   } else if (action === "refresh-devices") {
     await reloadAudioSystems();
+  } else if (action === "toggle-header-footer") {
+    elements.chromeToggle.click();
   } else if (action === "toggle-legato") {
     elements.legatoMode.click();
   } else if (action === "toggle-midi-free-play") {
@@ -3145,6 +3149,7 @@ elements.chromeToggle.addEventListener("click", () => {
   elements.chromeToggle.setAttribute("aria-label", hidden ? "Show header and footer" : "Hide header and footer");
   elements.chromeToggle.title = hidden ? "Show header and footer" : "Hide header and footer";
   closeAllPopovers(false);
+  void syncMacosMenu();
 });
 
 function setPopoverOpen(

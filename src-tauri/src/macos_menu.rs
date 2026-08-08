@@ -22,6 +22,7 @@ pub struct MacosMenuState {
     pub piano_shortcut_pitch: u8,
     pub score_loaded: bool,
     pub can_replay: bool,
+    pub header_footer_visible: bool,
 }
 
 impl Default for MacosMenuState {
@@ -55,6 +56,7 @@ impl Default for MacosMenuState {
             piano_shortcut_pitch: 36,
             score_loaded: false,
             can_replay: false,
+            header_footer_visible: true,
         }
     }
 }
@@ -121,11 +123,25 @@ pub fn install(app: &AppHandle, state: &MacosMenuState) -> tauri::Result<()> {
     file.append(&MenuItem::with_id(
         app,
         "macos-menu:open-score",
-        "Open Score…",
+        "Open A Score…",
         true,
         Some("CmdOrCtrl+O"),
     )?)?;
     menu.append(&file)?;
+
+    let view = Submenu::new(app, "View", true)?;
+    view.append(&MenuItem::with_id(
+        app,
+        "macos-menu:toggle-header-footer",
+        if state.header_footer_visible {
+            "Hide Header and Footer"
+        } else {
+            "Show Header and Footer"
+        },
+        true,
+        None::<&str>,
+    )?)?;
+    menu.append(&view)?;
 
     // There is deliberately no Edit menu. A score is performed and navigated,
     // not edited, so macOS' stock text-editing commands do not apply here.

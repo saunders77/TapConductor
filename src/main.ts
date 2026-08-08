@@ -821,12 +821,21 @@ function setStatus(kind: "ready" | "loading" | "fault", label: string): void {
   elements.status.querySelector("b")!.textContent = label;
 }
 
-const displayedErrorMessages = new Set<string>();
+const displayedErrorToasts = new Map<string, HTMLElement>();
+
+const INACTIVE_AUDIO_ERROR =
+  "Audio is suspended while TapConductor is inactive. Reload devices from the AUDIO menu.";
+
+function dismissErrorToast(message: string): void {
+  const item = displayedErrorToasts.get(message);
+  if (!item) return;
+  item.remove();
+  displayedErrorToasts.delete(message);
+}
 
 function toast(message: string, kind: "info" | "warning" | "error" = "info"): void {
   if (kind === "error") {
-    if (displayedErrorMessages.has(message)) return;
-    displayedErrorMessages.add(message);
+    if (displayedErrorToasts.has(message)) return;
   }
 
   const item = document.createElement("div");
@@ -843,11 +852,14 @@ function toast(message: string, kind: "info" | "warning" | "error" = "info"): vo
   dismiss.textContent = "×";
   const remove = (): void => {
     item.remove();
-    if (kind === "error") displayedErrorMessages.delete(message);
+    if (kind === "error" && displayedErrorToasts.get(message) === item) {
+      displayedErrorToasts.delete(message);
+    }
   };
   dismiss.addEventListener("click", remove);
   item.append(dismiss);
   elements.toasts.append(item);
+  if (kind === "error") displayedErrorToasts.set(message, item);
   if (kind !== "error") window.setTimeout(remove, kind === "warning" ? 12_000 : 7_000);
 }
 
@@ -2282,6 +2294,7 @@ async function reloadAudioSystems(): Promise<void> {
 
 function showDiagnostics(diagnostics: DiagnosticsDto, renderDetails = !elements.diagnostics.classList.contains("hidden")): void {
   lastDiagnostics = diagnostics;
+  if (diagnostics.ready) dismissErrorToast(INACTIVE_AUDIO_ERROR);
   elements.diagnosticsValue.textContent = diagnostics.ready ? "Ready" : "Needs attention";
   elements.diagnosticsButton.setAttribute(
     "aria-label",

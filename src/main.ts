@@ -150,7 +150,7 @@ app.innerHTML = `
         </nav>
         <div class="help-content">
           <section id="about" tabindex="-1"><h3>About TapConductor</h3>
-            <p>I made TapConductor for musicians like me whose piano skills aren't good enough or who have disabilities. You can use it <strong>with</strong> or <strong>without</strong> a piano for:</p>
+            <p>I made TapConductor for musicians like me whose piano skills aren't good enough or who have disabilities. You can use it <strong>with</strong> or <strong>without</strong> a piano for:
             <ul>
                 <li>Leading a rehearsal, especially choirs learning <strong>unaccompanied</strong> or <strong>accompanied</strong> music</li>
                 <li>Accompanying other musicians in auditions or rehearsals</li>
@@ -160,6 +160,7 @@ app.innerHTML = `
                 <li>Recording with MIDI to capture subtle expression, timing, and dynamics</li>
                 <li>(Caution) Pretending you can play piano music that's actually too difficult for you</li>
             </ul>
+            </p>
             <p>TapConductor is free and open-source!</p>
           </section>
           <section id="help-instructions" tabindex="-1"><h3>Open a sheet music score</h3><p>Select a MusicXML, compressed MusicXML, or MIDI file (file extensions .musicxml, .xml, .mxl, .mid, or .midi). If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read. If you only have a PDF, you can use a converter program to create a file TapConductor can read (such as Audiveris or MuseScore).</p><p class="help-demo-links">Or open one of the included examples: <a id="help-demo-choir-open" href="#">demo choir score</a> or <a id="help-demo-piano-open" href="#">demo piano score</a>.</p></section>

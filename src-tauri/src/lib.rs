@@ -31,14 +31,16 @@ pub fn run() {
     #[cfg(target_os = "ios")]
     let builder = builder.plugin(tauri_plugin_apple_audio_session::init());
 
+    let builder = builder.plugin(tauri_plugin_dialog::init());
+    #[cfg(target_os = "macos")]
+    let builder = builder.on_menu_event(|app, event| {
+        let id: &str = event.id().as_ref();
+        if id.starts_with("macos-menu:") {
+            let _ = app.emit("macos-menu-action", id);
+        }
+    });
+
     builder
-        .plugin(tauri_plugin_dialog::init())
-        .on_menu_event(|app, event| {
-            let id: &str = event.id().as_ref();
-            if id.starts_with("macos-menu:") {
-                let _ = app.emit("macos-menu-action", id);
-            }
-        })
         .on_window_event(move |_window, event| {
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 let _ = midi_shutdown_sender.send(MidiInputAction::Shutdown);

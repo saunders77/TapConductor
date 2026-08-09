@@ -49,3 +49,11 @@ test("iPad TAP button is wider and its transport buttons use adjacent columns", 
   assert.match(styles, /\.platform-ipados #back-button\s*{[^}]*grid-column:\s*2;/s);
   assert.match(styles, /\.platform-ipados #forward-button\s*{[^}]*grid-column:\s*4;/s);
 });
+
+test("Apple header controls use platform-specific visual corrections", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(styles, /\.platform-macos \.panic-button:not\(\.midi-free-play\)::before\s*{[^}]*transform:\s*translateY\(6px\);/s);
+  assert.match(styles, /\.platform-ipados \.control-deck > \.field\s*{[^}]*justify-content:\s*flex-start;[^}]*padding-inline:\s*2\.5px;/s);
+  assert.match(source, /appleUiPlatform === "ipados" \? "─{10}" : "─{12}"/);
+});

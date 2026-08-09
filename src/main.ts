@@ -2202,7 +2202,8 @@ function populateAudioSelect(devices: DeviceDto[]): void {
   for (const option of audioDeviceOptions(devices)) {
     elements.audioOutput.add(new Option(option.label, option.value));
   }
-  const separator = new Option("────────────", "");
+  const separatorLabel = appleUiPlatform === "ipados" ? "──────────" : "────────────";
+  const separator = new Option(separatorLabel, "");
   separator.disabled = true;
   elements.audioOutput.add(separator);
   elements.audioOutput.add(new Option("↻ Reload audio & MIDI devices", RELOAD_AUDIO_SYSTEMS_VALUE));

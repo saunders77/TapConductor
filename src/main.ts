@@ -85,7 +85,7 @@ app.innerHTML = `
         <span>Sound</span>
         <select id="instrument" aria-label="Instrument">
           <option value="piano">Piano</option>
-          <option value="synth">Synthesizer</option>
+          <option value="synth">Synth</option>
         </select>
       </label>
       <label class="field" title="Choose a MIDI controller for conducting or direct play.">

@@ -42,6 +42,38 @@ export interface PartDto {
   enabled: boolean;
 }
 
+export type ImportWarningCode =
+  | "graceNoteSkipped"
+  | "cueNoteSkipped"
+  | "hiddenNoteSkipped"
+  | "unpitchedNoteSkipped"
+  | "microtonalPitchSkipped"
+  | "pitchOutOfRange"
+  | "missingPitch"
+  | "invalidDuration"
+  | "overfullMeasure"
+  | "inconsistentMeasureDuration"
+  | "unmatchedTieStop"
+  | "unterminatedTie"
+  | "replacedOpenTie"
+  | "unsupportedElement"
+  | "emptyPart"
+  | "midiNoteWithoutOff"
+  | "midiNoteOffWithoutOn"
+  | "midiMetaIgnored";
+
+export interface ImportWarningDto {
+  code: ImportWarningCode;
+  severity: "info" | "warning";
+  message: string;
+  context: {
+    partId?: string;
+    measureId?: string;
+    measureIndex?: number;
+    sourceId?: string;
+  };
+}
+
 export interface LoadedScore {
   generation: number;
   path: string;
@@ -51,7 +83,7 @@ export interface LoadedScore {
   events: TapEventDto[];
   beats: BeatDto[];
   parts: PartDto[];
-  warnings: string[];
+  warnings: ImportWarningDto[];
   structuralDuration?: RationalDto;
 }
 

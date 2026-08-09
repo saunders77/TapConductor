@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Michael Saunders
 use serde::Serialize;
 use std::path::Path;
-use tapconductor_score::{NormalizedScore, Rational, ScoreFormat, TapEvent};
+use tapconductor_score::{ImportWarning, NormalizedScore, Rational, ScoreFormat, TapEvent};
 
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -114,7 +114,7 @@ pub struct LoadedScoreDto {
     events: Vec<TapEventDto>,
     beats: Vec<BeatDto>,
     parts: Vec<PartDto>,
-    warnings: Vec<String>,
+    warnings: Vec<ImportWarning>,
     structural_duration: Option<RationalDto>,
 }
 
@@ -173,11 +173,7 @@ impl LoadedScoreDto {
                     enabled: enabled_part_ids.contains(&part.id),
                 })
                 .collect(),
-            warnings: score
-                .warnings
-                .iter()
-                .map(|warning| warning.message.clone())
-                .collect(),
+            warnings: score.warnings.clone(),
             structural_duration: score.playback_measures.last().and_then(|measure| {
                 measure
                     .start

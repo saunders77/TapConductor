@@ -21,6 +21,7 @@ import {
   scoreActionTop,
   scoreContentTopShift,
 } from "./score-top-spacing";
+import { groupScoreWarnings, warningContext, type ScoreWarningGroup } from "./score-warning-groups";
 import {
   appInvoke as invoke,
   appListen as listen,
@@ -875,6 +876,7 @@ function setStatus(kind: "ready" | "loading" | "fault", label: string): void {
 }
 
 const displayedErrorToasts = new Map<string, HTMLElement>();
+const displayedScoreWarningGroups = new Set<HTMLElement>();
 
 const INACTIVE_AUDIO_ERROR =
   "Audio is suspended while TapConductor is inactive. Reload devices from the AUDIO menu.";
@@ -914,6 +916,53 @@ function toast(message: string, kind: "info" | "warning" | "error" = "info"): vo
   elements.toasts.append(item);
   if (kind === "error") displayedErrorToasts.set(message, item);
   if (kind !== "error") window.setTimeout(remove, kind === "warning" ? 12_000 : 7_000);
+}
+
+function groupedScoreWarningToast(group: ScoreWarningGroup): void {
+  const item = document.createElement("div");
+  item.className = "toast warning grouped-warning";
+  item.setAttribute("role", "status");
+
+  const details = document.createElement("details");
+  const summary = document.createElement("summary");
+  summary.textContent = `${group.warnings.length} errors: ${group.description}`;
+  details.append(summary);
+
+  const messages = document.createElement("ol");
+  for (const warning of group.warnings) {
+    const row = document.createElement("li");
+    const context = warningContext(warning);
+    row.textContent = context ? `${context}: ${warning.message}` : warning.message;
+    messages.append(row);
+  }
+  details.append(messages);
+  item.append(details);
+
+  const dismiss = document.createElement("button");
+  dismiss.type = "button";
+  dismiss.className = "toast-dismiss";
+  dismiss.setAttribute("aria-label", `Dismiss ${group.warnings.length} grouped score errors`);
+  dismiss.textContent = "×";
+  dismiss.addEventListener("click", () => {
+    item.remove();
+    displayedScoreWarningGroups.delete(item);
+  });
+  item.append(dismiss);
+  elements.toasts.append(item);
+  displayedScoreWarningGroups.add(item);
+}
+
+function dismissScoreWarningGroups(): void {
+  for (const previous of displayedScoreWarningGroups) previous.remove();
+  displayedScoreWarningGroups.clear();
+}
+
+function showScoreWarnings(warnings: LoadedScore["warnings"]): void {
+  dismissScoreWarningGroups();
+  for (const item of groupScoreWarnings(warnings)) {
+    if (item.kind === "group") groupedScoreWarningToast(item.group);
+    else toast(item.warning.message, "warning");
+  }
 }
 
 function noteName(midi: number): string {
@@ -1163,6 +1212,7 @@ async function loadScore(
   telemetryContext: ScoreTelemetryContext,
 ): Promise<void> {
   const totalLoadStarted = performance.now();
+  dismissScoreWarningGroups();
   setStatus("loading", loadingMessage);
   const loadButtons = [elements.open, elements.emptyOpen, elements.demoChoirOpen, elements.demoPianoOpen];
   loadButtons.forEach((button) => {
@@ -1343,7 +1393,7 @@ async function displayScore(loaded: LoadedScore, preserved?: ScoreViewState): Pr
     console.info("TapConductor score display performance", { ...scorePerformance });
   }
   setStatus("ready", "Ready");
-  loaded.warnings.forEach((warning) => toast(warning, "warning"));
+  showScoreWarnings(loaded.warnings);
 }
 
 const INCREMENTAL_BATCH_MEASURES = 12;

@@ -104,7 +104,7 @@ impl WebScore {
                 "name": part.name,
                 "enabled": self.active_parts.contains(&part.id),
             })).collect::<Vec<_>>(),
-            "warnings": self.score.warnings.iter().map(|warning| warning.message.clone()).collect::<Vec<_>>(),
+            "warnings": &self.score.warnings,
             "structuralDuration": self.score.playback_measures.last().and_then(|measure| {
                 measure.start.checked_add(measure.duration).ok().map(rational_json)
             }),

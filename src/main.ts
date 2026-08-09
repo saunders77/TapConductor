@@ -2216,7 +2216,14 @@ function populateAudioSelect(devices: DeviceDto[]): void {
 function fitSelect(select: HTMLSelectElement): void {
   const text = select.selectedOptions[0]?.textContent ?? "";
   const nativeControlAllowance = appleUiPlatform === "macos" ? 38 : 22;
-  select.style.width = `${Math.max(38, Math.min(206, text.length * 7 + nativeControlAllowance))}px`;
+  const preferredSelectWidth = Math.max(38, Math.min(206, text.length * 7 + nativeControlAllowance));
+  const field = select.closest<HTMLElement>(".control-deck > .field");
+  if (field) {
+    field.classList.add("select-field");
+    field.style.setProperty("--preferred-field-width", `${preferredSelectWidth + 20}px`);
+  }
+  select.style.width = "100%";
+  select.title = text;
 }
 
 function telemetryAudioBackend(value: string | undefined): string {
@@ -2249,6 +2256,8 @@ async function refreshDevices(): Promise<void> {
     populateSelect(elements.midiOutput, midiPorts.outputs, "Off");
     if (midiPorts.selectedInput) elements.midiInput.value = midiPorts.selectedInput;
     if (midiPorts.selectedOutput) elements.midiOutput.value = midiPorts.selectedOutput;
+    fitSelect(elements.midiInput);
+    fitSelect(elements.midiOutput);
   } else {
     errors.push(`MIDI device discovery failed: ${String(midiResult.reason)}`);
   }
@@ -3263,7 +3272,11 @@ for (const [button, popover] of [
 elements.partsButton.addEventListener("click", () => togglePopover(elements.partsButton, elements.partsPopover));
 
 for (const control of controlDeck?.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select") ?? []) {
-  control.addEventListener("change", () => control.classList.add("selection-committed"));
+  if (control instanceof HTMLSelectElement) fitSelect(control);
+  control.addEventListener("change", () => {
+    control.classList.add("selection-committed");
+    if (control instanceof HTMLSelectElement) fitSelect(control);
+  });
   control.addEventListener("blur", () => control.classList.remove("selection-committed"));
   control.addEventListener("keydown", () => control.classList.remove("selection-committed"));
   control.addEventListener("pointerdown", () => control.classList.remove("selection-committed"));

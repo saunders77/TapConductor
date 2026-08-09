@@ -68,3 +68,13 @@ test("score action rows have a fixed fallback and are positioned before engravin
   assert.ok(positionCall >= 0);
   assert.ok(engravingCall > positionCall);
 });
+
+test("the rhythm position highlight spans only the full score layer", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(styles, /\.score-scroll\s*{[^}]*overflow-x:\s*auto;[^}]*overflow-y:\s*auto;/s);
+  assert.match(styles, /\.score-highlights\s*{[^}]*position:\s*absolute;[^}]*inset:\s*0;/s);
+  assert.match(styles, /\.score-position-highlight\s*{[^}]*top:\s*0\s*!important;[^}]*height:\s*100%\s*!important;/s);
+  assert.match(styles, /\.slice-controls\s*{[^}]*background:\s*transparent;/s);
+  assert.match(styles, /\.slice-action\s*{[^}]*background:\s*transparent;/s);
+});

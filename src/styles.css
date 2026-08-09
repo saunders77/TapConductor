@@ -126,20 +126,19 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .score-stage { position: relative; width: max-content; min-width: 100%; min-height: 100%; margin: 0; padding: 58px max(34px, env(safe-area-inset-right, 0px)) 70px max(34px, env(safe-area-inset-left, 0px)); background: #fff; --score-content-shift-y: 0px; }
 /*
  * OSMD includes score-dependent page headroom in its SVG. Move the engraving
- * and notation-following overlays as one unit, while the action rows remain
- * fixed relative to the bottom of the header on every platform.
+ * while the full-height position highlight and action rows remain fixed
+ * relative to the score viewport on every platform.
  */
-.score-stage > #osmd,
-.score-stage > .score-highlights { transform: translateY(var(--score-content-shift-y)); }
+.score-stage > #osmd { transform: translateY(var(--score-content-shift-y)); }
 .staff-controls { position: absolute; top: 0; left: 6px; width: 22px; z-index: 8; pointer-events: none; }
 .staff-control { position: absolute; left: -1px; display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid #8a8c81; border-radius: 5px; background: #fffef9; box-shadow: 0 1px 3px #504f4525; pointer-events: auto; cursor: pointer; }
 .staff-control input { width: 14px; height: 14px; margin: 0; accent-color: #75ffb3; cursor: pointer; }
 #osmd { position: relative; z-index: 1; }
 .score-highlights { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
-.score-targets { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+.score-targets { position: absolute; inset: 0; pointer-events: none; z-index: 5; background: transparent; }
 /* Audition starts at 20px; start-here starts 20px below its bottom edge. JS remeasures if the control size changes. */
-.slice-controls { position: absolute; top: 20px; display: flex; flex-direction: column; align-items: center; row-gap: 20px; width: 24px; transform: translateX(-12px); pointer-events: auto; z-index: 3; }
-.score-position-highlight { position: absolute; pointer-events: none; opacity: 0; background: #75ffb3; transition: opacity .1s ease; }
+.slice-controls { position: absolute; top: 20px; display: flex; flex-direction: column; align-items: center; row-gap: 20px; width: 24px; transform: translateX(-12px); pointer-events: auto; z-index: 3; background: transparent; }
+.score-position-highlight { position: absolute; top: 0 !important; height: 100% !important; pointer-events: none; opacity: 0; background: #75ffb3; transition: opacity .1s ease; }
 .score-position-highlight.current { opacity: 1; }
 .slice-action { position: relative; z-index: 1; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #505248; cursor: pointer; line-height: 1; transition: background .1s, box-shadow .1s, transform .1s; }
 .slice-action:hover, .slice-action:focus-visible { background: #75ffb370; box-shadow: 0 0 0 3px #75ffb366; outline: none; transform: scale(1.12); }

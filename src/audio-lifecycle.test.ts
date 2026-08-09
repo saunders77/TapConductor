@@ -24,3 +24,15 @@ test("changing audio output releases the native selector before performance inpu
     /elements\.audioOutput\.addEventListener\("change", async \(\) => \{\s*releaseAudioOutputFocus\(\);/,
   );
 });
+
+test("CoreMIDI setup changes refresh both device selectors and the native menu", () => {
+  assert.match(source, /listen<void>\("midi-devices-changed", scheduleMidiDeviceRefresh\)/);
+  assert.match(
+    source,
+    /function scheduleMidiDeviceRefresh\(\)[\s\S]*?window\.setTimeout[\s\S]*?void refreshDevices\(\)/,
+  );
+  assert.match(
+    source,
+    /async function refreshDevices\(\)[\s\S]*?await syncMacosMenu\(\);\s*\}/,
+  );
+});

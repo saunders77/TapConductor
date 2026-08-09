@@ -3682,6 +3682,7 @@ dependencies = [
 name = "tapconductor-app"
 version = "0.1.0"
 dependencies = [
+ "coremidi",
  "serde",
  "serde_json",
  "tapconductor-audio",

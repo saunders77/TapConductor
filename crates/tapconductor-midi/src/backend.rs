@@ -210,13 +210,56 @@ mod midir_impl {
 
     #[cfg(test)]
     mod tests {
-        use super::{native_port_id, port_id};
+        use super::{native_port_id, port_id, MidirBackend};
+        use crate::backend::MidiBackend;
 
         #[test]
         fn wrapped_port_ids_preserve_opaque_native_ids() {
             let wrapped = port_id("in", "2468:Controller Name");
             assert_eq!(native_port_id(&wrapped, "in"), Some("2468:Controller Name"));
             assert_eq!(native_port_id(&wrapped, "out"), None);
+        }
+
+        #[cfg(target_os = "macos")]
+        #[test]
+        fn discovers_coremidi_endpoints_created_after_initial_enumeration() {
+            use coremidi::{Client, Protocol};
+            use std::{thread, time::Duration};
+
+            let client = Client::new("TapConductor hotplug test").expect("CoreMIDI test client");
+            let backend = MidirBackend;
+            backend.input_devices().expect("initial input discovery");
+            backend.output_devices().expect("initial output discovery");
+
+            let suffix = format!("{}", std::process::id());
+            let input_name = format!("TapConductor hotplug input {suffix}");
+            let output_name = format!("TapConductor hotplug output {suffix}");
+            let _source = client
+                .virtual_source(&input_name)
+                .expect("CoreMIDI virtual source");
+            let _destination = client
+                .virtual_destination_with_protocol(&output_name, Protocol::Midi10, |_| {})
+                .expect("CoreMIDI virtual destination");
+
+            let mut discovered = false;
+            for _ in 0..20 {
+                let inputs = backend.input_devices().expect("refreshed input discovery");
+                let outputs = backend
+                    .output_devices()
+                    .expect("refreshed output discovery");
+                if inputs.iter().any(|device| device.name == input_name)
+                    && outputs.iter().any(|device| device.name == output_name)
+                {
+                    discovered = true;
+                    break;
+                }
+                thread::sleep(Duration::from_millis(50));
+            }
+
+            assert!(
+                discovered,
+                "midir discovery did not observe CoreMIDI endpoints created after startup"
+            );
         }
     }
 }

@@ -538,6 +538,7 @@ const NONE_AUDIO_OUTPUT_VALUE = "__none_mute__";
 let selectedAudioDeviceId = "";
 let selectedMidiOutputId = "";
 const RELOAD_AUDIO_SYSTEMS_VALUE = "__reload_audio_systems__";
+let midiDeviceRefreshTimer: number | undefined;
 let currentAnnouncementId: string | null = null;
 let announcementPreviousFocus: HTMLElement | null = null;
 
@@ -602,6 +603,15 @@ function updateMidiFreePlayButton(): void {
     : "Play MIDI input directly";
   elements.panic.setAttribute("aria-label", elements.panic.title);
   void syncMacosMenu();
+}
+
+function scheduleMidiDeviceRefresh(): void {
+  if (appleUiPlatform !== "macos") return;
+  if (midiDeviceRefreshTimer !== undefined) window.clearTimeout(midiDeviceRefreshTimer);
+  midiDeviceRefreshTimer = window.setTimeout(() => {
+    midiDeviceRefreshTimer = undefined;
+    void refreshDevices();
+  }, 150);
 }
 
 function loadPianoShortcutPitch(): number {
@@ -2292,7 +2302,7 @@ async function refreshDevices(): Promise<void> {
     elements.diagnosticsButton.classList.add("not-ready");
     toast(errors.join(" "), "error");
   }
-  void syncMacosMenu();
+  await syncMacosMenu();
 }
 
 async function reloadAudioSystems(): Promise<void> {
@@ -2484,6 +2494,7 @@ async function installListeners(): Promise<void> {
     listen<string>("macos-menu-action", ({ payload }) => {
       void handleMacosMenuAction(payload);
     }),
+    listen<void>("midi-devices-changed", scheduleMidiDeviceRefresh),
   ]);
   unlisteners.push(...listeners);
 }

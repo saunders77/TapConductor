@@ -22,6 +22,11 @@ pub struct AppState {
     core: Mutex<AppCore>,
 }
 
+#[cfg(target_os = "macos")]
+struct MacosMidiWatcher {
+    _client: coremidi::Client,
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let (midi_sender, midi_receiver) = mpsc::channel();
@@ -110,6 +115,24 @@ pub fn run() {
         .setup(move |app| {
             #[cfg(target_os = "macos")]
             macos_menu::install(app.handle(), &macos_menu::MacosMenuState::default())?;
+            #[cfg(target_os = "macos")]
+            {
+                let handle = app.handle().clone();
+                match coremidi::Client::new_with_notifications(
+                    "TapConductor device watcher",
+                    move |_notification: &coremidi::Notification| {
+                        let _ = handle.emit("midi-devices-changed", ());
+                    },
+                ) {
+                    Ok(client) => {
+                        app.manage(MacosMidiWatcher { _client: client });
+                    }
+                    Err(status) => tracing::warn!(
+                        status,
+                        "Unable to monitor CoreMIDI device changes; manual refresh remains available"
+                    ),
+                }
+            }
             let marker_path = app.path().app_data_dir().ok().and_then(|app_data_dir| {
                 std::fs::create_dir_all(&app_data_dir)
                     .ok()

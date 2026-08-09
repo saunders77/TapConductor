@@ -17,7 +17,7 @@ test("every required UI element is present in the application markup", () => {
 
 test("the Info privacy section links to a separate telemetry settings view", () => {
   const privacySection = source.match(/<section id="privacy"[\s\S]*?<\/section>/)?.[0] ?? "";
-  const settingsView = source.match(/<div id="telemetry-settings"[\s\S]*?<div id="telemetry-consent"/)?.[0] ?? "";
+  const settingsView = source.match(/<div id="telemetry-settings"[\s\S]*?<div id="announcement-overlay"/)?.[0] ?? "";
 
   assert.match(privacySection, /id="telemetry-settings-link"/);
   assert.doesNotMatch(privacySection, /id="telemetry-toggle"/);
@@ -29,7 +29,7 @@ test("iPad transient dialogs stay content-sized", () => {
   const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
   assert.match(
     styles,
-    /\.platform-ipados \.telemetry-consent,\s*\.platform-ipados #announcement-overlay\s*{[^}]*align-items:\s*center;/,
+    /\.platform-ipados #announcement-overlay\s*{[^}]*align-items:\s*center;/,
   );
 });
 

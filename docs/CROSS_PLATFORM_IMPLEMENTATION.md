@@ -257,9 +257,8 @@ The privacy manifest declares no tracking and lists the pseudonymous device iden
 interaction, crash/diagnostic/performance data, and PostHog-derived coarse country/region used by
 opted-in telemetry, plus required-reason API categories for local files, timing, and preferences.
 App Store Connect privacy answers must match it. Inspect Xcode's generated privacy report before
-every upload. Since Apple distribution has no customizable installer finish page, fresh macOS and
-iPadOS installations show the equivalent telemetry choice on first launch before any telemetry is
-captured or sent.
+every upload. Fresh macOS and iPadOS installations default telemetry on and expose the same opt-out
+checkbox under Info > Privacy as every other build.
 
 ## Verification matrix
 

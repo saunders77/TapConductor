@@ -73,8 +73,9 @@ cargo fmt --all -- --check
 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 ```
 
-Then manually verify the Windows installer choice and the macOS/iPadOS first-launch
-Continue/Do not share choice, the Info > Privacy telemetry-settings link, later opt-in/out, install
-and launch cardinality, direct PostHog delivery, five-minute batching, graceful close, idle network
-silence, offline recovery, and the Rust panic-marker recovery flow on every release platform. For
-the Mac App Store build, also verify outbound delivery from the sandboxed application.
+Then manually verify that fresh/undecided web, development, Windows, macOS, and iPadOS launches
+default on; that an unchecked Windows installer choice and saved Info > Privacy opt-out remain off;
+and that later opt-in/out, install and launch cardinality, direct PostHog delivery, five-minute
+batching, graceful close, idle network silence, offline recovery, and the Rust panic-marker recovery
+flow work on every release platform. For the Mac App Store build, also verify outbound delivery from
+the sandboxed application.

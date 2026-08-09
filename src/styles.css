@@ -204,10 +204,6 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .announcement-actions { display: flex; justify-content: flex-end; padding-top: 16px; border-top: 1px solid #e7e6dc; }
 .telemetry-settings { z-index: 250; }
 .telemetry-settings-card { width: min(620px, 100%); }
-.telemetry-consent { z-index: 260; }
-.telemetry-consent-card { width: min(560px, 100%); }
-.telemetry-consent-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.telemetry-consent-actions button { min-height: 48px; }
 .telemetry-choice { display: flex; gap: 10px; align-items: flex-start; margin: 12px 0; padding: 12px; border: 1px solid #d8d7cd; border-radius: 8px; background: #f8f7ef; cursor: pointer; }
 .telemetry-choice input { margin-top: 3px; }
 .telemetry-choice span { display: grid; gap: 2px; color: #26271f; font-size: 13px; }
@@ -357,7 +353,6 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
     padding: max(10px, env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-right, 0px)) max(10px, env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px));
   }
   .help-card { max-height: 100%; }
-  .platform-ipados .telemetry-consent,
   .platform-ipados #announcement-overlay {
     align-items: center;
   }
@@ -376,7 +371,6 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 }
 
 @media (max-width: 700px) {
-  .telemetry-consent-actions { grid-template-columns: 1fr; }
   .topbar > .primary-button { flex: 1 1 auto; }
   .topbar > .help-button { flex: 0 0 auto; }
   .empty-state h1 { font-size: 25px; }

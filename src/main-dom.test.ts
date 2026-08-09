@@ -61,7 +61,7 @@ test("Apple header controls use platform-specific visual corrections", () => {
 
 test("score action rows have a fixed fallback and are positioned before engraving", () => {
   const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
-  assert.match(styles, /\.slice-controls\s*{[^}]*top:\s*36px;[^}]*row-gap:\s*0;/s);
+  assert.match(styles, /\.slice-controls\s*{[^}]*top:\s*20px;[^}]*row-gap:\s*28px;/s);
 
   const positionCall = source.indexOf("positionScoreActionRows();");
   const engravingCall = source.indexOf("fitFirstSystemEngravingToActions(activeOsmd);");

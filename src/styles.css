@@ -137,8 +137,8 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 #osmd { position: relative; z-index: 1; }
 .score-highlights { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
 .score-targets { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
-/* 1.5 × 24px below the header; row tops are 1 × 24px apart. JS remeasures if the control size changes. */
-.slice-controls { position: absolute; top: 36px; display: flex; flex-direction: column; align-items: center; row-gap: 0; width: 24px; transform: translateX(-12px); pointer-events: auto; z-index: 3; }
+/* Audition starts at 20px; start-here starts 28px below its bottom edge. JS remeasures if the control size changes. */
+.slice-controls { position: absolute; top: 20px; display: flex; flex-direction: column; align-items: center; row-gap: 28px; width: 24px; transform: translateX(-12px); pointer-events: auto; z-index: 3; }
 .score-position-highlight { position: absolute; pointer-events: none; opacity: 0; background: #75ffb3; transition: opacity .1s ease; }
 .score-position-highlight.current { opacity: 1; }
 .slice-action { position: relative; z-index: 1; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #505248; cursor: pointer; line-height: 1; transition: background .1s, box-shadow .1s, transform .1s; }

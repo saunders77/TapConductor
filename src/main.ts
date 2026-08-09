@@ -1447,8 +1447,8 @@ async function refreshIncrementalGeometry(
   scheduleIncrementalScrollAheadCheck();
 }
 
-const AUDITION_ICON_HEIGHTS_BELOW_HEADER = 1.5;
-const START_HERE_ICON_HEIGHTS_BELOW_AUDITION = 1;
+const AUDITION_PX_BELOW_HEADER = 20;
+const START_HERE_PX_BELOW_AUDITION_BOTTOM = 28;
 const SCORE_INK_SELECTOR = "path, text, line, polyline, polygon, circle, ellipse, use";
 
 function visibleScoreInkRects(): DOMRect[] {
@@ -1486,13 +1486,10 @@ function positionScoreActionRows(): void {
     const audition = control.querySelector<HTMLElement>(".play-chord");
     if (!audition) continue;
     const iconHeight = audition.getBoundingClientRect().height;
-    control.style.top = `${scoreActionTop(
-      iconHeight,
-      AUDITION_ICON_HEIGHTS_BELOW_HEADER,
-    )}px`;
+    control.style.top = `${scoreActionTop(AUDITION_PX_BELOW_HEADER)}px`;
     control.style.rowGap = `${scoreActionRowGap(
       iconHeight,
-      START_HERE_ICON_HEIGHTS_BELOW_AUDITION,
+      iconHeight + START_HERE_PX_BELOW_AUDITION_BOTTOM,
     )}px`;
   }
 }

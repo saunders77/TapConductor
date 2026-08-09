@@ -1,24 +1,21 @@
 // Copyright (c) 2026 Michael Saunders
 
 /**
- * Place the audition row a fixed number of its own button heights below the
- * score viewport.
+ * Place the audition row at a fixed pixel offset below the score viewport.
  */
 export function scoreActionTop(
-  iconHeight: number,
-  iconHeightsBelowTop: number,
+  topOffset: number,
 ): number {
-  if (![iconHeight, iconHeightsBelowTop].every(Number.isFinite)) return 0;
-  return Math.max(0, iconHeight) * Math.max(0, iconHeightsBelowTop);
+  return Number.isFinite(topOffset) ? Math.max(0, topOffset) : 0;
 }
 
-/** Return the flex gap needed for row tops to be N icon heights apart. */
+/** Return the flex gap needed for row tops to be the requested pixels apart. */
 export function scoreActionRowGap(
   iconHeight: number,
-  rowOffsetIconHeights: number,
+  rowTopOffset: number,
 ): number {
-  if (![iconHeight, rowOffsetIconHeights].every(Number.isFinite)) return 0;
-  return Math.max(0, iconHeight) * Math.max(0, rowOffsetIconHeights - 1);
+  if (![iconHeight, rowTopOffset].every(Number.isFinite)) return 0;
+  return Math.max(0, Math.max(0, rowTopOffset) - Math.max(0, iconHeight));
 }
 
 /**

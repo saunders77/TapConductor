@@ -16,7 +16,11 @@ import {
   semanticRenderTarget,
   shouldAdvanceRenderFrontier,
 } from "./incremental-score-render";
-import { scoreActionTop, scoreContentTopShift } from "./score-top-spacing";
+import {
+  scoreActionRowGap,
+  scoreActionTop,
+  scoreContentTopShift,
+} from "./score-top-spacing";
 import {
   appInvoke as invoke,
   appListen as listen,
@@ -1392,7 +1396,8 @@ async function refreshIncrementalGeometry(
   scheduleIncrementalScrollAheadCheck();
 }
 
-const AUDITION_ICON_HEIGHTS_BELOW_HEADER = 1.5;
+const AUDITION_ICON_HEIGHTS_BELOW_HEADER = 2.5;
+const START_HERE_ICON_HEIGHTS_BELOW_AUDITION = 2;
 const SCORE_INK_SELECTOR = "path, text, line, polyline, polygon, circle, ellipse, use";
 
 function visibleScoreInkRects(): DOMRect[] {
@@ -1436,9 +1441,14 @@ function fitFirstSystemToScoreTop(activeOsmd: OpenSheetMusicDisplay): void {
   for (const control of controls) {
     const audition = control.querySelector<HTMLElement>(".play-chord");
     if (!audition) continue;
+    const iconHeight = audition.getBoundingClientRect().height;
     control.style.top = `${scoreActionTop(
-      audition.getBoundingClientRect().height,
+      iconHeight,
       AUDITION_ICON_HEIGHTS_BELOW_HEADER,
+    )}px`;
+    control.style.rowGap = `${scoreActionRowGap(
+      iconHeight,
+      START_HERE_ICON_HEIGHTS_BELOW_AUDITION,
     )}px`;
   }
 

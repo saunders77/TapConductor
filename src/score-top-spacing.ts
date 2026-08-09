@@ -2,7 +2,7 @@
 
 /**
  * Place the audition row a fixed number of its own button heights below the
- * score viewport. The start-here row follows immediately in the same stack.
+ * score viewport.
  */
 export function scoreActionTop(
   iconHeight: number,
@@ -10,6 +10,15 @@ export function scoreActionTop(
 ): number {
   if (![iconHeight, iconHeightsBelowTop].every(Number.isFinite)) return 0;
   return Math.max(0, iconHeight) * Math.max(0, iconHeightsBelowTop);
+}
+
+/** Return the flex gap needed for row tops to be N icon heights apart. */
+export function scoreActionRowGap(
+  iconHeight: number,
+  rowOffsetIconHeights: number,
+): number {
+  if (![iconHeight, rowOffsetIconHeights].every(Number.isFinite)) return 0;
+  return Math.max(0, iconHeight) * Math.max(0, rowOffsetIconHeights - 1);
 }
 
 /**

@@ -1,27 +1,20 @@
 // Copyright (c) 2026 Michael Saunders
 import assert from "node:assert/strict";
 import test from "node:test";
-import { scoreContentTopShift, topClearingNotation } from "./score-top-spacing.ts";
+import { scoreActionTop, scoreContentTopShift } from "./score-top-spacing.ts";
 
-test("removes renderer and platform whitespace above score content", () => {
-  assert.equal(scoreContentTopShift([126, 88, 42], 8), -34);
+test("places audition actions one and a half icon heights below the header", () => {
+  assert.equal(scoreActionTop(24, 1.5), 36);
 });
 
-test("adds headroom when rendered content would begin above the desired padding", () => {
-  assert.equal(scoreContentTopShift([14, -3, 22], 8), 11);
+test("moves high engraving down until it clears the fixed action rows", () => {
+  assert.equal(scoreContentTopShift(42, 84), 42);
 });
 
-test("moves action icons above notation in their column with a stable gap", () => {
-  assert.equal(
-    topClearingNotation({ top: 30, bottom: 76 }, 68, 6),
-    16,
-  );
-  assert.equal(
-    topClearingNotation({ top: 18, bottom: 62 }, 80, 6),
-    18,
-  );
+test("removes excess renderer whitespace without moving the action rows", () => {
+  assert.equal(scoreContentTopShift(126, 84), -42);
 });
 
 test("ignores unavailable geometry while incremental rendering starts", () => {
-  assert.equal(scoreContentTopShift([Number.NaN, 40], 8), -32);
+  assert.equal(scoreContentTopShift(Number.NaN, 84), 0);
 });

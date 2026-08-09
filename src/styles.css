@@ -125,43 +125,31 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .score-scroll { position: relative; width: 100%; max-width: 100%; min-width: 0; flex: 1 1 auto; min-height: 0; overflow-x: auto; overflow-y: auto; scrollbar-gutter: auto; contain: size layout; background: #fff; }
 .score-stage { position: relative; width: max-content; min-width: 100%; min-height: 100%; margin: 0; padding: 58px max(34px, env(safe-area-inset-right, 0px)) 70px max(34px, env(safe-area-inset-left, 0px)); background: #fff; --score-content-shift-y: 0px; }
 /*
- * OSMD includes score-dependent page headroom in its SVG. Move the notation
- * and its overlays as one unit after measuring the actual first-system ink
- * and action controls, instead of stacking a platform-specific top inset on
- * top of that headroom.
+ * OSMD includes score-dependent page headroom in its SVG. Move the engraving
+ * and notation-following overlays as one unit, while the action rows remain
+ * fixed relative to the bottom of the header on every platform.
  */
 .score-stage > #osmd,
-.score-stage > .score-highlights,
-.score-stage > .score-targets { transform: translateY(var(--score-content-shift-y)); }
-/*
- * iPad's larger touch targets need more headroom above the first staff for
- * dynamics and other expressions. Counter-shift the controls so their
- * already-correct screen position stays unchanged while the notation moves.
- */
-.platform-ipados .score-stage { padding-top: 82px; }
-.platform-ipados .score-stage .slice-controls { margin-top: -24px; }
-.platform-ipados .score-stage .play-chord { transform: translateY(16px); }
-.platform-ipados .score-stage .play-chord:hover,
-.platform-ipados .score-stage .play-chord:focus-visible { transform: translateY(16px) scale(1.12); }
+.score-stage > .score-highlights { transform: translateY(var(--score-content-shift-y)); }
 .staff-controls { position: absolute; top: 0; left: 6px; width: 22px; z-index: 8; pointer-events: none; }
 .staff-control { position: absolute; left: -1px; display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid #8a8c81; border-radius: 5px; background: #fffef9; box-shadow: 0 1px 3px #504f4525; pointer-events: auto; cursor: pointer; }
 .staff-control input { width: 14px; height: 14px; margin: 0; accent-color: #75ffb3; cursor: pointer; }
 #osmd { position: relative; z-index: 1; }
 .score-highlights { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
 .score-targets { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
-.slice-controls { position: absolute; display: flex; flex-direction: column; align-items: center; width: 24px; transform: translateX(-12px); pointer-events: auto; z-index: 3; }
+.slice-controls { position: absolute; top: 0; display: flex; flex-direction: column; align-items: center; width: 24px; transform: translateX(-12px); pointer-events: auto; z-index: 3; }
 .score-position-highlight { position: absolute; pointer-events: none; opacity: 0; background: #75ffb3; transition: opacity .1s ease; }
 .score-position-highlight.current { opacity: 1; }
 .slice-action { position: relative; z-index: 1; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #505248; cursor: pointer; line-height: 1; transition: background .1s, box-shadow .1s, transform .1s; }
 .slice-action:hover, .slice-action:focus-visible { background: #75ffb370; box-shadow: 0 0 0 3px #75ffb366; outline: none; transform: scale(1.12); }
-.play-chord { margin-top: -10px; margin-bottom: 6px; }
+.play-chord { margin: 0; }
 .play-chord svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-.start-here { margin-top: 2px; }
+.start-here { margin: 0; }
 .start-here svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 .slice-controls.current .slice-action { color: #17683f; }
 .slice-ghost { position: absolute; pointer-events: none; opacity: 0; background: #75ffb3; transition: opacity .1s ease; }
 .slice-ghost.current { opacity: 1; }
-.note-target { position: absolute; min-width: 24px; min-height: 24px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: transparent; cursor: pointer; pointer-events: auto; z-index: 2; }
+.note-target { position: absolute; min-width: 24px; min-height: 24px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: transparent; cursor: pointer; pointer-events: auto; z-index: 2; transform: translateY(var(--score-content-shift-y)); }
 .note-target:hover, .note-target:focus-visible { border-color: #75ffb3; outline: 2px solid #75ffb3aa; background: #75ffb32e; }
 .empty-state { height: 100%; min-height: 420px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 35px; }
 .empty-state h1, .empty-state p, .empty-state small { width: min(680px, calc(100% - 32px)); text-align: left; }

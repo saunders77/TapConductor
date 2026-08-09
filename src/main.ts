@@ -16,7 +16,7 @@ import {
   semanticRenderTarget,
   shouldAdvanceRenderFrontier,
 } from "./incremental-score-render";
-import { scoreContentTopShift, topClearingNotation } from "./score-top-spacing";
+import { scoreActionTop, scoreContentTopShift } from "./score-top-spacing";
 import {
   appInvoke as invoke,
   appListen as listen,
@@ -1392,15 +1392,16 @@ async function refreshIncrementalGeometry(
   scheduleIncrementalScrollAheadCheck();
 }
 
-const SCORE_TOP_PADDING_PX = 8;
-const SCORE_ACTION_NOTATION_GAP_PX = 6;
+const AUDITION_ICON_HEIGHTS_BELOW_HEADER = 1.5;
 const SCORE_INK_SELECTOR = "path, text, line, polyline, polygon, circle, ellipse, use";
 
 function visibleScoreInkRects(): DOMRect[] {
   return [...elements.osmd.querySelectorAll<SVGGraphicsElement>(SCORE_INK_SELECTOR)]
     .map((element) => ({ element, rect: element.getBoundingClientRect() }))
     .filter(({ element, rect }) => {
-      if (rect.width <= 0 || rect.height <= 0) return false;
+      // SVG strokes such as ledger and octave lines may have zero geometric
+      // height or width while still drawing visible ink.
+      if (rect.width <= 0 && rect.height <= 0) return false;
       const style = getComputedStyle(element);
       return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) !== 0;
     })
@@ -1420,12 +1421,10 @@ function firstRenderedStaffTop(activeOsmd: OpenSheetMusicDisplay): number | unde
 }
 
 /**
- * OSMD's page margin already incorporates the score's skyline (ledger notes,
- * dynamics, articulations, and similar marks), and that margin varies with
- * the MusicXML and font metrics. Preserve the real skyline, make each action
- * stack clear the notation in its own column, then remove only the unused
- * space above the union. This also makes macOS use the same geometry as every
- * other platform.
+ * Keep both action rows fixed relative to the header. Then move only the
+ * engraving and notation-following overlays until the highest visible ink is
+ * immediately below the start-here row. The measured ink includes ledger
+ * notes, dynamics, articulations, and other score-dependent marks.
  */
 function fitFirstSystemToScoreTop(activeOsmd: OpenSheetMusicDisplay): void {
   const stageRect = elements.scoreStage.getBoundingClientRect();
@@ -1435,29 +1434,26 @@ function fitFirstSystemToScoreTop(activeOsmd: OpenSheetMusicDisplay): void {
   const controls = [...elements.scoreTargets.querySelectorAll<HTMLElement>(".slice-controls")];
 
   for (const control of controls) {
-    const rect = control.getBoundingClientRect();
-    const localNotationTop = inkRects
-      .filter((ink) => ink.left < rect.right && ink.right > rect.left && ink.top <= staffTop)
-      .reduce((top, ink) => Math.min(top, ink.top), staffTop);
-    const adjustedTop = topClearingNotation(
-      { top: rect.top, bottom: rect.bottom },
-      localNotationTop,
-      SCORE_ACTION_NOTATION_GAP_PX,
-    );
-    if (adjustedTop < rect.top) {
-      const currentTop = Number.parseFloat(control.style.top) || 0;
-      control.style.top = `${currentTop - (rect.top - adjustedTop)}px`;
-    }
+    const audition = control.querySelector<HTMLElement>(".play-chord");
+    if (!audition) continue;
+    control.style.top = `${scoreActionTop(
+      audition.getBoundingClientRect().height,
+      AUDITION_ICON_HEIGHTS_BELOW_HEADER,
+    )}px`;
   }
 
   const notationTop = inkRects.reduce((top, ink) => Math.min(top, ink.top), staffTop);
-  const controlsTop = controls.reduce(
-    (top, control) => Math.min(top, control.getBoundingClientRect().top),
-    Number.POSITIVE_INFINITY,
+  const startHereBottom = controls.reduce(
+    (bottom, control) => Math.max(
+      bottom,
+      control.querySelector<HTMLElement>(".start-here")?.getBoundingClientRect().bottom
+        ?? stageRect.top,
+    ),
+    stageRect.top,
   );
   const shift = scoreContentTopShift(
-    [staffTop, notationTop, controlsTop].map((top) => top - stageRect.top),
-    SCORE_TOP_PADDING_PX,
+    notationTop - stageRect.top,
+    startHereBottom - stageRect.top,
   );
   elements.scoreStage.style.setProperty("--score-content-shift-y", `${shift}px`);
 }
@@ -1939,8 +1935,6 @@ function buildScoreTargets(renderedThroughMeasure: number): { visualSteps: numbe
     const controls = createSliceControls(resolveIndex, target.measureNumber);
     controls.dataset.eventIndices = target.eventIndices.join(",");
     controls.style.left = `${target.visual.anchorLeft}px`;
-    const controlTop = Math.max(4, target.visual.top - 70);
-    controls.style.top = `${controlTop}px`;
     if (target.visual.notes.length > 0) {
       const noteLeft = Math.min(...target.visual.notes.map((note) => note.left));
       const noteRight = Math.max(...target.visual.notes.map((note) => note.left + note.width));

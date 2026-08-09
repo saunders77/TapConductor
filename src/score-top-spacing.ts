@@ -1,35 +1,25 @@
 // Copyright (c) 2026 Michael Saunders
 
-export type VerticalExtent = {
-  top: number;
-  bottom: number;
-};
-
 /**
- * Move an action stack just far enough upward to clear the notation in its
- * column. Keeping this calculation in pixels makes it follow OSMD zoom and
- * the browser's actual font metrics on every platform.
+ * Place the audition row a fixed number of its own button heights below the
+ * score viewport. The start-here row follows immediately in the same stack.
  */
-export function topClearingNotation(
-  controls: VerticalExtent,
-  notationTop: number,
-  gap: number,
+export function scoreActionTop(
+  iconHeight: number,
+  iconHeightsBelowTop: number,
 ): number {
-  if (![controls.top, controls.bottom, notationTop, gap].every(Number.isFinite)) {
-    return controls.top;
-  }
-  return controls.top - Math.max(0, controls.bottom + Math.max(0, gap) - notationTop);
+  if (![iconHeight, iconHeightsBelowTop].every(Number.isFinite)) return 0;
+  return Math.max(0, iconHeight) * Math.max(0, iconHeightsBelowTop);
 }
 
 /**
- * Translate the rendered score so the topmost required item (notation,
- * action controls, or the staff itself) starts at the desired outer padding.
+ * Translate the engraving so its highest visible ink begins at the first
+ * position that clears the fixed action rows.
  */
 export function scoreContentTopShift(
-  requiredTops: readonly number[],
-  outerPadding: number,
+  currentContentTop: number,
+  requiredContentTop: number,
 ): number {
-  const finiteTops = requiredTops.filter(Number.isFinite);
-  if (finiteTops.length === 0) return 0;
-  return Math.max(0, outerPadding) - Math.min(...finiteTops);
+  if (![currentContentTop, requiredContentTop].every(Number.isFinite)) return 0;
+  return requiredContentTop - currentContentTop;
 }

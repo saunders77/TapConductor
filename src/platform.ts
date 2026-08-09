@@ -24,33 +24,6 @@ export function setAppWindowTitle(fileName?: string): void {
     });
 }
 
-/**
- * Keep the native macOS window appearance aligned with the live system
- * preference. Setting the native theme (rather than a title color) lets
- * AppKit choose a contrasting title and traffic-light treatment itself.
- */
-export function syncAppWindowThemeWithSystem(): UnlistenFn {
-  if (webRuntime) return () => undefined;
-  const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
-  let active = true;
-  const applyTheme = (): void => {
-    const theme = systemTheme.matches ? "dark" : "light";
-    void import("@tauri-apps/api/window")
-      .then(({ getCurrentWindow }) => {
-        if (active) return getCurrentWindow().setTheme(theme);
-      })
-      .catch((error: unknown) => {
-        console.warn("The native window theme could not be synchronized.", error);
-      });
-  };
-  systemTheme.addEventListener("change", applyTheme);
-  applyTheme();
-  return () => {
-    active = false;
-    systemTheme.removeEventListener("change", applyTheme);
-  };
-}
-
 export async function appInvoke<T>(
   command: string,
   args?: Record<string, unknown>,

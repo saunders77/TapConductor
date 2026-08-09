@@ -5,6 +5,7 @@ mod core;
 mod crash_marker;
 mod dto;
 mod macos_menu;
+mod macos_window;
 mod midi_runtime;
 mod session;
 
@@ -47,6 +48,13 @@ pub fn run() {
 
     builder
         .on_window_event(move |_window, event| {
+            #[cfg(target_os = "macos")]
+            if matches!(
+                event,
+                tauri::WindowEvent::ThemeChanged(_) | tauri::WindowEvent::Focused(true)
+            ) {
+                let _ = macos_window::ensure_title_contrast(_window);
+            }
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 let _ = midi_shutdown_sender.send(MidiInputAction::Shutdown);
             }
@@ -114,7 +122,12 @@ pub fn run() {
         ])
         .setup(move |app| {
             #[cfg(target_os = "macos")]
-            macos_menu::install(app.handle(), &macos_menu::MacosMenuState::default())?;
+            {
+                macos_menu::install(app.handle(), &macos_menu::MacosMenuState::default())?;
+                if let Some(window) = app.get_webview_window("main") {
+                    macos_window::ensure_title_contrast_for_ns_window(window.ns_window()?);
+                }
+            }
             #[cfg(target_os = "macos")]
             {
                 let handle = app.handle().clone();

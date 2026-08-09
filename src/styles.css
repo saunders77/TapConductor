@@ -123,9 +123,16 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .score-help { color: #66685f; font-size: 11px; font-weight: 650; letter-spacing: .01em; }
 .zoom-controls { display: flex; align-items: center; gap: 7px; }.zoom-controls button { width: 27px; height: 27px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); cursor: pointer; }.zoom-controls output { min-width: 42px; text-align: center; font-size: 11px; font-weight: 700; }
 .score-scroll { position: relative; width: 100%; max-width: 100%; min-width: 0; flex: 1 1 auto; min-height: 0; overflow-x: auto; overflow-y: auto; scrollbar-gutter: auto; contain: size layout; background: #fff; }
-.score-stage { position: relative; width: max-content; min-width: 100%; min-height: 100%; margin: 0; padding: 58px max(34px, env(safe-area-inset-right, 0px)) 70px max(34px, env(safe-area-inset-left, 0px)); background: #fff; }
-/* Keep the first interaction row clear of the header on macOS. */
-.platform-macos .score-stage { padding-top: 80px; }
+.score-stage { position: relative; width: max-content; min-width: 100%; min-height: 100%; margin: 0; padding: 58px max(34px, env(safe-area-inset-right, 0px)) 70px max(34px, env(safe-area-inset-left, 0px)); background: #fff; --score-content-shift-y: 0px; }
+/*
+ * OSMD includes score-dependent page headroom in its SVG. Move the notation
+ * and its overlays as one unit after measuring the actual first-system ink
+ * and action controls, instead of stacking a platform-specific top inset on
+ * top of that headroom.
+ */
+.score-stage > #osmd,
+.score-stage > .score-highlights,
+.score-stage > .score-targets { transform: translateY(var(--score-content-shift-y)); }
 /*
  * iPad's larger touch targets need more headroom above the first staff for
  * dynamics and other expressions. Counter-shift the controls so their

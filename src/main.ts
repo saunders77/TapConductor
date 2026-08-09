@@ -248,30 +248,11 @@ app.innerHTML = `
         <div class="help-content">
           <section>
             <h3>Usage and crash data</h3>
-            <p>When enabled, TapConductor sends pseudonymous application usage, coarse system and settings categories, and sanitized error summaries directly to PostHog. It never sends score contents or names, paths, MIDI messages, device names, precise location, or contact information.</p>
+            <p>Telemetry is on by default. TapConductor sends pseudonymous application usage, coarse system and settings categories, and sanitized error summaries directly to PostHog. Uncheck the box below to stop telemetry. It never sends score contents or names, paths, MIDI messages, device names, precise location, or contact information.</p>
             <label class="telemetry-choice"><input id="telemetry-toggle" type="checkbox" /> <span><b>Send anonymous crash and usage data to the developer to help improve TapConductor</b><small id="telemetry-status">Checking…</small></span></label>
           </section>
         </div>
         <button id="telemetry-settings-done" class="primary-button" type="button">Done</button>
-      </section>
-    </div>
-
-    <div id="telemetry-consent" class="help-overlay telemetry-consent hidden" role="dialog" aria-modal="true" aria-labelledby="telemetry-consent-title" aria-describedby="telemetry-consent-summary">
-      <section class="help-card telemetry-consent-card">
-        <div class="help-card-header">
-          <div>
-            <h2 id="telemetry-consent-title">Thanks for trying TapConductor!</h2>
-          </div>
-        </div>
-        <div class="help-content">
-          <section>
-            <p id="telemetry-consent-summary">To help improve the app, TapConductor would like to send anonymous usage info with the developer (like crashes and how often TapConductor gets launched).</p>
-          </section>
-        </div>
-        <div class="telemetry-consent-actions">
-          <button id="telemetry-continue" class="secondary-button large" type="button">Continue</button>
-          <button id="telemetry-decline" class="secondary-button large" type="button">Block anonymous usage info</button>
-        </div>
       </section>
     </div>
 
@@ -379,9 +360,6 @@ const elements = {
   telemetrySettings: byId("telemetry-settings"),
   telemetrySettingsClose: byId<HTMLButtonElement>("telemetry-settings-close"),
   telemetrySettingsDone: byId<HTMLButtonElement>("telemetry-settings-done"),
-  telemetryConsent: byId("telemetry-consent"),
-  telemetryContinue: byId<HTMLButtonElement>("telemetry-continue"),
-  telemetryDecline: byId<HTMLButtonElement>("telemetry-decline"),
   telemetryToggle: byId<HTMLInputElement>("telemetry-toggle"),
   telemetryStatus: byId("telemetry-status"),
   announcementOverlay: byId("announcement-overlay"),
@@ -2847,18 +2825,9 @@ async function initializeTelemetry(): Promise<void> {
     const installerConsent = isWebBuild()
       ? null
       : await invoke<boolean | null>("get_installer_telemetry_consent").catch(() => null);
-    const action = initialTelemetryAction(installerConsent, isWebBuild(), appleUiPlatform);
+    const action = initialTelemetryAction(installerConsent);
     if (action === "enable") telemetry.enable();
-    else if (action === "disable") telemetry.disable();
-    else {
-      await new Promise<void>((resolve) => {
-        finishInitialTelemetryChoice = resolve;
-        elements.telemetryConsent.classList.remove("hidden");
-        syncModalIsolation();
-        window.requestAnimationFrame(() => elements.telemetryContinue.focus());
-      });
-      return;
-    }
+    else telemetry.disable();
     syncTelemetryControls();
   }
   if (telemetry.getConsent() === "enabled") {
@@ -2868,36 +2837,6 @@ async function initializeTelemetry(): Promise<void> {
     void syncNativeTelemetryConsent(false);
   }
 }
-
-let finishInitialTelemetryChoice: (() => void) | null = null;
-
-function completeInitialTelemetryChoice(enabled: boolean): void {
-  if (enabled) telemetry.enable();
-  else telemetry.disable();
-  void syncNativeTelemetryConsent(enabled);
-  elements.telemetryConsent.classList.add("hidden");
-  syncModalIsolation();
-  syncTelemetryControls();
-  finishInitialTelemetryChoice?.();
-  finishInitialTelemetryChoice = null;
-}
-
-elements.telemetryContinue.addEventListener("click", () => completeInitialTelemetryChoice(true));
-elements.telemetryDecline.addEventListener("click", () => completeInitialTelemetryChoice(false));
-elements.telemetryConsent.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") {
-    event.preventDefault();
-  } else if (event.key === "Tab") {
-    const focusable = [elements.telemetryContinue, elements.telemetryDecline];
-    const currentIndex = focusable.indexOf(document.activeElement as HTMLButtonElement);
-    const nextIndex = event.shiftKey
-      ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
-      : (currentIndex + 1) % focusable.length;
-    event.preventDefault();
-    focusable[nextIndex]!.focus();
-  }
-  event.stopPropagation();
-});
 
 elements.telemetryToggle.addEventListener("change", () => {
   if (elements.telemetryToggle.checked) {

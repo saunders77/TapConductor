@@ -20,17 +20,11 @@ test("does not classify other platforms as Apple UI platforms", () => {
   assert.equal(detectAppleUiPlatform("Mozilla/5.0 (Windows NT 10.0; Win64; x64)", 0), null);
 });
 
-test("prompts fresh native Apple installs when no installer choice exists", () => {
-  assert.equal(initialTelemetryAction(null, false, "macos"), "prompt");
-  assert.equal(initialTelemetryAction(null, false, "ipados"), "prompt");
+test("honors an explicit installer opt-out", () => {
+  assert.equal(initialTelemetryAction(false), "disable");
 });
 
-test("honors an explicit installer choice before applying platform defaults", () => {
-  assert.equal(initialTelemetryAction(true, false, null), "enable");
-  assert.equal(initialTelemetryAction(false, false, "macos"), "disable");
-});
-
-test("keeps telemetry off by default for web and native builds without a consent surface", () => {
-  assert.equal(initialTelemetryAction(null, true, "macos"), "disable");
-  assert.equal(initialTelemetryAction(null, false, null), "disable");
+test("defaults telemetry on with no installer choice", () => {
+  assert.equal(initialTelemetryAction(null), "enable");
+  assert.equal(initialTelemetryAction(true), "enable");
 });

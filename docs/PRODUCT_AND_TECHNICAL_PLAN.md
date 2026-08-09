@@ -343,18 +343,18 @@ the production configuration.
 
 ### Consent and privacy behavior
 
-Telemetry is enabled by default only after a clear first-run disclosure has been shown. The screen
-explains what is collected, links to the privacy policy, and offers **Continue** and **Do not share**
-with equal prominence. Until it is dismissed, the sink is a no-op and no install/launch event is
-sent. Settings must always expose **Share usage and crash data**, the current state, a
-plain-language data inventory, and a clear path from the Info page to those telemetry settings.
+Telemetry defaults on whenever no saved choice or explicit installer opt-out exists, including web,
+development, macOS, iPadOS, and Windows launches that bypass the installer. Settings must always
+expose **Send anonymous crash and usage data**, the current state, a plain-language data inventory,
+and a clear path from the Info page to those telemetry settings. An explicit opt-out persists and
+always takes precedence over the default.
 
-If the user chooses **Continue** on the initial run, enqueue exactly one `app_installed` (or
-`browser_instance_created`) event and exactly one `session_started` event for that same initial
-launch. Schedule that first consented launch batch immediately rather than waiting for the normal
-five-minute upload window. Persist their `event_id` values before transmission so retrying after a
-network failure cannot create duplicate logical events. If the user chooses **Do not share**, send
-neither event. Every later consented process launch likewise emits exactly one `session_started`.
+On the initial telemetry-enabled run, enqueue exactly one `app_installed` (or
+`browser_instance_created`) event and exactly one `session_started` event for that same launch.
+Schedule that launch batch immediately rather than waiting for the normal five-minute upload
+window. Persist their `event_id` values before transmission so retrying after a network failure
+cannot create duplicate logical events. Every later enabled process launch likewise emits exactly
+one `session_started`.
 
 The consent state is read synchronously before either analytics or crash SDK initialization:
 
@@ -416,10 +416,10 @@ city, coordinates, postal code, or a precise location. `locale` is useful for lo
 prioritization but must not be repurposed as region.
 
 An "install" cannot be observed at installer/store download time by application code. For native
-packages, define `app_installed` as **first consented launch of a newly created application-data
+packages, define `app_installed` as **first telemetry-enabled launch of a newly created application-data
 record** and use Microsoft/Apple store analytics separately for downloads and installations that
 never launch or opt out. The static browser edition has no install lifecycle; its equivalent is
-`browser_instance_created`, meaning first consented use for that origin/browser storage. An update
+`browser_instance_created`, meaning first telemetry-enabled use for that origin/browser storage. An update
 emits `app_updated` once when `app_version` changes under an existing `installation_id`.
 
 ### Versioned event catalog

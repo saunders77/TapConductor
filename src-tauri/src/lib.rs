@@ -48,13 +48,6 @@ pub fn run() {
 
     builder
         .on_window_event(move |_window, event| {
-            #[cfg(target_os = "macos")]
-            if matches!(
-                event,
-                tauri::WindowEvent::ThemeChanged(_) | tauri::WindowEvent::Focused(true)
-            ) {
-                let _ = macos_window::synchronize_native_appearance(_window);
-            }
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 let _ = midi_shutdown_sender.send(MidiInputAction::Shutdown);
             }
@@ -125,7 +118,7 @@ pub fn run() {
             {
                 macos_menu::install(app.handle(), &macos_menu::MacosMenuState::default())?;
                 if let Some(window) = app.get_webview_window("main") {
-                    macos_window::synchronize_native_appearance_for_ns_window(window.ns_window()?);
+                    macos_window::force_light_appearance_for_ns_window(window.ns_window()?);
                 }
             }
             #[cfg(target_os = "macos")]

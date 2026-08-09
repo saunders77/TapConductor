@@ -6,6 +6,10 @@ const PARTIAL_COUNT: usize = 6;
 const PARTIAL_RATIOS: [f32; PARTIAL_COUNT] = [1.0, 2.006, 3.018, 4.034, 5.056, 6.082];
 const PARTIAL_GAINS: [f32; PARTIAL_COUNT] = [1.0, 0.48, 0.30, 0.21, 0.15, 0.11];
 const PARTIAL_HALF_LIVES: [f32; PARTIAL_COUNT] = [10_000.0, 2.8, 1.9, 1.35, 1.0, 0.75];
+// A short fade-in keeps a newly allocated oscillator from entering the mix at
+// its non-zero starting phase. Eight milliseconds is long enough to remove
+// the discontinuity without making the instrument feel sluggish.
+const ATTACK_SECONDS: f32 = 0.008;
 
 /// Controls the dependency-free fallback instrument.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -39,6 +43,7 @@ struct Voice {
     previous: [f32; PARTIAL_COUNT],
     partial_amplitudes: [f32; PARTIAL_COUNT],
     amplitude: f32,
+    attack_gain: f32,
     age: u64,
 }
 
@@ -52,6 +57,7 @@ impl Voice {
         previous: [0.0; PARTIAL_COUNT],
         partial_amplitudes: [0.0; PARTIAL_COUNT],
         amplitude: 0.0,
+        attack_gain: 0.0,
         age: 0,
     };
 }
@@ -69,6 +75,7 @@ pub struct PianoSynth<const VOICES: usize = 128> {
     partial_decay: [f32; PARTIAL_COUNT],
     held_decay: f32,
     release_decay: f32,
+    attack_step: f32,
     output_gain: f32,
     next_age: u64,
 }
@@ -96,6 +103,7 @@ impl<const VOICES: usize> PianoSynth<VOICES> {
             0.5_f32.powf(1.0 / (config.held_half_life_seconds * config.sample_rate as f32));
         let release_decay =
             0.5_f32.powf(1.0 / (config.release_half_life_seconds * config.sample_rate as f32));
+        let attack_step = 1.0 / (ATTACK_SECONDS * config.sample_rate as f32).max(1.0);
         let mut oscillator_coefficients = [[0.0; PARTIAL_COUNT]; 128];
         let mut oscillator_starts = [[[0.0; 2]; PARTIAL_COUNT]; 128];
         for pitch in 0..128 {
@@ -122,6 +130,7 @@ impl<const VOICES: usize> PianoSynth<VOICES> {
             partial_decay,
             held_decay,
             release_decay,
+            attack_step,
             output_gain: config.output_gain,
             next_age: 1,
         })
@@ -194,6 +203,7 @@ impl<const VOICES: usize> Sampler for PianoSynth<VOICES> {
             previous: self.oscillator_starts[pitch as usize].map(|state| state[1]),
             partial_amplitudes,
             amplitude,
+            attack_gain: 0.0,
             age: self.next_age,
         };
         self.next_age = self.next_age.wrapping_add(1);
@@ -239,7 +249,8 @@ impl<const VOICES: usize> Sampler for PianoSynth<VOICES> {
                     voice.oscillator[partial] = next;
                     voice.partial_amplitudes[partial] *= self.partial_decay[partial];
                 }
-                mixed += voice_sample * voice.amplitude;
+                mixed += voice_sample * voice.amplitude * voice.attack_gain;
+                voice.attack_gain = (voice.attack_gain + self.attack_step).min(1.0);
                 voice.amplitude *= if voice.released {
                     self.release_decay
                 } else {
@@ -299,6 +310,32 @@ mod tests {
             .map(f32::abs)
             .fold(0.0, f32::max);
         assert!(late_peak < early_peak * 0.6);
+    }
+
+    #[test]
+    fn note_attack_fades_in_from_silence() {
+        let mut synth = PianoSynth::<8>::new(PianoConfig::new(48_000)).unwrap();
+        synth.note_on(VoiceGroupId(1), 60, u16::MAX);
+        synth.note_on(VoiceGroupId(1), 64, u16::MAX);
+        synth.note_on(VoiceGroupId(1), 67, u16::MAX);
+
+        let mut first_frame = [0.0; 2];
+        synth.render(&mut first_frame, 2);
+        assert_eq!(first_frame, [0.0, 0.0]);
+        assert!(synth
+            .voices
+            .iter()
+            .filter(|voice| voice.active)
+            .all(|voice| voice.attack_gain > 0.0 && voice.attack_gain < 1.0));
+
+        let attack_frames = (ATTACK_SECONDS * 48_000.0) as usize;
+        let mut remainder = vec![0.0; attack_frames - 1];
+        synth.render(&mut remainder, 1);
+        assert!(synth
+            .voices
+            .iter()
+            .filter(|voice| voice.active)
+            .all(|voice| voice.attack_gain >= 0.999));
     }
 
     #[test]

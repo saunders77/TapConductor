@@ -150,6 +150,23 @@ impl Drop for OutputWorker {
     }
 }
 
+impl OutputWorker {
+    fn shutdown(mut self) -> Result<(), String> {
+        // A closed command channel means the worker has already exited; it
+        // still needs to be joined so its native connection is definitely
+        // dropped before CoreMIDI is restarted.
+        let _ = self.sender.send(OutputWorkerCommand::Shutdown);
+        let Some(thread) = self.thread.take() else {
+            return Ok(());
+        };
+        run_midi_operation("output shutdown", move || {
+            thread
+                .join()
+                .map_err(|_| "The MIDI output scheduler panicked while stopping.".to_owned())
+        })
+    }
+}
+
 const MIDI_OPERATION_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub struct MidiManager {
@@ -385,9 +402,40 @@ impl MidiManager {
         let input = self.selected_input_id.clone();
         let output = self.selected_output_id.clone();
         let mut errors = Vec::new();
+
+        // A process restart closes every CoreMIDI client before discovery.
+        // Reproduce that lifecycle here so MIDIRestart does not rescan while
+        // TapConductor still owns clients backed by the previous registry.
+        if let Some(connection) = self.input_connection.take()
+            && let Err(error) = run_midi_operation("input shutdown", move || {
+                drop(connection);
+                Ok(())
+            })
+        {
+            errors.push(error);
+        }
+        if let Some(worker) = self.output_worker.take()
+            && let Err(error) = worker.shutdown()
+        {
+            errors.push(error);
+        }
+        self.selected_input_id = None;
+        self.selected_input_name = None;
+        self.selected_output_id = None;
+        self.selected_output_name = None;
+        self.last_output_error = None;
+        let _ = self.input_action_sender.send(MidiInputAction::Panic);
+
         if let Err(error) = self.backend.reload() {
             errors.push(error.to_string());
         }
+
+        // MIDIRestart asks drivers to rescan, but registry notifications can
+        // arrive after the call returns. Do not immediately recreate clients
+        // against the pre-refresh endpoint snapshot.
+        #[cfg(target_os = "macos")]
+        thread::sleep(Duration::from_millis(750));
+
         if let Err(error) = self.set_input(input) {
             errors.push(error);
         }
@@ -652,8 +700,30 @@ fn command_due(command: &OutputWorkerCommand) -> Option<Instant> {
 
 #[cfg(test)]
 mod piano_shortcut_tests {
-    use super::{MidiInputAction, PianoShortcutGate, ShortcutGateOutput};
+    use super::{MidiInputAction, PianoShortcutGate, ShortcutGateOutput, spawn_output_worker};
     use crate::dto::PianoShortcutCommandDto;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+    use tapconductor_midi::{
+        MidiMessage,
+        backend::{MidiBackendError, MidiOutputConnection},
+    };
+
+    struct DropTrackingOutput(Arc<AtomicBool>);
+
+    impl Drop for DropTrackingOutput {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::Release);
+        }
+    }
+
+    impl MidiOutputConnection for DropTrackingOutput {
+        fn send(&mut self, _message: MidiMessage) -> Result<(), MidiBackendError> {
+            Ok(())
+        }
+    }
 
     fn down(token: &str, pitch: u8) -> MidiInputAction {
         MidiInputAction::Down {
@@ -717,5 +787,16 @@ mod piano_shortcut_tests {
             gate.process(down("note", 64), 36, false),
             ShortcutGateOutput::Pass(_)
         ));
+    }
+
+    #[test]
+    fn orderly_output_shutdown_drops_the_native_connection_before_returning() {
+        let dropped = Arc::new(AtomicBool::new(false));
+        let worker = spawn_output_worker(Box::new(DropTrackingOutput(Arc::clone(&dropped))))
+            .expect("output worker starts");
+
+        worker.shutdown().expect("output worker stops");
+
+        assert!(dropped.load(Ordering::Acquire));
     }
 }

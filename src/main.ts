@@ -2303,6 +2303,13 @@ async function reloadAudioSystems(): Promise<void> {
     toast("Audio and MIDI devices reloaded.", "info");
   } finally {
     await refreshDevices();
+    if (appleUiPlatform === "macos") {
+      // CoreMIDI driver registry notifications can land after MIDIRestart has
+      // returned. Refresh once more after the native client teardown/rescan
+      // cycle so slower USB drivers also reach the menus without an app restart.
+      await new Promise((resolve) => window.setTimeout(resolve, 750));
+      await refreshDevices();
+    }
     elements.audioOutput.disabled = false;
     if (lastDiagnostics?.ready) setStatus("ready", "Audio ready");
     else setStatus("fault", "Audio needs attention");

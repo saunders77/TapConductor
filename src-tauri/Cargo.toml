@@ -38,12 +38,10 @@ windows = { version = "0.62", features = [
 tapconductor-audio = { path = "../crates/tapconductor-audio", features = ["cpal-backend"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.4"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = [
-  "NSColor",
-  "NSControl",
-  "NSResponder",
-  "NSTextField",
-  "NSView",
+  "NSAppearance",
+  "NSApplication",
   "NSWindow",
 ] }
 coremidi = "0.9.1"

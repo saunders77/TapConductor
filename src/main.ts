@@ -1387,7 +1387,8 @@ async function refreshIncrementalGeometry(
   }
   const targetsStarted = performance.now();
   const targetStats = buildScoreTargets(renderedThroughSourceMeasure);
-  fitFirstSystemToScoreTop(activeOsmd);
+  positionScoreActionRows();
+  fitFirstSystemEngravingToActions(activeOsmd);
   recordScorePhase("targetBuildMs", targetsStarted);
   scorePerformance ??= {};
   scorePerformance.visualSteps = targetStats.visualSteps;
@@ -1396,8 +1397,8 @@ async function refreshIncrementalGeometry(
   scheduleIncrementalScrollAheadCheck();
 }
 
-const AUDITION_ICON_HEIGHTS_BELOW_HEADER = 2.5;
-const START_HERE_ICON_HEIGHTS_BELOW_AUDITION = 2;
+const AUDITION_ICON_HEIGHTS_BELOW_HEADER = 1.5;
+const START_HERE_ICON_HEIGHTS_BELOW_AUDITION = 1;
 const SCORE_INK_SELECTOR = "path, text, line, polyline, polygon, circle, ellipse, use";
 
 function visibleScoreInkRects(): DOMRect[] {
@@ -1426,18 +1427,11 @@ function firstRenderedStaffTop(activeOsmd: OpenSheetMusicDisplay): number | unde
 }
 
 /**
- * Keep both action rows fixed relative to the header. Then move only the
- * engraving and notation-following overlays until the highest visible ink is
- * immediately below the start-here row. The measured ink includes ledger
- * notes, dynamics, articulations, and other score-dependent marks.
+ * Keep both action rows fixed relative to the header, without depending on
+ * any notation geometry being available from OSMD.
  */
-function fitFirstSystemToScoreTop(activeOsmd: OpenSheetMusicDisplay): void {
-  const stageRect = elements.scoreStage.getBoundingClientRect();
-  const staffTop = firstRenderedStaffTop(activeOsmd);
-  if (staffTop === undefined) return;
-  const inkRects = visibleScoreInkRects();
+function positionScoreActionRows(): void {
   const controls = [...elements.scoreTargets.querySelectorAll<HTMLElement>(".slice-controls")];
-
   for (const control of controls) {
     const audition = control.querySelector<HTMLElement>(".play-chord");
     if (!audition) continue;
@@ -1451,8 +1445,23 @@ function fitFirstSystemToScoreTop(activeOsmd: OpenSheetMusicDisplay): void {
       START_HERE_ICON_HEIGHTS_BELOW_AUDITION,
     )}px`;
   }
+}
 
-  const notationTop = inkRects.reduce((top, ink) => Math.min(top, ink.top), staffTop);
+/**
+ * Move only the engraving and notation-following overlays until the highest
+ * visible ink is immediately below the fixed start-here row. The measured ink
+ * includes ledger notes, dynamics, articulations, and other score marks.
+ */
+function fitFirstSystemEngravingToActions(activeOsmd: OpenSheetMusicDisplay): void {
+  const stageRect = elements.scoreStage.getBoundingClientRect();
+  const controls = [...elements.scoreTargets.querySelectorAll<HTMLElement>(".slice-controls")];
+  const staffTop = firstRenderedStaffTop(activeOsmd);
+  const inkRects = visibleScoreInkRects();
+  const notationTop = inkRects.reduce(
+    (top, ink) => Math.min(top, ink.top),
+    staffTop ?? Number.POSITIVE_INFINITY,
+  );
+  if (!Number.isFinite(notationTop)) return;
   const startHereBottom = controls.reduce(
     (bottom, control) => Math.max(
       bottom,

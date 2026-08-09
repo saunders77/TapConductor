@@ -58,3 +58,13 @@ test("Apple header controls use platform-specific visual corrections", () => {
   assert.match(styles, /\.platform-ipados \.control-deck > \.field\s*{[^}]*justify-content:\s*flex-start;/s);
   assert.match(source, /appleUiPlatform === "ipados" \? "─{10}" : "─{12}"/);
 });
+
+test("score action rows have a fixed fallback and are positioned before engraving", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+  assert.match(styles, /\.slice-controls\s*{[^}]*top:\s*36px;[^}]*row-gap:\s*0;/s);
+
+  const positionCall = source.indexOf("positionScoreActionRows();");
+  const engravingCall = source.indexOf("fitFirstSystemEngravingToActions(activeOsmd);");
+  assert.ok(positionCall >= 0);
+  assert.ok(engravingCall > positionCall);
+});

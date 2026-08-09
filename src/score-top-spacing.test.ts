@@ -7,22 +7,22 @@ import {
   scoreContentTopShift,
 } from "./score-top-spacing.ts";
 
-test("places audition actions two and a half icon heights below the header", () => {
-  assert.equal(scoreActionTop(24, 2.5), 60);
+test("places audition actions one and a half icon heights below the header", () => {
+  assert.equal(scoreActionTop(24, 1.5), 36);
 });
 
-test("places start-here actions two icon heights below the audition row", () => {
-  assert.equal(scoreActionRowGap(24, 2), 24);
+test("places start-here actions one icon height below the audition row", () => {
+  assert.equal(scoreActionRowGap(24, 1), 0);
 });
 
 test("moves high engraving down until it clears the fixed action rows", () => {
-  assert.equal(scoreContentTopShift(42, 132), 90);
+  assert.equal(scoreContentTopShift(42, 84), 42);
 });
 
 test("removes excess renderer whitespace without moving the action rows", () => {
-  assert.equal(scoreContentTopShift(156, 132), -24);
+  assert.equal(scoreContentTopShift(108, 84), -24);
 });
 
 test("ignores unavailable geometry while incremental rendering starts", () => {
-  assert.equal(scoreContentTopShift(Number.NaN, 132), 0);
+  assert.equal(scoreContentTopShift(Number.NaN, 84), 0);
 });

@@ -44,6 +44,7 @@ import type {
   PianoShortcutInput,
   TapEventDto,
 } from "./types";
+import { shouldAutoMuteAudio } from "./output-policy";
 import { audioDeviceOptions } from "./audio-device-options";
 
 const app = document.querySelector<HTMLDivElement>("#app");
@@ -535,6 +536,7 @@ const PIANO_SHORTCUT_PITCH_KEY = "tapconductor.piano-shortcut-pitch-v1";
 let pianoShortcutPitch = loadPianoShortcutPitch();
 const NONE_AUDIO_OUTPUT_VALUE = "__none_mute__";
 let selectedAudioDeviceId = "";
+let selectedMidiOutputId = "";
 const RELOAD_AUDIO_SYSTEMS_VALUE = "__reload_audio_systems__";
 let currentAnnouncementId: string | null = null;
 let announcementPreviousFocus: HTMLElement | null = null;
@@ -2256,7 +2258,10 @@ async function refreshDevices(): Promise<void> {
     populateSelect(elements.midiInput, midiPorts.inputs, "Off");
     populateSelect(elements.midiOutput, midiPorts.outputs, "Off");
     if (midiPorts.selectedInput) elements.midiInput.value = midiPorts.selectedInput;
-    if (midiPorts.selectedOutput) elements.midiOutput.value = midiPorts.selectedOutput;
+    const selectedOutputStillExists = midiPorts.outputs
+      .some((device) => device.id === midiPorts.selectedOutput);
+    selectedMidiOutputId = selectedOutputStillExists ? midiPorts.selectedOutput ?? "" : "";
+    elements.midiOutput.value = selectedMidiOutputId;
     fitSelect(elements.midiInput);
     fitSelect(elements.midiOutput);
   } else {
@@ -3293,19 +3298,7 @@ function releaseAudioOutputFocus(): void {
   });
 }
 
-elements.audioOutput.addEventListener("change", async () => {
-  releaseAudioOutputFocus();
-  const requested = elements.audioOutput.value;
-  if (requested === RELOAD_AUDIO_SYSTEMS_VALUE) {
-    elements.audioOutput.value = selectedAudioDeviceId;
-    fitSelect(elements.audioOutput);
-    try {
-      await reloadAudioSystems();
-    } catch {
-      // invokeSafe and refreshDevices already surfaced the relevant errors.
-    }
-    return;
-  }
+async function applyAudioOutputSelection(requested: string): Promise<boolean> {
   const previous = selectedAudioDeviceId;
   try {
     await invokeSafe("set_audio_device", { id: requested }, {
@@ -3323,10 +3316,28 @@ elements.audioOutput.addEventListener("change", async () => {
       internal_audio_enabled: requested !== NONE_AUDIO_OUTPUT_VALUE,
       estimated_latency_ms_bucket: millisecondsBucket(lastDiagnostics?.estimatedLatencyMs ?? 0),
     }));
+    return true;
   } catch {
     elements.audioOutput.value = previous;
     fitSelect(elements.audioOutput);
+    return false;
   }
+}
+
+elements.audioOutput.addEventListener("change", async () => {
+  releaseAudioOutputFocus();
+  const requested = elements.audioOutput.value;
+  if (requested === RELOAD_AUDIO_SYSTEMS_VALUE) {
+    elements.audioOutput.value = selectedAudioDeviceId;
+    fitSelect(elements.audioOutput);
+    try {
+      await reloadAudioSystems();
+    } catch {
+      // invokeSafe and refreshDevices already surfaced the relevant errors.
+    }
+    return;
+  }
+  await applyAudioOutputSelection(requested);
 });
 elements.instrument.addEventListener("change", () => {
   fitSelect(elements.instrument);
@@ -3360,22 +3371,33 @@ elements.pianoShortcutPitch.addEventListener("change", () => {
   void invokeSafe("set_piano_shortcut_pitch", { midiPitch: pianoShortcutPitch });
   void syncMacosMenu();
 });
-elements.midiOutput.addEventListener("change", () => {
+elements.midiOutput.addEventListener("change", async () => {
+  const requested = elements.midiOutput.value;
+  const previous = selectedMidiOutputId;
   fitSelect(elements.midiOutput);
-  void invokeSafe("set_midi_output", { id: elements.midiOutput.value || null })
-    .then(() => {
-      scheduleSettingsTelemetry("midi", "midi_settings_changed", () => ({
-        input_enabled: elements.midiInput.value.length > 0,
-        output_enabled: elements.midiOutput.value.length > 0,
-        input_connection: elements.midiInput.value ? "unknown" : "none",
-        output_connection: elements.midiOutput.value ? "unknown" : "none",
-        channel_filter_mode: "all",
-        velocity_curve: "device",
-        sustain_enabled: true,
-      }));
-      void syncMacosMenu();
-      if (isWebBuild()) return refreshDevices();
-    });
+  try {
+    await invokeSafe("set_midi_output", { id: requested || null });
+    selectedMidiOutputId = requested;
+    if (shouldAutoMuteAudio(previous, requested)) {
+      elements.audioOutput.value = NONE_AUDIO_OUTPUT_VALUE;
+      fitSelect(elements.audioOutput);
+      await applyAudioOutputSelection(NONE_AUDIO_OUTPUT_VALUE);
+    }
+    scheduleSettingsTelemetry("midi", "midi_settings_changed", () => ({
+      input_enabled: elements.midiInput.value.length > 0,
+      output_enabled: elements.midiOutput.value.length > 0,
+      input_connection: elements.midiInput.value ? "unknown" : "none",
+      output_connection: elements.midiOutput.value ? "unknown" : "none",
+      channel_filter_mode: "all",
+      velocity_curve: "device",
+      sustain_enabled: true,
+    }));
+    void syncMacosMenu();
+    if (isWebBuild()) await refreshDevices();
+  } catch {
+    elements.midiOutput.value = previous;
+    fitSelect(elements.midiOutput);
+  }
 });
 elements.tapMode.addEventListener("change", () => {
   tapMode = elements.tapMode.value === "beat" ? "beat" : "rhythm";

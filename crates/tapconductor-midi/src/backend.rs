@@ -50,6 +50,10 @@ pub type MidiInputHandler = Box<dyn FnMut(TimestampedMidiMessage) + Send + 'stat
 
 /// Backend-neutral device discovery and connection API.
 pub trait MidiBackend {
+    fn reload(&self) -> Result<(), MidiBackendError> {
+        Ok(())
+    }
+
     fn input_devices(&self) -> Result<Vec<MidiDeviceInfo>, MidiBackendError>;
     fn output_devices(&self) -> Result<Vec<MidiDeviceInfo>, MidiBackendError>;
 
@@ -77,29 +81,37 @@ mod midir_impl {
     #[derive(Clone, Copy, Debug, Default)]
     pub struct MidirBackend;
 
-    fn port_id(prefix: &str, index: usize, name: &str) -> String {
-        format!("midir:{prefix}:{index}:{name}")
+    fn port_id(prefix: &str, native_id: &str) -> String {
+        format!("midir:{prefix}:{native_id}")
     }
 
-    fn parse_index(id: &str, prefix: &str) -> Option<usize> {
-        let mut pieces = id.splitn(4, ':');
-        if pieces.next()? != "midir" || pieces.next()? != prefix {
-            return None;
-        }
-        pieces.next()?.parse().ok()
+    fn native_port_id<'a>(id: &'a str, prefix: &str) -> Option<&'a str> {
+        id.strip_prefix(&format!("midir:{prefix}:"))
+            .filter(|id| !id.is_empty())
     }
 
     impl MidiBackend for MidirBackend {
+        fn reload(&self) -> Result<(), MidiBackendError> {
+            #[cfg(target_os = "macos")]
+            coremidi::restart().map_err(|status| {
+                MidiBackendError::new(
+                    "CoreMIDI reload",
+                    format!("MIDIRestart returned OSStatus {status}"),
+                )
+            })?;
+            Ok(())
+        }
+
         fn input_devices(&self) -> Result<Vec<MidiDeviceInfo>, MidiBackendError> {
             let input = MidiInput::new("TapConductor discovery")
                 .map_err(|error| MidiBackendError::new("input discovery", error.to_string()))?;
             let mut devices = Vec::new();
-            for (index, port) in input.ports().iter().enumerate() {
+            for port in input.ports() {
                 let name = input
-                    .port_name(port)
+                    .port_name(&port)
                     .unwrap_or_else(|_| "Unknown MIDI input".into());
                 devices.push(MidiDeviceInfo {
-                    id: port_id("in", index, &name),
+                    id: port_id("in", &port.id()),
                     name,
                     direction: MidiPortDirection::Input,
                 });
@@ -111,12 +123,12 @@ mod midir_impl {
             let output = MidiOutput::new("TapConductor discovery")
                 .map_err(|error| MidiBackendError::new("output discovery", error.to_string()))?;
             let mut devices = Vec::new();
-            for (index, port) in output.ports().iter().enumerate() {
+            for port in output.ports() {
                 let name = output
-                    .port_name(port)
+                    .port_name(&port)
                     .unwrap_or_else(|_| "Unknown MIDI output".into());
                 devices.push(MidiDeviceInfo {
-                    id: port_id("out", index, &name),
+                    id: port_id("out", &port.id()),
                     name,
                     direction: MidiPortDirection::Output,
                 });
@@ -129,19 +141,18 @@ mod midir_impl {
             device_id: &str,
             mut handler: MidiInputHandler,
         ) -> Result<Box<dyn MidiInputConnection>, MidiBackendError> {
-            let index = parse_index(device_id, "in").ok_or_else(|| {
+            let native_id = native_port_id(device_id, "in").ok_or_else(|| {
                 MidiBackendError::new("input selection", "invalid midir input ID")
             })?;
             let mut input = MidiInput::new("TapConductor input")
                 .map_err(|error| MidiBackendError::new("input creation", error.to_string()))?;
             input.ignore(Ignore::None);
-            let ports = input.ports();
-            let port = ports.get(index).ok_or_else(|| {
+            let port = input.find_port_by_id(native_id.to_owned()).ok_or_else(|| {
                 MidiBackendError::new("input selection", "MIDI input is unavailable")
             })?;
             let connection = input
                 .connect(
-                    port,
+                    &port,
                     "TapConductor input connection",
                     move |timestamp, bytes, _| {
                         if let Ok(Some(message)) = parse_midi1(bytes) {
@@ -163,17 +174,18 @@ mod midir_impl {
             &self,
             device_id: &str,
         ) -> Result<Box<dyn MidiOutputConnection>, MidiBackendError> {
-            let index = parse_index(device_id, "out").ok_or_else(|| {
+            let native_id = native_port_id(device_id, "out").ok_or_else(|| {
                 MidiBackendError::new("output selection", "invalid midir output ID")
             })?;
             let output = MidiOutput::new("TapConductor output")
                 .map_err(|error| MidiBackendError::new("output creation", error.to_string()))?;
-            let ports = output.ports();
-            let port = ports.get(index).ok_or_else(|| {
-                MidiBackendError::new("output selection", "MIDI output is unavailable")
-            })?;
+            let port = output
+                .find_port_by_id(native_id.to_owned())
+                .ok_or_else(|| {
+                    MidiBackendError::new("output selection", "MIDI output is unavailable")
+                })?;
             let connection = output
-                .connect(port, "TapConductor output connection")
+                .connect(&port, "TapConductor output connection")
                 .map_err(|error| MidiBackendError::new("output connection", error.to_string()))?;
             Ok(Box::new(MidirOutputConnection(connection)))
         }
@@ -195,6 +207,18 @@ mod midir_impl {
     }
 
     pub use self::MidirBackend as PublicMidirBackend;
+
+    #[cfg(test)]
+    mod tests {
+        use super::{native_port_id, port_id};
+
+        #[test]
+        fn wrapped_port_ids_preserve_opaque_native_ids() {
+            let wrapped = port_id("in", "2468:Controller Name");
+            assert_eq!(native_port_id(&wrapped, "in"), Some("2468:Controller Name"));
+            assert_eq!(native_port_id(&wrapped, "out"), None);
+        }
+    }
 }
 
 #[cfg(feature = "midir-backend")]

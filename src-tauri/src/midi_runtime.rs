@@ -385,6 +385,9 @@ impl MidiManager {
         let input = self.selected_input_id.clone();
         let output = self.selected_output_id.clone();
         let mut errors = Vec::new();
+        if let Err(error) = self.backend.reload() {
+            errors.push(error.to_string());
+        }
         if let Err(error) = self.set_input(input) {
             errors.push(error);
         }

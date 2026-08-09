@@ -3717,6 +3717,7 @@ dependencies = [
 name = "tapconductor-midi"
 version = "0.1.0"
 dependencies = [
+ "coremidi",
  "midir",
 ]
 

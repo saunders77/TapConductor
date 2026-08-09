@@ -236,9 +236,10 @@ where
             consumed += 1;
             if self.apply_command(command) {
                 // Panic is authoritative over every command that was already
-                // queued, including future releases/attacks. Commands enqueued
-                // after this callback begins are observed on the next block.
-                self.pending_len = 0;
+                // queued, including future releases/attacks. Configuration
+                // changes are retained so a mute queued with the safety panic
+                // cannot be lost before the next callback.
+                self.retain_configuration_commands(consumed);
                 panic_applied = true;
                 break;
             }
@@ -286,6 +287,23 @@ where
             self.diagnostics.note_schedule_overflow();
         }
         let _ = self.insert_sorted(command);
+    }
+
+    fn retain_configuration_commands(&mut self, first: usize) {
+        let previous_len = self.pending_len;
+        let mut retained = 0;
+        for index in first..previous_len {
+            let command = self.pending[index].take();
+            if command.is_some_and(|command| matches!(command, AudioCommand::SetMasterGain { .. }))
+            {
+                self.pending[retained] = command;
+                retained += 1;
+            }
+        }
+        for slot in &mut self.pending[retained..previous_len] {
+            *slot = None;
+        }
+        self.pending_len = retained;
     }
 
     #[allow(clippy::result_large_err)] // Scheduled commands remain inline and allocation-free.
@@ -504,6 +522,21 @@ mod tests {
         engine.render_block(&mut output, RenderCallbackInfo::default());
         assert_eq!(&output[..3], &[0.25; 3]);
         assert_eq!(&output[3..], &[0.125; 5]);
+    }
+
+    #[test]
+    fn panic_retains_a_mute_queued_for_the_same_boundary() {
+        let (mut tx, mut engine, _) =
+            audio_engine::<TraceSampler, 4, 4>(TraceSampler::default(), 48_000, 1);
+        tx.panic_at(0);
+        tx.try_send(AudioCommand::SetMasterGain { gain: 0.0, at: 0 })
+            .unwrap();
+
+        let mut output = [0.0; 8];
+        engine.render_block(&mut output, RenderCallbackInfo::default());
+        engine.render_block(&mut output, RenderCallbackInfo::default());
+
+        assert_eq!(output, [0.0; 8]);
     }
 
     #[test]

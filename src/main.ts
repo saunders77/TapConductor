@@ -45,6 +45,13 @@ import type {
 } from "./types";
 import { shouldAutoMuteAudio } from "./output-policy";
 import { audioDeviceOptions } from "./audio-device-options";
+import {
+  APP_SETTINGS_KEY,
+  loadAppSettings,
+  resolveDevicePreference,
+  saveAppSettings,
+  type DevicePreference,
+} from "./app-settings";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing #app");
@@ -486,7 +493,8 @@ let score: LoadedScore | null = null;
 let cursorIndex = 0;
 let highlightIndex = 0;
 let mostRecentChordIndex: number | null = null;
-let zoom = 0.9;
+const persistedSettings = loadAppSettings(localStorage);
+let zoom = persistedSettings.zoomPercent / 100;
 const ZOOM_STEPS = [50, 75, 90, 100, 110, 125, 150, 175];
 let osmd: OpenSheetMusicDisplay | null = null;
 type OsmdConstructor = typeof import("opensheetmusicdisplay")["OpenSheetMusicDisplay"];
@@ -532,7 +540,18 @@ const PIANO_SHORTCUT_PITCH_KEY = "tapconductor.piano-shortcut-pitch-v1";
 let pianoShortcutPitch = loadPianoShortcutPitch();
 const NONE_AUDIO_OUTPUT_VALUE = "__none_mute__";
 let selectedAudioDeviceId = "";
+let selectedMidiInputId = "";
 let selectedMidiOutputId = "";
+let availableAudioDevices: DeviceDto[] = [];
+let availableMidiInputs: DeviceDto[] = [];
+let availableMidiOutputs: DeviceDto[] = [];
+let desiredAudioOutput = persistedSettings.audioOutput;
+let desiredMidiInput = persistedSettings.midiInput;
+let desiredMidiOutput = persistedSettings.midiOutput;
+let audioRestorePending = desiredAudioOutput !== undefined && desiredAudioOutput.id !== "";
+let midiInputRestorePending = desiredMidiInput !== undefined && desiredMidiInput.id !== "";
+let midiOutputRestorePending = desiredMidiOutput !== undefined && desiredMidiOutput.id !== "";
+let restoringDevices = false;
 const RELOAD_AUDIO_SYSTEMS_VALUE = "__reload_audio_systems__";
 let midiDeviceRefreshTimer: number | undefined;
 let currentAnnouncementId: string | null = null;
@@ -611,7 +630,12 @@ function scheduleMidiDeviceRefresh(): void {
 }
 
 function loadPianoShortcutPitch(): number {
+  if (persistedSettings.pianoShortcutPitch !== DEFAULT_PIANO_SHORTCUT_PITCH) {
+    return persistedSettings.pianoShortcutPitch;
+  }
   try {
+    // Preserve the preference written by releases before the unified settings record.
+    if (localStorage.getItem(APP_SETTINGS_KEY) !== null) return persistedSettings.pianoShortcutPitch;
     const stored = localStorage.getItem(PIANO_SHORTCUT_PITCH_KEY);
     if (stored === null) return DEFAULT_PIANO_SHORTCUT_PITCH;
     const pitch = Number(stored);
@@ -623,10 +647,21 @@ function loadPianoShortcutPitch(): number {
   }
 }
 
+function persistSettings(): void {
+  saveAppSettings(localStorage, persistedSettings);
+}
+
+function preferenceForDevice(id: string, devices: readonly DeviceDto[]): DevicePreference {
+  const device = devices.find((candidate) => candidate.id === id);
+  return { id, ...(device ? { name: device.name } : {}) };
+}
+
 async function toggleMidiFreePlay(): Promise<void> {
   const nextMode = !midiFreePlay;
   await invokeSafe("set_midi_free_play", { enabled: nextMode });
   midiFreePlay = nextMode;
+  persistedSettings.midiFreePlay = midiFreePlay;
+  persistSettings();
   updateMidiFreePlayButton();
   toast(midiFreePlay ? "Direct MIDI play on." : "Following the score again.", "info");
   if (tapMode === "beat") resetBeatTap();
@@ -885,6 +920,32 @@ for (let pitch = 0; pitch <= 127; pitch += 1) {
   elements.pianoShortcutPitch.add(new Option(`${noteName(pitch)} (MIDI ${pitch})`, String(pitch)));
 }
 elements.pianoShortcutPitch.value = String(pianoShortcutPitch);
+persistedSettings.pianoShortcutPitch = pianoShortcutPitch;
+
+tapMode = persistedSettings.tapMode;
+midiFreePlay = persistedSettings.midiFreePlay;
+elements.instrument.value = persistedSettings.instrument;
+elements.tapMode.value = tapMode;
+elements.legatoMode.checked = persistedSettings.legato;
+elements.legatoValue.textContent = persistedSettings.legato ? "On" : "Off";
+elements.volume.value = String(persistedSettings.volumePercent);
+elements.volumeValue.value = `${persistedSettings.volumePercent}%`;
+elements.regularRoll.value = String(persistedSettings.tapRollMs);
+elements.regularRollValue.value = `${persistedSettings.tapRollMs} ms`;
+elements.auditionRoll.value = String(persistedSettings.chordRollMs);
+elements.auditionRollValue.value = `${persistedSettings.chordRollMs} ms`;
+elements.zoomRange.value = String(persistedSettings.zoomPercent);
+elements.zoomValue.value = `${persistedSettings.zoomPercent}%`;
+shell?.classList.toggle("chrome-hidden", persistedSettings.chromeHidden);
+elements.chromeToggle.setAttribute("aria-expanded", String(!persistedSettings.chromeHidden));
+elements.chromeToggle.setAttribute(
+  "aria-label",
+  persistedSettings.chromeHidden ? "Show header and footer" : "Hide header and footer",
+);
+elements.chromeToggle.title = persistedSettings.chromeHidden
+  ? "Show header and footer"
+  : "Hide header and footer";
+updateMidiFreePlayButton();
 
 function describeEvent(event: TapEventDto | undefined): { title: string; detail: string } {
   if (!event) return { title: "End of score", detail: "—" };
@@ -2219,7 +2280,85 @@ function populateAudioSelect(devices: DeviceDto[]): void {
     .some((option) => option.value === selectedAudioDeviceId && !option.disabled);
   elements.audioOutput.value = selectionStillExists ? selectedAudioDeviceId : "";
   if (!selectionStillExists) selectedAudioDeviceId = "";
+  if (desiredAudioOutput?.id) {
+    const desiredDevice = desiredAudioOutput.id === NONE_AUDIO_OUTPUT_VALUE
+      ? undefined
+      : resolveDevicePreference(desiredAudioOutput, devices);
+    const isSatisfied = desiredAudioOutput.id === NONE_AUDIO_OUTPUT_VALUE
+      ? selectedAudioDeviceId === NONE_AUDIO_OUTPUT_VALUE
+      : desiredDevice?.isDefault
+        ? selectedAudioDeviceId === ""
+        : desiredDevice?.id === selectedAudioDeviceId;
+    audioRestorePending = !isSatisfied;
+  }
   fitSelect(elements.audioOutput);
+}
+
+async function attemptPersistedDeviceRestoration(): Promise<void> {
+  if (restoringDevices) return;
+  restoringDevices = true;
+  try {
+    if (audioRestorePending && desiredAudioOutput) {
+      const resolved = desiredAudioOutput.id === NONE_AUDIO_OUTPUT_VALUE
+        ? { id: NONE_AUDIO_OUTPUT_VALUE, name: "None (Mute)" }
+        : resolveDevicePreference(desiredAudioOutput, availableAudioDevices);
+      if (resolved) {
+        try {
+          const selectedId = "isDefault" in resolved && resolved.isDefault ? "" : resolved.id;
+          await invokeSafe("set_audio_device", { id: selectedId });
+          selectedAudioDeviceId = selectedId;
+          elements.audioOutput.value = selectedId;
+          desiredAudioOutput = selectedId === ""
+            ? desiredAudioOutput
+            : { id: resolved.id, name: resolved.name };
+          persistedSettings.audioOutput = desiredAudioOutput;
+          audioRestorePending = false;
+          fitSelect(elements.audioOutput);
+          persistSettings();
+        } catch {
+          // Keep the desired route so a later device refresh can retry it.
+        }
+      }
+    }
+
+    if (midiInputRestorePending && desiredMidiInput) {
+      const resolved = resolveDevicePreference(desiredMidiInput, availableMidiInputs);
+      if (resolved) {
+        try {
+          await invokeSafe("set_midi_input", { id: resolved.id });
+          selectedMidiInputId = resolved.id;
+          elements.midiInput.value = resolved.id;
+          desiredMidiInput = { id: resolved.id, name: resolved.name };
+          persistedSettings.midiInput = desiredMidiInput;
+          midiInputRestorePending = false;
+          fitSelect(elements.midiInput);
+          persistSettings();
+        } catch {
+          // Keep the desired route so a later device refresh can retry it.
+        }
+      }
+    }
+
+    if (midiOutputRestorePending && desiredMidiOutput) {
+      const resolved = resolveDevicePreference(desiredMidiOutput, availableMidiOutputs);
+      if (resolved) {
+        try {
+          await invokeSafe("set_midi_output", { id: resolved.id });
+          selectedMidiOutputId = resolved.id;
+          elements.midiOutput.value = resolved.id;
+          desiredMidiOutput = { id: resolved.id, name: resolved.name };
+          persistedSettings.midiOutput = desiredMidiOutput;
+          midiOutputRestorePending = false;
+          fitSelect(elements.midiOutput);
+          persistSettings();
+        } catch {
+          // Keep the desired route so a later device refresh can retry it.
+        }
+      }
+    }
+  } finally {
+    restoringDevices = false;
+  }
 }
 
 function fitSelect(select: HTMLSelectElement): void {
@@ -2255,19 +2394,31 @@ async function refreshDevices(): Promise<void> {
   ]);
   const errors: string[] = [];
   if (audioResult.status === "fulfilled") {
+    availableAudioDevices = audioResult.value;
     populateAudioSelect(audioResult.value);
   } else {
     errors.push(`Audio device discovery failed: ${String(audioResult.reason)}`);
   }
   if (midiResult.status === "fulfilled") {
     const midiPorts = midiResult.value;
+    availableMidiInputs = midiPorts.inputs;
+    availableMidiOutputs = midiPorts.outputs;
     populateSelect(elements.midiInput, midiPorts.inputs, "Off");
     populateSelect(elements.midiOutput, midiPorts.outputs, "Off");
-    if (midiPorts.selectedInput) elements.midiInput.value = midiPorts.selectedInput;
+    const selectedInputStillExists = midiPorts.inputs
+      .some((device) => device.id === midiPorts.selectedInput);
+    selectedMidiInputId = selectedInputStillExists ? midiPorts.selectedInput ?? "" : "";
+    elements.midiInput.value = selectedMidiInputId;
+    if (desiredMidiInput?.id && desiredMidiInput.id !== selectedMidiInputId) {
+      midiInputRestorePending = true;
+    }
     const selectedOutputStillExists = midiPorts.outputs
       .some((device) => device.id === midiPorts.selectedOutput);
     selectedMidiOutputId = selectedOutputStillExists ? midiPorts.selectedOutput ?? "" : "";
     elements.midiOutput.value = selectedMidiOutputId;
+    if (desiredMidiOutput?.id && desiredMidiOutput.id !== selectedMidiOutputId) {
+      midiOutputRestorePending = true;
+    }
     fitSelect(elements.midiInput);
     fitSelect(elements.midiOutput);
   } else {
@@ -2298,6 +2449,7 @@ async function refreshDevices(): Promise<void> {
     elements.diagnosticsButton.classList.add("not-ready");
     toast(errors.join(" "), "error");
   }
+  await attemptPersistedDeviceRestoration();
   await syncMacosMenu();
 }
 
@@ -2454,7 +2606,6 @@ async function refreshDiagnostics(): Promise<void> {
 }
 
 async function installListeners(): Promise<void> {
-  await invokeSafe("set_piano_shortcut_pitch", { midiPitch: pianoShortcutPitch });
   const listeners = await Promise.all([
     listen<CoreEvent>("performance-event", ({ payload }) => {
       if (payload.type === "fault") {
@@ -2493,6 +2644,25 @@ async function installListeners(): Promise<void> {
     listen<void>("midi-devices-changed", scheduleMidiDeviceRefresh),
   ]);
   unlisteners.push(...listeners);
+}
+
+async function restorePersistedRuntimeSettings(): Promise<void> {
+  await invokeSafe("set_piano_shortcut_pitch", { midiPitch: pianoShortcutPitch });
+  await invokeSafe("set_instrument", { instrument: persistedSettings.instrument });
+  await invokeSafe("set_volume", { value: persistedSettings.volumePercent / 100 });
+  await invokeSafe("set_roll_delays", {
+    regularMs: persistedSettings.tapRollMs,
+    auditionMs: persistedSettings.chordRollMs,
+  });
+  await invokeSafe("set_tap_mode", { beat: persistedSettings.tapMode === "beat" });
+  await invokeSafe("set_legato_mode", { enabled: persistedSettings.legato });
+  await invokeSafe("set_midi_free_play", { enabled: persistedSettings.midiFreePlay });
+}
+
+async function initializeApp(): Promise<void> {
+  await installListeners();
+  await restorePersistedRuntimeSettings();
+  await refreshDevices();
 }
 
 function syncTelemetryControls(): void {
@@ -3180,6 +3350,7 @@ window.addEventListener("blur", () => {
   for (const token of [...heldTokens]) void performUp(token);
 });
 window.addEventListener("beforeunload", () => {
+  persistSettings();
   flushSettingsTelemetry();
   telemetry.endSession();
   unlisteners.forEach((unlisten) => unlisten());
@@ -3188,6 +3359,8 @@ window.addEventListener("beforeunload", () => {
 
 elements.volume.addEventListener("input", () => {
   elements.volumeValue.value = `${elements.volume.value}%`;
+  persistedSettings.volumePercent = Number(elements.volume.value);
+  persistSettings();
   void invoke("set_volume", { value: Number(elements.volume.value) / 100 }).catch(() => undefined);
 });
 const updateRollDelays = (): void => {
@@ -3195,6 +3368,9 @@ const updateRollDelays = (): void => {
   const auditionMs = Number(elements.auditionRoll.value);
   elements.regularRollValue.value = `${regularMs} ms`;
   elements.auditionRollValue.value = `${auditionMs} ms`;
+  persistedSettings.tapRollMs = regularMs;
+  persistedSettings.chordRollMs = auditionMs;
+  persistSettings();
   void invokeSafe("set_roll_delays", { regularMs, auditionMs }).then(() => {
     scheduleSettingsTelemetry("roll", "roll_settings_changed", () => ({
       roll_enabled: Number(elements.regularRoll.value) > 0 || Number(elements.auditionRoll.value) > 0,
@@ -3214,6 +3390,8 @@ elements.chromeToggle.addEventListener("click", () => {
   elements.chromeToggle.setAttribute("aria-expanded", String(!hidden));
   elements.chromeToggle.setAttribute("aria-label", hidden ? "Show header and footer" : "Hide header and footer");
   elements.chromeToggle.title = hidden ? "Show header and footer" : "Hide header and footer";
+  persistedSettings.chromeHidden = hidden;
+  persistSettings();
   closeAllPopovers(false);
   void syncMacosMenu();
 });
@@ -3320,6 +3498,10 @@ async function applyAudioOutputSelection(requested: string): Promise<boolean> {
       output_kind: "unknown",
     });
     selectedAudioDeviceId = requested;
+    desiredAudioOutput = preferenceForDevice(requested, availableAudioDevices);
+    persistedSettings.audioOutput = desiredAudioOutput;
+    audioRestorePending = false;
+    persistSettings();
     fitSelect(elements.audioOutput);
     void syncMacosMenu();
     scheduleSettingsTelemetry("audio", "audio_settings_changed", () => ({
@@ -3355,33 +3537,44 @@ elements.audioOutput.addEventListener("change", async () => {
 });
 elements.instrument.addEventListener("change", () => {
   fitSelect(elements.instrument);
-  void invokeSafe("set_instrument", { instrument: elements.instrument.value })
-    .then(() => syncMacosMenu());
+  const instrument = elements.instrument.value === "synth" ? "synth" : "piano";
+  void invokeSafe("set_instrument", { instrument }).then(() => {
+    persistedSettings.instrument = instrument;
+    persistSettings();
+    return syncMacosMenu();
+  });
 });
-elements.midiInput.addEventListener("change", () => {
+elements.midiInput.addEventListener("change", async () => {
+  const requested = elements.midiInput.value;
+  const previous = selectedMidiInputId;
   fitSelect(elements.midiInput);
-  void invokeSafe("set_midi_input", { id: elements.midiInput.value || null })
-    .then(() => {
-      scheduleSettingsTelemetry("midi", "midi_settings_changed", () => ({
-        input_enabled: elements.midiInput.value.length > 0,
-        output_enabled: elements.midiOutput.value.length > 0,
-        input_connection: elements.midiInput.value ? "unknown" : "none",
-        output_connection: elements.midiOutput.value ? "unknown" : "none",
-        channel_filter_mode: "all",
-        velocity_curve: "device",
-        sustain_enabled: true,
-      }));
-      void syncMacosMenu();
-      if (isWebBuild()) return refreshDevices();
-    });
+  try {
+    await invokeSafe("set_midi_input", { id: requested || null });
+    selectedMidiInputId = requested;
+    desiredMidiInput = preferenceForDevice(requested, availableMidiInputs);
+    persistedSettings.midiInput = desiredMidiInput;
+    midiInputRestorePending = false;
+    persistSettings();
+    scheduleSettingsTelemetry("midi", "midi_settings_changed", () => ({
+      input_enabled: elements.midiInput.value.length > 0,
+      output_enabled: elements.midiOutput.value.length > 0,
+      input_connection: elements.midiInput.value ? "unknown" : "none",
+      output_connection: elements.midiOutput.value ? "unknown" : "none",
+      channel_filter_mode: "all",
+      velocity_curve: "device",
+      sustain_enabled: true,
+    }));
+    void syncMacosMenu();
+    if (isWebBuild()) await refreshDevices();
+  } catch {
+    elements.midiInput.value = previous;
+    fitSelect(elements.midiInput);
+  }
 });
 elements.pianoShortcutPitch.addEventListener("change", () => {
   pianoShortcutPitch = Number(elements.pianoShortcutPitch.value);
-  try {
-    localStorage.setItem(PIANO_SHORTCUT_PITCH_KEY, String(pianoShortcutPitch));
-  } catch {
-    // The active setting still works when persistent browser storage is unavailable.
-  }
+  persistedSettings.pianoShortcutPitch = pianoShortcutPitch;
+  persistSettings();
   void invokeSafe("set_piano_shortcut_pitch", { midiPitch: pianoShortcutPitch });
   void syncMacosMenu();
 });
@@ -3392,6 +3585,10 @@ elements.midiOutput.addEventListener("change", async () => {
   try {
     await invokeSafe("set_midi_output", { id: requested || null });
     selectedMidiOutputId = requested;
+    desiredMidiOutput = preferenceForDevice(requested, availableMidiOutputs);
+    persistedSettings.midiOutput = desiredMidiOutput;
+    midiOutputRestorePending = false;
+    persistSettings();
     if (shouldAutoMuteAudio(previous, requested)) {
       elements.audioOutput.value = NONE_AUDIO_OUTPUT_VALUE;
       fitSelect(elements.audioOutput);
@@ -3417,6 +3614,8 @@ elements.tapMode.addEventListener("change", () => {
   tapMode = elements.tapMode.value === "beat" ? "beat" : "rhythm";
   clearBeatTimers();
   void invokeSafe("set_tap_mode", { beat: tapMode === "beat" }).then(() => {
+    persistedSettings.tapMode = tapMode;
+    persistSettings();
     scheduleSettingsTelemetry("rhythm", "rhythm_settings_changed", () => ({
       performance_mode: tapMode,
       beat_mode: tapMode === "beat",
@@ -3439,6 +3638,8 @@ elements.legatoMode.addEventListener("change", () => {
   elements.legatoValue.textContent = enabled ? "On" : "Off";
   void syncMacosMenu();
   void invokeSafe("set_legato_mode", { enabled }).then(() => {
+    persistedSettings.legato = enabled;
+    persistSettings();
     scheduleSettingsTelemetry("rhythm", "rhythm_settings_changed", () => ({
       performance_mode: tapMode,
       beat_mode: tapMode === "beat",
@@ -3470,6 +3671,8 @@ function showZoomPercent(percent: number): number {
 function commitZoomPercent(percent: number): void {
   const normalized = showZoomPercent(percent);
   elements.zoomRange.value = String(normalized);
+  persistedSettings.zoomPercent = normalized;
+  persistSettings();
   const nextZoom = normalized / 100;
   if (nextZoom === zoom) return;
   zoom = nextZoom;
@@ -3514,21 +3717,14 @@ void initializeTelemetry().finally(() => {
   window.setTimeout(() => void showLatestAnnouncement(), 1_500);
 });
 
-void installListeners().then(refreshDevices).catch((error: unknown) => {
-  setStatus("fault", "Core unavailable");
-  toast(String(error), "error");
-});
-window.setInterval(() => void refreshDiagnostics(), 1_000);
-
 if (isWebBuild()) {
   document.documentElement.classList.add("web-build");
   document.getElementById("web-edition-badge")?.classList.remove("hidden");
   elements.instrument.replaceChildren(
-    new Option("Web piano", "piano", true, true),
-    new Option("Synthesizer", "synth"),
+    new Option("Web piano", "piano", persistedSettings.instrument === "piano", persistedSettings.instrument === "piano"),
+    new Option("Synthesizer", "synth", persistedSettings.instrument === "synth", persistedSettings.instrument === "synth"),
   );
   fitSelect(elements.instrument);
-  void invokeSafe("set_instrument", { instrument: "piano" });
   document.getElementById("instrument-help")!.textContent =
     "The browser edition includes a lightweight Web piano and synthesizer.";
   document.querySelector(".brand")?.setAttribute(
@@ -3541,3 +3737,9 @@ if (isWebBuild()) {
     });
   }
 }
+
+void initializeApp().catch((error: unknown) => {
+  setStatus("fault", "Core unavailable");
+  toast(String(error), "error");
+});
+window.setInterval(() => void refreshDiagnostics(), 1_000);

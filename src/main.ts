@@ -1448,7 +1448,7 @@ async function refreshIncrementalGeometry(
 }
 
 const AUDITION_PX_BELOW_HEADER = 20;
-const START_HERE_PX_BELOW_AUDITION_BOTTOM = 28;
+const START_HERE_PX_BELOW_AUDITION_BOTTOM = 20;
 const SCORE_INK_SELECTOR = "path, text, line, polyline, polygon, circle, ellipse, use";
 
 function visibleScoreInkRects(): DOMRect[] {

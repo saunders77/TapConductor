@@ -493,9 +493,7 @@ function loadOsmdConstructor(): Promise<OsmdConstructor> {
     });
   return osmdConstructorPromise;
 }
-let osmdEventSteps: number[] = [];
 let osmdBeatSteps: number[] = [];
-let osmdCurrentStep = 0;
 let eventHorizontalPositions: number[] = [];
 let beatHorizontalPositions: number[] = [];
 let measureHorizontalPositions = new Map<number, number>();
@@ -1045,10 +1043,8 @@ function updateVisualPosition(follow = true): void {
     ? activeBeatVisualIndex
     : null;
   if (displayedBeatIndex !== null) {
-    moveOsmdCursorToStep(osmdBeatSteps[displayedBeatIndex]!);
     if (follow) autoFollowPosition(beatHorizontalPositions[displayedBeatIndex]);
   } else {
-    moveOsmdCursor(highlightIndex);
     if (follow) autoFollowPosition(eventHorizontalPositions[highlightIndex]);
   }
   clearActiveHighlights();
@@ -1098,28 +1094,6 @@ function autoFollowPosition(sliceLeft: number | undefined): void {
       left: target,
       behavior: "auto",
     });
-  }
-}
-
-function moveOsmdCursor(index: number): void {
-  if (!osmd || score?.format !== "music_xml") return;
-  moveOsmdCursorToStep(osmdEventSteps[index] ?? index);
-}
-
-function moveOsmdCursorToStep(visualStep: number): void {
-  if (!osmd || score?.format !== "music_xml") return;
-  try {
-    if (visualStep < osmdCurrentStep) {
-      osmd.cursor.reset();
-      osmdCurrentStep = 0;
-    }
-    while (osmdCurrentStep < visualStep) {
-      osmd.cursor.next();
-      osmdCurrentStep += 1;
-    }
-    osmd.cursor.hide();
-  } catch {
-    // Some malformed scores have fewer graphical cursor positions than semantic events.
   }
 }
 
@@ -1300,9 +1274,7 @@ async function displayScore(loaded: LoadedScore, preserved?: ScoreViewState): Pr
   const preservedCursor = indexForPreservedEvent(loaded.events, preserved?.event);
   const preservedScrollLeft = preserved?.scrollLeft ?? 0;
   score = loaded;
-  osmdEventSteps = [];
   osmdBeatSteps = [];
-  osmdCurrentStep = 0;
   eventHorizontalPositions = [];
   beatHorizontalPositions = [];
   measureHorizontalPositions = new Map();
@@ -1727,7 +1699,6 @@ function buildScoreTargets(renderedThroughMeasure: number): { visualSteps: numbe
   const hostRect = elements.scoreStage.getBoundingClientRect();
   const cursor = osmd.cursor;
   cursor.reset();
-  osmdCurrentStep = 0;
   cursor.show();
 
   type NoteVisual = {
@@ -1814,7 +1785,6 @@ function buildScoreTargets(renderedThroughMeasure: number): { visualSteps: numbe
       });
     }
     cursor.next();
-    osmdCurrentStep += 1;
   }
 
   const rationalKey = (measureIndex: number, numerator: number, denominator: number): string => {
@@ -1895,7 +1865,6 @@ function buildScoreTargets(renderedThroughMeasure: number): { visualSteps: numbe
 
   const groupedTargets = new Map<string, { eventIndices: number[]; visual: VisualStep; measureNumber: string }>();
   const eventIndicesByStep = new Map<number, number[]>();
-  osmdEventSteps = [];
   for (const event of activeScore.events) {
     if (event.measureIndex > renderedThroughMeasure) continue;
     const candidates = matchingVisualSteps(
@@ -1951,7 +1920,6 @@ function buildScoreTargets(renderedThroughMeasure: number): { visualSteps: numbe
             .sort((left, right) => left - right)[Math.floor(eventNotes.length / 2)]!,
         }
       : visual;
-    osmdEventSteps[event.index] = eventVisual.step;
     const indicesAtStep = eventIndicesByStep.get(eventVisual.step) ?? [];
     indicesAtStep.push(event.index);
     eventIndicesByStep.set(eventVisual.step, indicesAtStep);
@@ -2095,8 +2063,7 @@ function buildScoreTargets(renderedThroughMeasure: number): { visualSteps: numbe
   elements.scoreHighlights.replaceChildren(highlightFragment);
   elements.scoreTargets.replaceChildren(targetFragment);
   normalizeScoreActionTabStops();
-  moveOsmdCursor(highlightIndex);
-  osmd.cursor.hide();
+  cursor.hide();
   return {
     visualSteps: visualSteps.length,
     targetNodes,

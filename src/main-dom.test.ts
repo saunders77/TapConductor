@@ -85,3 +85,15 @@ test("the rhythm position highlight spans only the full score layer", () => {
   assert.match(styles, /\.slice-controls\s*{[^}]*background:\s*transparent;/s);
   assert.match(styles, /\.slice-action\s*{[^}]*background:\s*transparent;/s);
 });
+
+test("normal position changes do not mutate OSMD or animate the engraving stack", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+  const updateVisualPosition = source.match(
+    /function updateVisualPosition\([^)]*\): void \{([\s\S]*?)\n\}/,
+  )?.[1] ?? "";
+
+  assert.doesNotMatch(updateVisualPosition, /osmd\.cursor|moveOsmdCursor/);
+  assert.match(styles, /\.score-position-highlight\s*{[^}]*visibility:\s*hidden;/s);
+  assert.match(styles, /\.score-position-highlight\.current\s*{[^}]*visibility:\s*visible;/s);
+  assert.doesNotMatch(styles, /\.score-position-highlight\s*{[^}]*transition:/s);
+});

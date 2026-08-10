@@ -49,6 +49,14 @@ test("iPad score actions use tighter platform-specific top spacing", () => {
   assert.match(source, /START_HERE_PX_BELOW_AUDITION_BOTTOM = appleUiPlatform === "ipados" \? 0 : 12/);
 });
 
+test("iPad orientation changes rebuild score and overlay geometry after layout settles", () => {
+  assert.match(source, /ipadLandscapeQuery = window\.matchMedia\("\(orientation: landscape\)"\)/);
+  assert.match(source, /refreshIpadOrientationLayout[\s\S]*?requestAnimationFrame[\s\S]*?requestAnimationFrame[\s\S]*?positionScoreActionRows\(\)[\s\S]*?restartIncrementalRendering\(currentTarget\)[\s\S]*?updateVisualPosition\(\)/);
+  assert.match(source, /ipadLandscapeQuery\.addEventListener\("change", scheduleIpadOrientationLayoutRefresh\)/);
+  assert.match(source, /window\.addEventListener\("orientationchange", scheduleIpadOrientationLayoutRefresh\)/);
+  assert.match(source, /window\.addEventListener\("resize", scheduleIpadOrientationLayoutRefresh, \{ passive: true \}\)/);
+});
+
 test("iPad TAP button is wider and its transport buttons use adjacent columns", () => {
   const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 

@@ -3766,6 +3766,56 @@ elements.zoomRange.addEventListener("change", () => {
   commitZoomPercent(Number(elements.zoomRange.value));
 });
 
+const ipadLandscapeQuery = window.matchMedia("(orientation: landscape)");
+let lastIpadLandscape = ipadLandscapeQuery.matches;
+let ipadOrientationLayoutTimer: number | null = null;
+
+async function refreshIpadOrientationLayout(expectedLandscape: boolean): Promise<void> {
+  // WKWebView can report the new orientation before its viewport and media
+  // query layout have completed. Two frames ensure OSMD and overlay geometry
+  // are measured against the final score viewport.
+  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+  if (ipadLandscapeQuery.matches !== expectedLandscape) {
+    scheduleIpadOrientationLayoutRefresh();
+    return;
+  }
+
+  positionScoreActionRows();
+  if (!osmd || !score || score.format !== "music_xml") {
+    updateVisualPosition(false);
+    return;
+  }
+  const currentTarget = Math.max(
+    renderedThroughSourceMeasure,
+    semanticRenderTarget(score.events, cursorIndex, INCREMENTAL_LOCAL_AHEAD_MEASURES),
+  );
+  await restartIncrementalRendering(currentTarget);
+  updateVisualPosition();
+}
+
+function scheduleIpadOrientationLayoutRefresh(): void {
+  if (appleUiPlatform !== "ipados") return;
+  const nextLandscape = ipadLandscapeQuery.matches;
+  if (nextLandscape === lastIpadLandscape && ipadOrientationLayoutTimer === null) return;
+  if (ipadOrientationLayoutTimer !== null) window.clearTimeout(ipadOrientationLayoutTimer);
+  ipadOrientationLayoutTimer = window.setTimeout(() => {
+    ipadOrientationLayoutTimer = null;
+    const settledLandscape = ipadLandscapeQuery.matches;
+    if (settledLandscape === lastIpadLandscape) return;
+    lastIpadLandscape = settledLandscape;
+    void refreshIpadOrientationLayout(settledLandscape).catch((error: unknown) => {
+      toast(`The score could not be realigned after rotation: ${String(error)}`, "error");
+    });
+  }, 120);
+}
+
+if (appleUiPlatform === "ipados") {
+  ipadLandscapeQuery.addEventListener("change", scheduleIpadOrientationLayoutRefresh);
+  window.addEventListener("orientationchange", scheduleIpadOrientationLayoutRefresh);
+  window.addEventListener("resize", scheduleIpadOrientationLayoutRefresh, { passive: true });
+}
+
 void initializeTelemetry().finally(() => {
   window.setTimeout(() => void showLatestAnnouncement(), 1_500);
 });

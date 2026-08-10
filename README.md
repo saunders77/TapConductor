@@ -14,6 +14,8 @@
 
 <p>
   TapConductor is open-source software. You can build it from the code in this repository or download the installer for Windows or Mac:
+  <strong>[Download Mac .dmg installer](releases/download/TapConductor/v0.1.0_TapConductor_universal.dmg)</strong>
+  <strong>[Download Windows .exe installer](releases/download/TapConductor/v0.1.0_TapConductor_x64-setup.exe)</strong>
 </p>
 
 ![TapConductor application screenshot](assets/screenshot.png)

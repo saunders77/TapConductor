@@ -50,6 +50,15 @@ test("iPad TAP button is wider and its transport buttons use adjacent columns", 
   assert.match(styles, /\.platform-ipados #forward-button\s*{[^}]*grid-column:\s*4;/s);
 });
 
+test("iPad landscape widens TAP by 60 percent and keeps circular transports symmetric", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(styles, /@media \(max-width: 1100px\) and \(orientation: landscape\)[\s\S]*?\.platform-ipados \.performance-strip\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 44px minmax\(150px, 672px\) 44px minmax\(0, 1fr\);[^}]*column-gap:\s*10px;/s);
+  assert.match(styles, /@media \(max-width: 1100px\) and \(orientation: landscape\)[\s\S]*?\.platform-ipados \.tap-button\s*{[^}]*width:\s*min\(672px, 100%\);/s);
+  assert.match(styles, /\.transport\s*{[^}]*display:\s*grid;[^}]*place-items:\s*center;/s);
+  assert.match(styles, /@media \(max-width: 1100px\)[\s\S]*?\.transport\s*{[^}]*width:\s*44px;[^}]*min-width:\s*44px;[^}]*height:\s*44px;[^}]*min-height:\s*44px;[^}]*aspect-ratio:\s*1;/s);
+});
+
 test("compact footer controls leave vertical room for slider labels", () => {
   const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 
@@ -57,6 +66,9 @@ test("compact footer controls leave vertical room for slider labels", () => {
   assert.match(styles, /\.bottom-controls\s*{[^}]*height:\s*46px;/s);
   assert.match(styles, /\.bottom-controls \.range-field\s*{[^}]*gap:\s*0;[^}]*padding-block:\s*0;/s);
   assert.match(styles, /\.bottom-controls \.zoom-controls\s*{[^}]*row-gap:\s*0;/s);
+  assert.match(styles, /\.platform-ipados \.bottom-controls \.range-field\s*{[^}]*gap:\s*4px;/s);
+  assert.match(styles, /\.platform-ipados \.bottom-controls \.zoom-controls\s*{[^}]*row-gap:\s*4px;/s);
+  assert.match(styles, /\.platform-ipados \.bottom-controls input\[type="range"\]\s*{[^}]*height:\s*28px;[^}]*min-height:\s*28px;[^}]*margin:\s*0;/s);
 });
 
 test("Apple header controls use platform-specific visual corrections", () => {

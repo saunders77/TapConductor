@@ -177,7 +177,7 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .tap-button small { display: none; }
 .position-readout, .next-readout { min-width: 0; display: flex; flex-direction: column; gap: 3px; }.position-readout { text-align: right; }.position-readout strong, .next-readout strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }.position-readout small, .next-readout small { color: #8d8e85; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .tap-button { flex: 0 0 178px; height: 100px; border: 2px solid #75ffb3; border-radius: 13px; background: var(--accent); color: #171813; cursor: pointer; box-shadow: 0 0 0 4px #75ffb315, inset 0 -4px 0 #75ffb3; transition: transform .06s, filter .1s; }.tap-button:hover { background: #b8ffd4; }.tap-button span { display: block; font-size: 23px; font-weight: 800; letter-spacing: .15em; }.tap-button small { display: block; margin-top: 2px; font-size: 11px; font-weight: 700; opacity: .7; }.tap-button:active { transform: translateY(2px); filter: brightness(.92); }.tap-button:disabled { opacity: .3; cursor: default; }
-.transport { flex: 0 0 42px; width: 42px; height: 42px; border: 1px solid #41423a; border-radius: 50%; background: #25261f; color: #d2d3c7; cursor: pointer; font-size: 27px; }.transport:disabled { opacity: .25; }
+.transport { flex: 0 0 42px; width: 42px; height: 42px; padding: 0; display: grid; place-items: center; border: 1px solid #41423a; border-radius: 50%; background: #25261f; color: #d2d3c7; cursor: pointer; }.transport > span { display: block; font-size: 27px; line-height: 1; transform: translateY(-1px); }.transport:disabled { opacity: .25; }
 
 .popover { position: fixed; top: 0; left: 0; width: 290px; max-height: 430px; overflow: auto; z-index: 50; padding: 17px; border: 1px solid var(--line); border-radius: 10px; background: #fffef9; box-shadow: 0 16px 45px #25251f30; }.popover h3 { margin: 0 0 4px; font: 600 20px var(--font-sans); }.popover > p { margin: 0 0 13px; color: var(--muted); font-size: 11px; line-height: 1.45; }.check-row { display: flex; gap: 9px; align-items: center; padding: 9px 4px; border-top: 1px solid #ecebe2; font-size: 13px; }.check-row input { accent-color: #75ffb3; }
 .diagnostics { width: 330px; }.diagnostics div { display: flex; justify-content: space-between; gap: 15px; padding: 7px 0; border-top: 1px solid #ecebe2; font-size: 12px; }.diagnostics div span { color: var(--muted); }.diagnostics div b { text-align: right; }
@@ -316,7 +316,7 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
     grid-template-columns: minmax(0, 1fr) 44px minmax(150px, 420px) 44px minmax(0, 1fr);
   }
   .footer-brand { display: none; }
-  .transport { width: 44px; height: 44px; }
+  .transport { width: 44px; min-width: 44px; height: 44px; min-height: 44px; aspect-ratio: 1; }
   #back-button { grid-column: 1; grid-row: 1; justify-self: center; }
   .tap-button { grid-column: 2; grid-row: 1; width: min(280px, 100%); height: 92px; justify-self: center; }
   #forward-button { grid-column: 3; grid-row: 1; justify-self: center; }
@@ -348,6 +348,13 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
   .bottom-controls .zoom-label { line-height: 1; }
   .bottom-controls .zoom-controls { row-gap: 0; }
   .bottom-controls .zoom-controls { padding-inline: 4px 10px; }
+  .platform-ipados .bottom-controls .range-field { gap: 4px; }
+  .platform-ipados .bottom-controls .zoom-controls { row-gap: 4px; }
+  .platform-ipados .bottom-controls input[type="range"] {
+    height: 28px;
+    min-height: 28px;
+    margin: 0;
+  }
   .toast-region { bottom: calc(182px + env(safe-area-inset-bottom, 0px)); }
   .score-stage { min-width: 100%; margin-inline: 0; padding-inline: 20px; }
   .empty-state { min-height: 0; overflow-y: auto; padding: 20px 16px; }
@@ -359,6 +366,14 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
   .platform-ipados #announcement-overlay {
     align-items: center;
   }
+}
+
+@media (max-width: 1100px) and (orientation: landscape) {
+  .platform-ipados .performance-strip {
+    grid-template-columns: minmax(0, 1fr) 44px minmax(150px, 672px) 44px minmax(0, 1fr);
+    column-gap: 10px;
+  }
+  .platform-ipados .tap-button { width: min(672px, 100%); }
 }
 
 .web-edition-badge {

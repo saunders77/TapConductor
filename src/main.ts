@@ -314,14 +314,14 @@ app.innerHTML = `
           <strong id="position-title">Waiting for a score</strong>
           <small id="position-detail">—</small>
         </div>
-        <button id="back-button" class="transport" type="button" disabled aria-label="Previous score event" aria-keyshortcuts="ArrowLeft">‹</button>
+        <button id="back-button" class="transport" type="button" disabled aria-label="Previous score event" aria-keyshortcuts="ArrowLeft"><span aria-hidden="true">‹</span></button>
         <button id="tap-button" class="tap-button" type="button" disabled aria-label="Tap to play the next score event" aria-keyshortcuts="Enter">
           <span>TAP</span>
           <small>Tap <strong>any key A-Z</strong> to play.</small>
           <small>Hold for longer notes.</small>
           <small><strong>Spacebar</strong> to replay a chord.</small>
         </button>
-        <button id="forward-button" class="transport" type="button" disabled aria-label="Next score event" aria-keyshortcuts="ArrowRight">›</button>
+        <button id="forward-button" class="transport" type="button" disabled aria-label="Next score event" aria-keyshortcuts="ArrowRight"><span aria-hidden="true">›</span></button>
         <div class="next-readout">
           <span>Next</span>
           <strong id="next-title">—</strong>

@@ -6,6 +6,7 @@ export interface RationalPoint {
 
 export interface TimelineEvent {
   absolute: RationalPoint;
+  notes?: readonly { end: RationalPoint }[];
 }
 
 export interface TimelineBeat {
@@ -21,6 +22,7 @@ export interface ConductedTimelineBeat extends TimelineBeat {
 export interface PlannedBeatEvent {
   eventIndex: number;
   delayMs: number;
+  holdMs: number;
 }
 
 export interface BeatIntervalPlan {
@@ -29,6 +31,7 @@ export interface BeatIntervalPlan {
 }
 
 const POSITION_EPSILON = 1e-9;
+export const MAX_NON_LEGATO_BEAT_HOLD_MS = 250;
 
 export const rationalValue = (value: RationalPoint): number =>
   value.denominator === 0 ? 0 : value.numerator / value.denominator;
@@ -88,9 +91,20 @@ export function planBeatInterval(
     const fraction = eventPosition <= currentPosition + POSITION_EPSILON
       ? 0
       : (eventPosition - currentPosition) / writtenInterval;
+    const earliestEnd = events[nextEventIndex]!.notes?.reduce(
+      (earliest, note) => Math.min(earliest, rationalValue(note.end)),
+      Number.POSITIVE_INFINITY,
+    );
+    const writtenDuration = earliestEnd === undefined || !Number.isFinite(earliestEnd)
+      ? Number.POSITIVE_INFINITY
+      : Math.max(0, earliestEnd - eventPosition);
     eventsInBeat.push({
       eventIndex: nextEventIndex,
       delayMs: Math.max(0, measuredBeatMs * fraction),
+      holdMs: Math.min(
+        MAX_NON_LEGATO_BEAT_HOLD_MS,
+        measuredBeatMs * writtenDuration / writtenInterval,
+      ),
     });
     nextEventIndex += 1;
   }

@@ -579,18 +579,7 @@ impl AppCore {
         let midi_clock_sample = self.audio.now_sample();
         let midi_clock_instant = Instant::now();
         for command in transition.audio_commands().copied() {
-            // Beat Tap intentionally retains the pre-release behavior: its
-            // quick automatic key-up must not engage the new piano damping
-            // envelope. MIDI OUT must still receive the command because it is
-            // the physical note-release boundary for the external device.
-            let suppress_audio_damping = self.beat_tap_mode
-                && matches!(
-                    command,
-                    tapconductor_performance::AudioCommand::DampenGroup { .. }
-                );
-            if !suppress_audio_damping
-                && let Err(error) = self.audio.send_performance_command(command)
-            {
+            if let Err(error) = self.audio.send_performance_command(command) {
                 self.recover_audio_delivery_failure(retry_target);
                 return Err(format!(
                     "{error} Playback was stopped{} so the failed gesture can be retried safely.",

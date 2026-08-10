@@ -26,6 +26,7 @@ import {
   appInvoke as invoke,
   appListen as listen,
   isWebBuild,
+  openExternalUrl,
   openScoreDialog,
   setAppWindowTitle,
   type UnlistenFn,
@@ -248,7 +249,7 @@ app.innerHTML = `
         <div class="help-content">
           <section>
             <h3>Usage and crash data</h3>
-            <p>Telemetry is on by default. TapConductor sends pseudonymous application usage, coarse system and settings categories, and sanitized error summaries directly to PostHog. Uncheck the box below to stop telemetry. It never sends score contents or names, paths, MIDI messages, device names, precise location, or contact information.</p>
+            <p>Telemetry is opt-out. TapConductor sends anonymous application usage stats, coarse system and settings categories, and sanitized error summaries. Uncheck the box below to stop telemetry. It never sends personal info like score contents or names, paths, MIDI messages, device names, precise location, or contact information.</p>
             <label class="telemetry-choice"><input id="telemetry-toggle" type="checkbox" /> <span><b>Send anonymous crash and usage data to the developer to help improve TapConductor</b><small id="telemetry-status">Checking…</small></span></label>
           </section>
         </div>
@@ -288,7 +289,7 @@ app.innerHTML = `
         <div id="score-scroll" class="score-scroll" role="region" tabindex="0" aria-label="Score viewer" aria-describedby="score-keyboard-help">
           <div id="empty-state" class="empty-state">
             <h1>Play sheet music by tapping for each chord</h1>
-            <p>If your piano skills aren't great or if you don't have a piano, TapConductor can help you accompany other musicians, lead a rehearsal, perform, or make a recording.</p>
+            <p>If your piano skills aren't great or if you don't have a piano, TapConductor can help you accompany other musicians, lead a rehearsal, perform, or make a recording. Connecting TapConductor to a piano via USB is recommended for the best experience.</p>
             <p>TapConductor reads any of these file formats: <b>.musicxml</b>, <b>.xml</b>, <b>.mxl</b>, <b>.mid</b>, <b>.midi</b>.</p>
             <p>If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read.
             <p>If you only have a PDF, you can use a converter program to create a file TapConductor can read (free options like Audiveris or MuseScore or paid options like SmartScore, PlayScore, Soundslice, NewZik, or PhotoScore).</p>
@@ -603,6 +604,7 @@ function updateMidiFreePlayButton(): void {
     ? "Return to conducting the score"
     : "Play MIDI input directly";
   elements.panic.setAttribute("aria-label", elements.panic.title);
+  elements.tap.disabled = midiFreePlay || score === null;
   void syncMacosMenu();
 }
 
@@ -734,7 +736,7 @@ let beatPlaying = false;
 let beatIndex = 0;
 let beatNextEventIndex = 0;
 let beatTimes: number[] = [];
-let beatTimers = new Map<number, number>();
+let beatTimers = new Map<number, { eventIndex: number; holdMs: number }>();
 let beatQueue: Promise<void> = Promise.resolve();
 let beatRunId = 0;
 let lastPressedBeatIndex: number | null = null;
@@ -746,9 +748,9 @@ function clearBeatTimers(): void {
 }
 
 function flushBeatTimers(): void {
-  const pending = [...beatTimers.values()].sort((left, right) => left - right);
+  const pending = [...beatTimers.values()].sort((left, right) => left.eventIndex - right.eventIndex);
   clearBeatTimers();
-  pending.forEach(dispatchBeatEvent);
+  pending.forEach(({ eventIndex, holdMs }) => dispatchBeatEvent(eventIndex, holdMs));
 }
 
 function updateTapButtonLabel(): void {
@@ -788,7 +790,7 @@ function resetBeatTap(): void {
   if (score) updatePosition();
 }
 
-function dispatchBeatEvent(index: number): void {
+function dispatchBeatEvent(index: number, holdMs: number): void {
   if (!score || index >= score.events.length) return;
   const runId = beatRunId;
   beatQueue = beatQueue.then(async () => {
@@ -798,7 +800,11 @@ function dispatchBeatEvent(index: number): void {
     updatePosition();
     const token = `beat-auto:${crypto.randomUUID()}`;
     await invokeSafe<void>("performance_input_down", { token, velocity: DEFAULT_VELOCITY });
-    await invokeSafe<void>("release_input", { token });
+    if (elements.legatoMode.checked) {
+      await invokeSafe<void>("release_input", { token });
+    } else {
+      window.setTimeout(() => void invokeSafe<void>("release_input", { token }), holdMs);
+    }
   }).catch(() => undefined);
 }
 
@@ -819,14 +825,14 @@ function scheduleBeatInterval(): void {
 
   for (const planned of plan.events) {
     if (planned.delayMs <= 0) {
-      dispatchBeatEvent(planned.eventIndex);
+      dispatchBeatEvent(planned.eventIndex, planned.holdMs);
       continue;
     }
     const timer = window.setTimeout(() => {
       beatTimers.delete(timer);
-      dispatchBeatEvent(planned.eventIndex);
+      dispatchBeatEvent(planned.eventIndex, planned.holdMs);
     }, planned.delayMs);
-    beatTimers.set(timer, planned.eventIndex);
+    beatTimers.set(timer, { eventIndex: planned.eventIndex, holdMs: planned.holdMs });
   }
 }
 
@@ -1292,7 +1298,7 @@ async function displayScore(loaded: LoadedScore, preserved?: ScoreViewState): Pr
   mostRecentChordIndex = null;
   elements.empty.classList.add("hidden");
   elements.scoreStage.classList.remove("hidden");
-  elements.tap.disabled = false;
+  elements.tap.disabled = midiFreePlay;
   renderParts();
 
   elements.osmd.replaceChildren();
@@ -2251,6 +2257,7 @@ async function auditionDown(token: string, index: number, midiPitches?: number[]
 }
 
 async function performDown(token: string, velocity = DEFAULT_VELOCITY): Promise<void> {
+  if (midiFreePlay) return;
   if (tapMode === "beat" && !token.startsWith("audition:")) {
     const shouldCountTap = Boolean(score) && !heldTokens.has(token);
     beatTapDown(token);
@@ -3079,21 +3086,18 @@ elements.telemetrySettings.addEventListener("keydown", (event) => {
   event.stopPropagation();
 });
 elements.announcementOk.addEventListener("click", closeAnnouncement);
-elements.announcementContent.addEventListener("click", (event) => {
+document.addEventListener("click", (event) => {
   const target = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
   if (!target) return;
-  event.preventDefault();
-  const href = safeAnnouncementLink(target.href);
+  const rawHref = target.getAttribute("href") ?? "";
+  if (!/^https?:\/\//i.test(rawHref)) return;
+  const href = safeAnnouncementLink(rawHref);
   if (!href) return;
-  if (isWebBuild()) {
-    window.open(href, "_blank", "noopener,noreferrer");
-    return;
-  }
-  void import("@tauri-apps/plugin-opener")
-    .then(({ openUrl }) => openUrl(href))
+  event.preventDefault();
+  void openExternalUrl(href)
     .catch((error: unknown) => {
-      console.warn("TapConductor could not open the announcement link.", error);
-      toast("The announcement link could not be opened.", "warning");
+      console.warn("TapConductor could not open the external link.", error);
+      toast("The link could not be opened.", "warning");
     });
 });
 elements.announcementOverlay.addEventListener("keydown", (event) => {
@@ -3665,6 +3669,8 @@ elements.midiOutput.addEventListener("change", async () => {
 });
 elements.tapMode.addEventListener("change", () => {
   tapMode = elements.tapMode.value === "beat" ? "beat" : "rhythm";
+  elements.legatoMode.checked = tapMode === "beat";
+  elements.legatoMode.dispatchEvent(new Event("change", { bubbles: true }));
   clearBeatTimers();
   void invokeSafe("set_tap_mode", { beat: tapMode === "beat" }).then(() => {
     persistedSettings.tapMode = tapMode;

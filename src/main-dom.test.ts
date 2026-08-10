@@ -107,6 +107,12 @@ test("iPad TAP copy is touch-specific and footer sliders use touch order", () =>
   assert.match(styles, /\.platform-ipados \.bottom-controls \.zoom-controls\s*{[^}]*border-right:\s*0;/s);
 });
 
+test("Stop disables score tapping until conducting mode is restored", () => {
+  assert.match(source, /elements\.tap\.disabled = midiFreePlay \|\| score === null;/);
+  assert.match(source, /async function performDown[\s\S]*?if \(midiFreePlay\) return;/);
+  assert.match(source, /elements\.tap\.disabled = midiFreePlay;/);
+});
+
 test("compact footer controls leave vertical room for slider labels", () => {
   const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 

@@ -604,6 +604,7 @@ function updateMidiFreePlayButton(): void {
     ? "Return to conducting the score"
     : "Play MIDI input directly";
   elements.panic.setAttribute("aria-label", elements.panic.title);
+  elements.tap.disabled = midiFreePlay || score === null;
   void syncMacosMenu();
 }
 
@@ -1297,7 +1298,7 @@ async function displayScore(loaded: LoadedScore, preserved?: ScoreViewState): Pr
   mostRecentChordIndex = null;
   elements.empty.classList.add("hidden");
   elements.scoreStage.classList.remove("hidden");
-  elements.tap.disabled = false;
+  elements.tap.disabled = midiFreePlay;
   renderParts();
 
   elements.osmd.replaceChildren();
@@ -2256,6 +2257,7 @@ async function auditionDown(token: string, index: number, midiPitches?: number[]
 }
 
 async function performDown(token: string, velocity = DEFAULT_VELOCITY): Promise<void> {
+  if (midiFreePlay) return;
   if (tapMode === "beat" && !token.startsWith("audition:")) {
     const shouldCountTap = Boolean(score) && !heldTokens.has(token);
     beatTapDown(token);

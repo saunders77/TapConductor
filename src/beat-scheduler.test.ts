@@ -24,9 +24,9 @@ test("fires the downbeat now and schedules written subdivisions from the last ta
 
   assert.deepEqual(plan, {
     events: [
-      { eventIndex: 1, delayMs: 0 },
-      { eventIndex: 2, delayMs: 300 },
-      { eventIndex: 3, delayMs: 450 },
+      { eventIndex: 1, delayMs: 0, holdMs: 250 },
+      { eventIndex: 2, delayMs: 300, holdMs: 250 },
+      { eventIndex: 3, delayMs: 450, holdMs: 250 },
     ],
     nextEventIndex: 4,
   });
@@ -57,9 +57,9 @@ test("keeps grace and principal events as separate moments at one written positi
   );
 
   assert.deepEqual(plan.events, [
-    { eventIndex: 0, delayMs: 0 },
-    { eventIndex: 1, delayMs: 0 },
-    { eventIndex: 2, delayMs: 0 },
+    { eventIndex: 0, delayMs: 0, holdMs: 250 },
+    { eventIndex: 1, delayMs: 0, holdMs: 250 },
+    { eventIndex: 2, delayMs: 0, holdMs: 250 },
   ]);
   assert.equal(plan.nextEventIndex, 3);
 });
@@ -75,10 +75,25 @@ test("uses the written beat length for subdivisions after the final beat marker"
   );
 
   assert.deepEqual(plan.events, [
-    { eventIndex: 0, delayMs: 0 },
-    { eventIndex: 1, delayMs: 200 },
+    { eventIndex: 0, delayMs: 0, holdMs: 250 },
+    { eventIndex: 1, delayMs: 200, holdMs: 250 },
   ]);
   assert.equal(plan.nextEventIndex, 2);
+});
+
+test("shortens a non-legato chord hold when its earliest note ends first", () => {
+  const plan = planBeatInterval(
+    [
+      { ...at(2), notes: [{ end: at(9, 4).absolute }, { end: at(3).absolute }] },
+      { ...at(3), notes: [{ end: at(4).absolute }] },
+    ],
+    0,
+    { ...at(2), beatType: 4 },
+    { ...at(3), beatType: 4 },
+    600,
+  );
+
+  assert.equal(plan.events[0]!.holdMs, 150);
 });
 
 test("counts in a full bar plus the elapsed half-bar before a pickup", () => {

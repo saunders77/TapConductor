@@ -734,7 +734,7 @@ let beatPlaying = false;
 let beatIndex = 0;
 let beatNextEventIndex = 0;
 let beatTimes: number[] = [];
-let beatTimers = new Map<number, number>();
+let beatTimers = new Map<number, { eventIndex: number; holdMs: number }>();
 let beatQueue: Promise<void> = Promise.resolve();
 let beatRunId = 0;
 let lastPressedBeatIndex: number | null = null;
@@ -746,9 +746,9 @@ function clearBeatTimers(): void {
 }
 
 function flushBeatTimers(): void {
-  const pending = [...beatTimers.values()].sort((left, right) => left - right);
+  const pending = [...beatTimers.values()].sort((left, right) => left.eventIndex - right.eventIndex);
   clearBeatTimers();
-  pending.forEach(dispatchBeatEvent);
+  pending.forEach(({ eventIndex, holdMs }) => dispatchBeatEvent(eventIndex, holdMs));
 }
 
 function updateTapButtonLabel(): void {
@@ -788,7 +788,7 @@ function resetBeatTap(): void {
   if (score) updatePosition();
 }
 
-function dispatchBeatEvent(index: number): void {
+function dispatchBeatEvent(index: number, holdMs: number): void {
   if (!score || index >= score.events.length) return;
   const runId = beatRunId;
   beatQueue = beatQueue.then(async () => {
@@ -798,7 +798,11 @@ function dispatchBeatEvent(index: number): void {
     updatePosition();
     const token = `beat-auto:${crypto.randomUUID()}`;
     await invokeSafe<void>("performance_input_down", { token, velocity: DEFAULT_VELOCITY });
-    await invokeSafe<void>("release_input", { token });
+    if (elements.legatoMode.checked) {
+      await invokeSafe<void>("release_input", { token });
+    } else {
+      window.setTimeout(() => void invokeSafe<void>("release_input", { token }), holdMs);
+    }
   }).catch(() => undefined);
 }
 
@@ -819,14 +823,14 @@ function scheduleBeatInterval(): void {
 
   for (const planned of plan.events) {
     if (planned.delayMs <= 0) {
-      dispatchBeatEvent(planned.eventIndex);
+      dispatchBeatEvent(planned.eventIndex, planned.holdMs);
       continue;
     }
     const timer = window.setTimeout(() => {
       beatTimers.delete(timer);
-      dispatchBeatEvent(planned.eventIndex);
+      dispatchBeatEvent(planned.eventIndex, planned.holdMs);
     }, planned.delayMs);
-    beatTimers.set(timer, planned.eventIndex);
+    beatTimers.set(timer, { eventIndex: planned.eventIndex, holdMs: planned.holdMs });
   }
 }
 
@@ -3665,6 +3669,8 @@ elements.midiOutput.addEventListener("change", async () => {
 });
 elements.tapMode.addEventListener("change", () => {
   tapMode = elements.tapMode.value === "beat" ? "beat" : "rhythm";
+  elements.legatoMode.checked = tapMode === "beat";
+  elements.legatoMode.dispatchEvent(new Event("change", { bubbles: true }));
   clearBeatTimers();
   void invokeSafe("set_tap_mode", { beat: tapMode === "beat" }).then(() => {
     persistedSettings.tapMode = tapMode;

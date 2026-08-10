@@ -12,6 +12,16 @@ export function isWebBuild(): boolean {
   return !isTauri;
 }
 
+export async function openExternalUrl(url: string): Promise<void> {
+  if (webRuntime) {
+    window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  const { openUrl } = await import("@tauri-apps/plugin-opener");
+  await openUrl(url);
+}
+
 export function setAppWindowTitle(fileName?: string): void {
   const title = fileName ? `TapConductor: ${fileName}` : "TapConductor";
   document.title = title;

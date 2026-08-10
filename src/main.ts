@@ -26,6 +26,7 @@ import {
   appInvoke as invoke,
   appListen as listen,
   isWebBuild,
+  openExternalUrl,
   openScoreDialog,
   setAppWindowTitle,
   type UnlistenFn,
@@ -248,7 +249,7 @@ app.innerHTML = `
         <div class="help-content">
           <section>
             <h3>Usage and crash data</h3>
-            <p>Telemetry is on by default. TapConductor sends pseudonymous application usage, coarse system and settings categories, and sanitized error summaries directly to PostHog. Uncheck the box below to stop telemetry. It never sends score contents or names, paths, MIDI messages, device names, precise location, or contact information.</p>
+            <p>Telemetry is opt-out. TapConductor sends anonymous application usage stats, coarse system and settings categories, and sanitized error summaries. Uncheck the box below to stop telemetry. It never sends personal info like score contents or names, paths, MIDI messages, device names, precise location, or contact information.</p>
             <label class="telemetry-choice"><input id="telemetry-toggle" type="checkbox" /> <span><b>Send anonymous crash and usage data to the developer to help improve TapConductor</b><small id="telemetry-status">Checking…</small></span></label>
           </section>
         </div>
@@ -3083,21 +3084,18 @@ elements.telemetrySettings.addEventListener("keydown", (event) => {
   event.stopPropagation();
 });
 elements.announcementOk.addEventListener("click", closeAnnouncement);
-elements.announcementContent.addEventListener("click", (event) => {
+document.addEventListener("click", (event) => {
   const target = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
   if (!target) return;
-  event.preventDefault();
-  const href = safeAnnouncementLink(target.href);
+  const rawHref = target.getAttribute("href") ?? "";
+  if (!/^https?:\/\//i.test(rawHref)) return;
+  const href = safeAnnouncementLink(rawHref);
   if (!href) return;
-  if (isWebBuild()) {
-    window.open(href, "_blank", "noopener,noreferrer");
-    return;
-  }
-  void import("@tauri-apps/plugin-opener")
-    .then(({ openUrl }) => openUrl(href))
+  event.preventDefault();
+  void openExternalUrl(href)
     .catch((error: unknown) => {
-      console.warn("TapConductor could not open the announcement link.", error);
-      toast("The announcement link could not be opened.", "warning");
+      console.warn("TapConductor could not open the external link.", error);
+      toast("The link could not be opened.", "warning");
     });
 });
 elements.announcementOverlay.addEventListener("keydown", (event) => {

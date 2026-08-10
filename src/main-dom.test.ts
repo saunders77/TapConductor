@@ -50,6 +50,15 @@ test("iPad TAP button is wider and its transport buttons use adjacent columns", 
   assert.match(styles, /\.platform-ipados #forward-button\s*{[^}]*grid-column:\s*4;/s);
 });
 
+test("compact footer controls leave vertical room for slider labels", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(styles, /@media \(max-width: 1100px\)[\s\S]*?\.performance-strip\s*{[^}]*grid-template-rows:\s*minmax\(92px, 1fr\) 46px;[^}]*padding:\s*4px [^;]* max\(4px, env\(safe-area-inset-bottom, 0px\)\)/s);
+  assert.match(styles, /\.bottom-controls\s*{[^}]*height:\s*46px;/s);
+  assert.match(styles, /\.bottom-controls \.range-field\s*{[^}]*gap:\s*0;[^}]*padding-block:\s*0;/s);
+  assert.match(styles, /\.bottom-controls \.zoom-controls\s*{[^}]*row-gap:\s*0;/s);
+});
+
 test("Apple header controls use platform-specific visual corrections", () => {
   const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 

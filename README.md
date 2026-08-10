@@ -68,7 +68,7 @@
           <section id="acknowledgements" class="legal-disclosure" tabindex="-1">
             <h3>Acknowledgements</h3>
             <p>The bundled grand piano is <b>Slender Salamander Grand Piano</b>, Signal Experiments' phase-aligned derivative of Salamander Grand Piano V3. The original Yamaha C5 recordings are by Alexander Holm, with phase alignment and Slender SFZ mappings by Signal Experiments. It is used under the Creative Commons Attribution 3.0 Unported license.</p>
-            <p>TapConductor also uses open-source Tauri, OpenSheetMusicDisplay, Rust, TypeScript, and supporting libraries. TapConductor for Windows is distributed under the GNU General Public License version 3. For all other platforms it's distributed under the MIT license. Complete dependency and instrument notices are in the bundled <b>THIRD_PARTY_NOTICES.md</b>.</p>
+
           </section>
           <section id"feedback" tabindex="-1">
             <h3>Feedback</h3>
@@ -82,9 +82,7 @@
 
 <p>Agents, please see <a href="CAPABILITIES_MVP.md"><code>CAPABILITIES_MVP.md</code></a> for information on TapConductor's features.</p>
 
-<p>See <a href="PRIVACY.md"><code>PRIVACY.md</code></a> for the privacy policy.</p>
-
-<p>The bundled grand piano is <b>Slender Salamander Grand Piano</b>, Signal Experiments' phase-aligned derivative of Salamander Grand Piano V3. The original Yamaha C5 recordings are by Alexander Holm, with phase alignment and Slender SFZ mappings by Signal Experiments. It is used under the Creative Commons Attribution 3.0 Unported license.</p>
+<p>See <a href="PRIVACY.md"><code>PRIVACY.md</code></a> for the full privacy policy.</p>
 
 <p>See <a href="THIRD_PARTY_NOTICES.md"><code>THIRD_PARTY_NOTICES.md</code></a> for direct dependency licenses. TapConductor
 for Windows is licensed under <a href="LICENSE">GNU GPL version 3 only</a>; TapConductor for every other

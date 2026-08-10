@@ -41,6 +41,14 @@ test("iPad performance UI suppresses browser gestures but leaves dialogs alone",
   assert.match(source, /target\.closest\('\[role="dialog"\]'\)/);
 });
 
+test("iPad score actions use tighter platform-specific top spacing", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(styles, /\.platform-ipados \.slice-controls\s*{[^}]*top:\s*15px;[^}]*row-gap:\s*0;/s);
+  assert.match(source, /AUDITION_PX_BELOW_HEADER = appleUiPlatform === "ipados" \? 15 : 20/);
+  assert.match(source, /START_HERE_PX_BELOW_AUDITION_BOTTOM = appleUiPlatform === "ipados" \? 0 : 12/);
+});
+
 test("iPad TAP button is wider and its transport buttons use adjacent columns", () => {
   const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 
@@ -53,10 +61,42 @@ test("iPad TAP button is wider and its transport buttons use adjacent columns", 
 test("iPad landscape widens TAP by 60 percent and keeps circular transports symmetric", () => {
   const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 
-  assert.match(styles, /@media \(max-width: 1100px\) and \(orientation: landscape\)[\s\S]*?\.platform-ipados \.performance-strip\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 44px minmax\(150px, 672px\) 44px minmax\(0, 1fr\);[^}]*column-gap:\s*10px;/s);
-  assert.match(styles, /@media \(max-width: 1100px\) and \(orientation: landscape\)[\s\S]*?\.platform-ipados \.tap-button\s*{[^}]*width:\s*min\(672px, 100%\);/s);
+  assert.match(styles, /@media \(orientation: landscape\)[\s\S]*?\.platform-ipados \.performance-strip\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 44px minmax\(150px, 672px\) 44px minmax\(0, 1fr\);[^}]*column-gap:\s*10px;/s);
+  assert.match(styles, /@media \(orientation: landscape\)[\s\S]*?\.platform-ipados \.tap-button\s*{[^}]*width:\s*min\(672px, 100%\);/s);
+  assert.doesNotMatch(styles, /@media \(max-width:\s*1100px\) and \(orientation:\s*landscape\)/);
   assert.match(styles, /\.transport\s*{[^}]*display:\s*grid;[^}]*place-items:\s*center;/s);
   assert.match(styles, /@media \(max-width: 1100px\)[\s\S]*?\.transport\s*{[^}]*width:\s*44px;[^}]*min-width:\s*44px;[^}]*height:\s*44px;[^}]*min-height:\s*44px;[^}]*aspect-ratio:\s*1;/s);
+});
+
+test("iPad landscape applies the compact footer at every device width", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+  const landscapeStart = styles.indexOf("@media (orientation: landscape)");
+  const landscapeEnd = styles.indexOf("\n}\n\n.platform-ipados .performance-strip", landscapeStart);
+  const landscape = styles.slice(landscapeStart, landscapeEnd + 2);
+
+  assert.match(landscape, /\.platform-ipados \.workspace\s*{[^}]*174px;/s);
+  assert.match(landscape, /\.platform-ipados \.performance-strip\s*{[^}]*grid-template-rows:\s*minmax\(92px, 1fr\) 46px;/s);
+  assert.match(landscape, /\.platform-ipados \.bottom-controls\s*{[^}]*grid-row:\s*2;[^}]*height:\s*46px;[^}]*display:\s*flex\s*!important;/s);
+  assert.match(landscape, /\.platform-ipados \.bottom-controls input\[type="range"\]\s*{[^}]*height:\s*28px;[^}]*margin:\s*0;/s);
+});
+
+test("iPad collapsed chrome retains only the compact transport footer", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(styles, /\.platform-ipados \.shell\.chrome-hidden \.workspace\s*{[^}]*96px[^}]*safe-area-inset-bottom/s);
+  assert.match(styles, /\.platform-ipados \.shell\.chrome-hidden \.performance-strip\s*{[^}]*display:\s*grid;[^}]*grid-template-rows:\s*92px;/s);
+  assert.match(styles, /\.platform-ipados \.shell\.chrome-hidden \.bottom-controls\s*{[^}]*display:\s*none\s*!important;/s);
+});
+
+test("iPad TAP copy is touch-specific and footer sliders use touch order", () => {
+  assert.match(source, /class="ipad-tap-help">Hold for longer notes\. Use multiple fingers separately to hold each chord its desired length\./);
+  assert.match(source, /appleUiPlatform === "ipados"\s*\? \[elements\.regularRoll\.parentElement, elements\.auditionRoll\.parentElement, elements\.volume\.parentElement, zoomControls\]/s);
+
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+  assert.match(styles, /\.platform-ipados \.tap-button \.keyboard-tap-help\s*{[^}]*display:\s*none;/s);
+  assert.match(styles, /\.platform-ipados \.tap-button \.ipad-tap-help\s*{[^}]*display:\s*block;/s);
+  assert.match(styles, /\.platform-ipados \.bottom-controls \.range-field:nth-child\(2\)\s*{[^}]*border-right:\s*1px solid #3b3c34;/s);
+  assert.match(styles, /\.platform-ipados \.bottom-controls \.zoom-controls\s*{[^}]*border-right:\s*0;/s);
 });
 
 test("compact footer controls leave vertical room for slider labels", () => {
@@ -78,6 +118,18 @@ test("Apple header controls use platform-specific visual corrections", () => {
   assert.match(styles, /\.control-deck > \.select-field\s*{[^}]*padding-inline:\s*2\.5px;/s);
   assert.match(styles, /\.platform-ipados \.control-deck > \.field\s*{[^}]*justify-content:\s*flex-start;/s);
   assert.match(source, /appleUiPlatform === "ipados" \? "─{10}" : "─{12}"/);
+});
+
+test("collapsed header toggle stays left and header fields shrink by content", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(styles, /\.shell\.chrome-hidden \.topbar\s*{[^}]*justify-content:\s*flex-start;/s);
+  assert.match(styles, /@media \(max-width: 1100px\)[\s\S]*?\.shell\.chrome-hidden \.topbar\s*{[^}]*padding-inline:\s*max\(12px, env\(safe-area-inset-left, 0px\)\)/s);
+  assert.match(styles, /\.control-deck\s*{[^}]*overflow:\s*hidden;/s);
+  assert.match(styles, /\.control-deck > \.select-field\s*{[^}]*flex-basis:\s*var\(--preferred-field-width, 92px\);[^}]*min-width:\s*0;/s);
+  assert.match(styles, /\.control-deck > \.range-field\s*{[^}]*flex:\s*0 1 130px;/s);
+  assert.match(source, /preferredSelectWidth = Math\.max\([\s\S]*?text\.length \* 7 \+ nativeControlAllowance,[\s\S]*?label\.length \* 7 \+ 8/s);
+  assert.doesNotMatch(source, /Math\.min\(206, text\.length/);
 });
 
 test("score action rows have a fixed fallback and are positioned before engraving", () => {

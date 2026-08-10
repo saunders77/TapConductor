@@ -317,9 +317,10 @@ app.innerHTML = `
         <button id="back-button" class="transport" type="button" disabled aria-label="Previous score event" aria-keyshortcuts="ArrowLeft"><span aria-hidden="true">‹</span></button>
         <button id="tap-button" class="tap-button" type="button" disabled aria-label="Tap to play the next score event" aria-keyshortcuts="Enter">
           <span>TAP</span>
-          <small>Tap <strong>any key A-Z</strong> to play.</small>
-          <small>Hold for longer notes.</small>
-          <small><strong>Spacebar</strong> to replay a chord.</small>
+          <small class="keyboard-tap-help">Tap <strong>any key A-Z</strong> to play.</small>
+          <small class="keyboard-tap-help">Hold for longer notes.</small>
+          <small class="keyboard-tap-help"><strong>Spacebar</strong> to replay a chord.</small>
+          <small class="ipad-tap-help">Hold for longer notes. Use multiple fingers separately to hold each chord its desired length.</small>
         </button>
         <button id="forward-button" class="transport" type="button" disabled aria-label="Next score event" aria-keyshortcuts="ArrowRight"><span aria-hidden="true">›</span></button>
         <div class="next-readout">
@@ -461,7 +462,10 @@ if (performanceStrip) {
     performanceStrip.prepend(footerBrand);
   }
   performanceStrip.append(bottomControls);
-  [elements.regularRoll.parentElement, elements.volume.parentElement, elements.auditionRoll.parentElement, zoomControls]
+  const footerControls = appleUiPlatform === "ipados"
+    ? [elements.regularRoll.parentElement, elements.auditionRoll.parentElement, elements.volume.parentElement, zoomControls]
+    : [elements.regularRoll.parentElement, elements.volume.parentElement, elements.auditionRoll.parentElement, zoomControls];
+  footerControls
     .filter((element): element is HTMLElement => element instanceof HTMLElement)
     .forEach((element) => bottomControls.append(element));
 }
@@ -1397,8 +1401,10 @@ async function refreshIncrementalGeometry(
   scheduleIncrementalScrollAheadCheck();
 }
 
-const AUDITION_PX_BELOW_HEADER = 20;
-const START_HERE_PX_BELOW_AUDITION_BOTTOM = 12;
+const AUDITION_PX_BELOW_HEADER = appleUiPlatform === "ipados" ? 15 : 20;
+// Coarse iPad controls are 36px tall. A zero edge gap is the closest
+// non-overlapping equivalent to moving the second row roughly 15px upward.
+const START_HERE_PX_BELOW_AUDITION_BOTTOM = appleUiPlatform === "ipados" ? 0 : 12;
 const SCORE_INK_SELECTOR = "path, text, line, polyline, polygon, circle, ellipse, use";
 
 function visibleScoreInkRects(): DOMRect[] {
@@ -2444,8 +2450,13 @@ async function attemptPersistedDeviceRestoration(): Promise<void> {
 
 function fitSelect(select: HTMLSelectElement): void {
   const text = select.selectedOptions[0]?.textContent ?? "";
+  const label = select.closest<HTMLElement>(".field")?.querySelector<HTMLElement>(":scope > span")?.textContent ?? "";
   const nativeControlAllowance = appleUiPlatform === "macos" ? 38 : 22;
-  const preferredSelectWidth = Math.max(38, Math.min(206, text.length * 7 + nativeControlAllowance));
+  const preferredSelectWidth = Math.max(
+    38,
+    text.length * 7 + nativeControlAllowance,
+    label.length * 7 + 8,
+  );
   const field = select.closest<HTMLElement>(".control-deck > .field");
   if (field) {
     field.classList.add("select-field");

@@ -11,18 +11,18 @@ test("places audition action tops 20 pixels below the header", () => {
   assert.equal(scoreActionTop(20), 20);
 });
 
-test("places start-here actions 20 pixels below the audition button bottoms", () => {
-  assert.equal(scoreActionRowGap(24, 24 + 20), 20);
+test("places start-here actions 12 pixels below the audition button bottoms", () => {
+  assert.equal(scoreActionRowGap(24, 24 + 12), 12);
 });
 
 test("moves high engraving down until it clears the fixed action rows", () => {
-  assert.equal(scoreContentTopShift(42, 88), 46);
+  assert.equal(scoreContentTopShift(42, 80), 38);
 });
 
 test("removes excess renderer whitespace without moving the action rows", () => {
-  assert.equal(scoreContentTopShift(112, 88), -24);
+  assert.equal(scoreContentTopShift(104, 80), -24);
 });
 
 test("ignores unavailable geometry while incremental rendering starts", () => {
-  assert.equal(scoreContentTopShift(Number.NaN, 88), 0);
+  assert.equal(scoreContentTopShift(Number.NaN, 80), 0);
 });

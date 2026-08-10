@@ -61,12 +61,19 @@ test("Apple header controls use platform-specific visual corrections", () => {
 
 test("score action rows have a fixed fallback and are positioned before engraving", () => {
   const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
-  assert.match(styles, /\.slice-controls\s*{[^}]*top:\s*20px;[^}]*row-gap:\s*20px;/s);
+  assert.match(styles, /\.slice-controls\s*{[^}]*top:\s*20px;[^}]*row-gap:\s*12px;/s);
 
   const positionCall = source.indexOf("positionScoreActionRows();");
   const engravingCall = source.indexOf("fitFirstSystemEngravingToActions(activeOsmd);");
   assert.ok(positionCall >= 0);
   assert.ok(engravingCall > positionCall);
+});
+
+test("desktop footer is 40 pixels shorter without shrinking its contents", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+  assert.match(styles, /\.workspace\s*{[^}]*grid-template-rows:\s*minmax\(0, 1fr\) 110px;/s);
+  assert.match(styles, /\.performance-strip\s*{[^}]*padding:\s*5px [^;]* max\(5px, env\(safe-area-inset-bottom, 0px\)\)/s);
+  assert.match(styles, /\.tap-button\s*{[^}]*height:\s*100px;/s);
 });
 
 test("the rhythm position highlight spans only the full score layer", () => {

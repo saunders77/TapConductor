@@ -19,7 +19,8 @@
 </p>
 
 ![TapConductor application screenshot](assets/screenshot.png) 
-<a href="https://www.youtube.com/shorts/d9GjJh0hbyc">Watch a quick demo video</a>
+
+[<img src="assets/video.png">](https://www.youtube.com/shorts/d9GjJh0hbyc)
 
 <h2>Supported files</h2>
 

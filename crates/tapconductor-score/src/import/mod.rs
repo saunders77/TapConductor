@@ -2,7 +2,7 @@
 mod midi;
 mod musicxml;
 
-use std::{fs, path::Path};
+use std::{fs::File, io::Read, path::Path};
 
 use crate::{ImportError, NormalizedScore};
 
@@ -14,6 +14,7 @@ pub struct ImportOptions {
     pub include_hidden_notes: bool,
     pub max_input_bytes: u64,
     pub max_decompressed_bytes: u64,
+    pub max_archive_entries: usize,
     pub max_xml_depth: usize,
     pub max_notes: usize,
     pub max_playback_measures: usize,
@@ -26,6 +27,7 @@ impl Default for ImportOptions {
             include_hidden_notes: false,
             max_input_bytes: 64 * 1024 * 1024,
             max_decompressed_bytes: 128 * 1024 * 1024,
+            max_archive_entries: 40_096,
             max_xml_depth: 256,
             max_notes: 1_000_000,
             max_playback_measures: 100_000,
@@ -38,10 +40,19 @@ pub fn import_path(
     options: &ImportOptions,
 ) -> Result<NormalizedScore, ImportError> {
     let path = path.as_ref();
-    let metadata = fs::metadata(path).map_err(|source| ImportError::Io {
+    let mut file = File::open(path).map_err(|source| ImportError::Io {
         path: path.to_owned(),
         source,
     })?;
+    let metadata = file.metadata().map_err(|source| ImportError::Io {
+        path: path.to_owned(),
+        source,
+    })?;
+    if !metadata.is_file() {
+        return Err(ImportError::UnsupportedDocument(
+            "the selected path is not a regular file".to_owned(),
+        ));
+    }
     if metadata.len() > options.max_input_bytes {
         return Err(ImportError::InputTooLarge {
             limit_name: "input size",
@@ -49,10 +60,15 @@ pub fn import_path(
             limit: options.max_input_bytes,
         });
     }
-    let bytes = fs::read(path).map_err(|source| ImportError::Io {
-        path: path.to_owned(),
-        source,
-    })?;
+    let capacity = usize::try_from(metadata.len().min(options.max_input_bytes)).unwrap_or(0);
+    let mut bytes = Vec::with_capacity(capacity);
+    file.by_ref()
+        .take(options.max_input_bytes.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|source| ImportError::Io {
+            path: path.to_owned(),
+            source,
+        })?;
     import_bytes(&bytes, options)
 }
 

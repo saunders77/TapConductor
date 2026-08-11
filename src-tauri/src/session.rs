@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Michael Saunders
 use crate::dto::LoadedScoreDto;
-use std::{collections::BTreeSet, fs, path::PathBuf};
+use std::{collections::BTreeSet, fs::File, io::Read, path::PathBuf};
 use tapconductor_score::{ImportOptions, NormalizedScore, NoteAttack, Rational, TapEvent};
 
 pub struct ScoreSession {
@@ -15,8 +15,17 @@ pub struct ScoreSession {
 impl ScoreSession {
     pub fn load(path: PathBuf, generation: u64) -> Result<Self, String> {
         let options = ImportOptions::default();
-        let metadata = fs::metadata(&path)
+        let mut file = File::open(&path)
+            .map_err(|error| format!("Unable to open {}: {error}", path.display()))?;
+        let metadata = file
+            .metadata()
             .map_err(|error| format!("Unable to inspect {}: {error}", path.display()))?;
+        if !metadata.is_file() {
+            return Err(format!(
+                "The selected score is not a regular file: {}",
+                path.display()
+            ));
+        }
         if metadata.len() > options.max_input_bytes {
             return Err(format!(
                 "The selected score is {} bytes; the input limit is {} bytes.",
@@ -24,8 +33,18 @@ impl ScoreSession {
                 options.max_input_bytes
             ));
         }
-        let bytes = fs::read(&path)
+        let capacity = usize::try_from(metadata.len().min(options.max_input_bytes)).unwrap_or(0);
+        let mut bytes = Vec::with_capacity(capacity);
+        file.by_ref()
+            .take(options.max_input_bytes.saturating_add(1))
+            .read_to_end(&mut bytes)
             .map_err(|error| format!("Unable to read {}: {error}", path.display()))?;
+        if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > options.max_input_bytes {
+            return Err(format!(
+                "The selected score exceeds the input limit of {} bytes.",
+                options.max_input_bytes
+            ));
+        }
         let score = tapconductor_score::import_bytes(&bytes, &options)
             .map_err(|error| error.to_string())?;
         let active_parts = score.all_part_ids();

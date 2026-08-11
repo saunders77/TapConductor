@@ -28,9 +28,25 @@ pub(super) fn extract_mxl_musicxml(
     bytes: &[u8],
     options: &ImportOptions,
 ) -> Result<Vec<u8>, ImportError> {
+    let central_directory_entries = bytes
+        .windows(4)
+        .filter(|window| *window == b"PK\x01\x02")
+        .count();
+    if central_directory_entries > options.max_archive_entries {
+        return Err(ImportError::ResourceLimit {
+            kind: "compressed MusicXML archive entry count",
+            limit: options.max_archive_entries,
+        });
+    }
     let cursor = Cursor::new(bytes);
     let mut archive =
         ZipArchive::new(cursor).map_err(|error| ImportError::InvalidArchive(error.to_string()))?;
+    if archive.len() > options.max_archive_entries {
+        return Err(ImportError::ResourceLimit {
+            kind: "compressed MusicXML archive entry count",
+            limit: options.max_archive_entries,
+        });
+    }
 
     let container = read_zip_entry(
         &mut archive,

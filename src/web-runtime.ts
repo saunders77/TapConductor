@@ -57,6 +57,7 @@ type SinkAudioContext = AudioContext & {
 const DEFAULT_VELOCITY = 96;
 const ENABLE_WEB_MIDI_ID = "__enable_web_midi__";
 const NONE_AUDIO_OUTPUT_ID = "__none_mute__";
+const MAX_SCORE_INPUT_BYTES = 64 * 1024 * 1024;
 // Still far steeper than the held-note decay, but long enough for the
 // key-up tail to remain clearly audible instead of sounding abruptly muted.
 const WEB_RELEASE_SECONDS = 0.4;
@@ -526,6 +527,11 @@ export class WebRuntime {
   }
 
   private async loadFile(file: File): Promise<LoadedScore> {
+    if (file.size > MAX_SCORE_INPUT_BYTES) {
+      throw new Error(
+        `The selected score is ${file.size} bytes; the input limit is ${MAX_SCORE_INPUT_BYTES} bytes.`,
+      );
+    }
     return this.loadBytes(new Uint8Array(await file.arrayBuffer()), file.name);
   }
 

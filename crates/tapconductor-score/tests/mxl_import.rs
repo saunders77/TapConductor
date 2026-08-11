@@ -74,3 +74,22 @@ fn applies_decompressed_size_cap() {
         Err(ImportError::InputTooLarge { .. })
     ));
 }
+
+#[test]
+fn rejects_archives_with_excessive_entry_counts_before_parsing() {
+    let mut bytes = b"PK\x03\x04".to_vec();
+    for _ in 0..3 {
+        bytes.extend_from_slice(b"PK\x01\x02");
+    }
+    let options = ImportOptions {
+        max_archive_entries: 2,
+        ..ImportOptions::default()
+    };
+    assert!(matches!(
+        import_bytes(&bytes, &options),
+        Err(ImportError::ResourceLimit {
+            kind: "compressed MusicXML archive entry count",
+            limit: 2,
+        })
+    ));
+}

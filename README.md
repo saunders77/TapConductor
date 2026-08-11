@@ -17,7 +17,9 @@
   <h3><a href="https://github.com/saunders77/TapConductor/releases/download/TapConductor/v0.1.0_TapConductor_universal.dmg">⬇️ Download Mac installer v0.1.0_TapConductor_universal.dmg</a></h3>
   <h3><a href="https://github.com/saunders77/TapConductor/releases/download/TapConductor/v0.1.0_TapConductor_universal.dmg">⬇️ Download Windows installer v0.1.0_TapConductor_x64-setup.exe</a></h3>
 </p>
-<a href="https://www.youtube.com/shorts/d9GjJh0hbyc">![TapConductor application screenshot](assets/screenshot.png) Watch a quick demo video</a>
+
+![TapConductor application screenshot](assets/screenshot.png) 
+<a href="https://www.youtube.com/shorts/d9GjJh0hbyc">Watch a quick demo video</a>
 
 <h2>Supported files</h2>
 

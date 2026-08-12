@@ -3885,7 +3885,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-apple-audio-session"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "tauri",

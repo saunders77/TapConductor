@@ -1,6 +1,6 @@
 [package]
 name = "tapconductor-midi"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license-file.workspace = true
 description = "Platform-neutral MIDI input and output for TapConductor"

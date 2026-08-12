@@ -3680,7 +3680,7 @@ dependencies = [
 
 [[package]]
 name = "tapconductor-app"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "coremidi",
  "objc2-app-kit",
@@ -3702,7 +3702,7 @@ dependencies = [
 
 [[package]]
 name = "tapconductor-audio"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cpal",
  "windows 0.62.2",
@@ -3710,14 +3710,14 @@ dependencies = [
 
 [[package]]
 name = "tapconductor-latency-probe"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "tapconductor-audio",
 ]
 
 [[package]]
 name = "tapconductor-midi"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "coremidi",
  "midir",
@@ -3725,11 +3725,11 @@ dependencies = [
 
 [[package]]
 name = "tapconductor-performance"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "tapconductor-score"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "midly",
  "quick-xml 0.37.5",
@@ -3741,7 +3741,7 @@ dependencies = [
 
 [[package]]
 name = "tapconductor-web"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde_json",
  "tapconductor-score",

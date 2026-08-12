@@ -1,6 +1,6 @@
-# TapConductor
+# TapConductor interactive score player
 
-<p>I made TapConductor for musicians like me whose piano skills aren't good enough or who have disabilities. You can use it <strong>with</strong> or <strong>without</strong> a piano for:
+<p>TapConductor is an interactive score-playing app for musicians like me whose piano skills aren't good enough or who have disabilities. You can use it <strong>with</strong> or <strong>without</strong> a piano for:
   <ul>
     <li>Leading a rehearsal, especially choirs learning <strong>unaccompanied</strong> or <strong>accompanied</strong> music</li>
     <li>Accompanying other musicians in auditions or rehearsals</li>

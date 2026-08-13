@@ -328,7 +328,7 @@ app.innerHTML = `
       <div class="loading-card">
         <span class="loading-spinner" aria-hidden="true"></span>
         <strong id="loading-message">Starting audio…</strong>
-        <small>Please wait. Tapping and playback are unavailable.</small>
+        <small>Please wait.</small>
       </div>
     </div>
 

@@ -23,6 +23,8 @@ export type AppSettings = {
   chromeHidden: boolean;
   midiFreePlay: boolean;
   pianoShortcutPitch: number;
+  /** `system` follows the first supported language in navigator.languages. */
+  language: "system" | "en" | "zh-Hans" | "es" | "ja" | "de" | "fr" | "ko" | "pt-BR" | "it" | "ru" | "ar" | "tr";
 };
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -37,7 +39,12 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   chromeHidden: false,
   midiFreePlay: false,
   pianoShortcutPitch: 36,
+  language: "system",
 };
+
+const APP_LANGUAGES = new Set<AppSettings["language"]>([
+  "system", "en", "zh-Hans", "es", "ja", "de", "fr", "ko", "pt-BR", "it", "ru", "ar", "tr",
+]);
 
 type SettingsStorage = Pick<Storage, "getItem" | "setItem">;
 
@@ -92,6 +99,9 @@ export function loadAppSettings(storage: SettingsStorage): AppSettings {
         127,
         DEFAULT_APP_SETTINGS.pianoShortcutPitch,
       ),
+      language: typeof value.language === "string" && APP_LANGUAGES.has(value.language as AppSettings["language"])
+        ? value.language as AppSettings["language"]
+        : DEFAULT_APP_SETTINGS.language,
     };
   } catch {
     return { ...DEFAULT_APP_SETTINGS };

@@ -56,6 +56,7 @@ test("invalid or out-of-range persisted values fall back or clamp safely", () =>
     chromeHidden: 1,
     midiFreePlay: "yes",
     pianoShortcutPitch: 200,
+    language: "klingon",
   }));
   assert.deepEqual(loadAppSettings(storage), {
     ...DEFAULT_APP_SETTINGS,

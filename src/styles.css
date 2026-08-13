@@ -195,6 +195,11 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 .help-close { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 7px; background: #fff; cursor: pointer; font-size: 24px; line-height: 1; }.help-close:hover, .help-close:focus-visible { border-color: #75ffb3; background: #75ffb32e; outline: none; }
 .help-content { display: grid; gap: 16px; padding: 19px 0; }.help-content section { padding-left: 14px; border-left: 3px solid #75ffb3; }
 .help-content p + p { margin-top: 10px; }
+.language-setting { display: flex; align-items: center; gap: 16px; margin-top: 14px; padding: 12px 14px; border: 1px solid #d8d7cd; border-radius: 8px; background: #f8f7ef; }
+.language-setting > span { display: grid; flex: 1; gap: 2px; }
+.language-setting small { color: #64665d; line-height: 1.35; }
+.language-setting select { min-width: 180px; max-width: 48%; }
+[dir="rtl"] .help-content section { padding-left: 0; padding-right: 14px; border-left: 0; border-right: 3px solid #75ffb3; }
 .help-content ul { margin: 8px 0 0; padding-left: 22px; color: #5d5f56; font-size: 13px; line-height: 1.5; }
 .help-content li + li { margin-top: 4px; }
 .help-demo-links { margin-top: 8px !important; }

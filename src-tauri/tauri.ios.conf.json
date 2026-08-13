@@ -24,7 +24,19 @@
       "../LICENSING.md": "LICENSING.md",
       "../PRIVACY.md": "PRIVACY.md",
       "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
-      "apple/PrivacyInfo.xcprivacy": "PrivacyInfo.xcprivacy"
+      "apple/PrivacyInfo.xcprivacy": "PrivacyInfo.xcprivacy",
+      "apple/locales/en.lproj": "en.lproj",
+      "apple/locales/zh-Hans.lproj": "zh-Hans.lproj",
+      "apple/locales/es.lproj": "es.lproj",
+      "apple/locales/ja.lproj": "ja.lproj",
+      "apple/locales/de.lproj": "de.lproj",
+      "apple/locales/fr.lproj": "fr.lproj",
+      "apple/locales/ko.lproj": "ko.lproj",
+      "apple/locales/pt-BR.lproj": "pt-BR.lproj",
+      "apple/locales/it.lproj": "it.lproj",
+      "apple/locales/ru.lproj": "ru.lproj",
+      "apple/locales/ar.lproj": "ar.lproj",
+      "apple/locales/tr.lproj": "tr.lproj"
     },
     "icon": [
       "icons/icon.png",

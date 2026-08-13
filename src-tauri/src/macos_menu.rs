@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Michael Saunders
 use serde::Deserialize;
+use std::collections::HashMap;
 use tauri::AppHandle;
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -23,6 +24,8 @@ pub struct MacosMenuState {
     pub score_loaded: bool,
     pub can_replay: bool,
     pub header_footer_visible: bool,
+    #[serde(default)]
+    pub labels: HashMap<String, String>,
 }
 
 impl Default for MacosMenuState {
@@ -57,6 +60,7 @@ impl Default for MacosMenuState {
             score_loaded: false,
             can_replay: false,
             header_footer_visible: true,
+            labels: HashMap::new(),
         }
     }
 }
@@ -79,12 +83,13 @@ pub fn install(app: &AppHandle, state: &MacosMenuState) -> tauri::Result<()> {
         parent: &Submenu<tauri::Wry>,
         prefix: &str,
         choices: &[MacosMenuOption],
+        empty_label: &str,
     ) -> tauri::Result<()> {
         if choices.is_empty() {
             let empty = MenuItem::with_id(
                 app,
                 format!("macos-menu:{prefix}:empty"),
-                "None available",
+                empty_label,
                 false,
                 None::<&str>,
             )?;
@@ -105,6 +110,10 @@ pub fn install(app: &AppHandle, state: &MacosMenuState) -> tauri::Result<()> {
         Ok(())
     }
 
+    let label = |key: &str, fallback: &'static str| -> &str {
+        state.labels.get(key).map(String::as_str).unwrap_or(fallback)
+    };
+
     let menu = Menu::new(app)?;
 
     let application = Submenu::new(app, "TapConductor", true)?;
@@ -119,24 +128,24 @@ pub fn install(app: &AppHandle, state: &MacosMenuState) -> tauri::Result<()> {
     application.append(&PredefinedMenuItem::quit(app, None)?)?;
     menu.append(&application)?;
 
-    let file = Submenu::new(app, "File", true)?;
+    let file = Submenu::new(app, label("file", "File"), true)?;
     file.append(&MenuItem::with_id(
         app,
         "macos-menu:open-score",
-        "Open A Score…",
+        label("openScore", "Open A Score…"),
         true,
         Some("CmdOrCtrl+O"),
     )?)?;
     menu.append(&file)?;
 
-    let view = Submenu::new(app, "View", true)?;
+    let view = Submenu::new(app, label("view", "View"), true)?;
     view.append(&MenuItem::with_id(
         app,
         "macos-menu:toggle-header-footer",
         if state.header_footer_visible {
-            "Hide Header and Footer"
+            label("hideChrome", "Hide Header and Footer")
         } else {
-            "Show Header and Footer"
+            label("showChrome", "Show Header and Footer")
         },
         true,
         None::<&str>,
@@ -145,24 +154,24 @@ pub fn install(app: &AppHandle, state: &MacosMenuState) -> tauri::Result<()> {
 
     // There is deliberately no Edit menu. A score is performed and navigated,
     // not edited, so macOS' stock text-editing commands do not apply here.
-    let audio = Submenu::new(app, "Audio", true)?;
-    let audio_outputs = Submenu::new(app, "Audio Output", true)?;
-    append_choices(app, &audio_outputs, "audio-output", &state.audio_outputs)?;
+    let audio = Submenu::new(app, label("audio", "Audio"), true)?;
+    let audio_outputs = Submenu::new(app, label("audioOutput", "Audio Output"), true)?;
+    append_choices(app, &audio_outputs, "audio-output", &state.audio_outputs, label("noneAvailable", "None available"))?;
     audio.append(&audio_outputs)?;
-    let instruments = Submenu::new(app, "Instrument", true)?;
-    append_choices(app, &instruments, "instrument", &state.instruments)?;
+    let instruments = Submenu::new(app, label("instrument", "Instrument"), true)?;
+    append_choices(app, &instruments, "instrument", &state.instruments, label("noneAvailable", "None available"))?;
     audio.append(&instruments)?;
-    let midi_inputs = Submenu::new(app, "MIDI IN", true)?;
-    append_choices(app, &midi_inputs, "midi-input", &state.midi_inputs)?;
+    let midi_inputs = Submenu::new(app, label("midiIn", "MIDI IN"), true)?;
+    append_choices(app, &midi_inputs, "midi-input", &state.midi_inputs, label("noneAvailable", "None available"))?;
     audio.append(&midi_inputs)?;
-    let midi_outputs = Submenu::new(app, "MIDI OUT", true)?;
-    append_choices(app, &midi_outputs, "midi-output", &state.midi_outputs)?;
+    let midi_outputs = Submenu::new(app, label("midiOut", "MIDI OUT"), true)?;
+    append_choices(app, &midi_outputs, "midi-output", &state.midi_outputs, label("noneAvailable", "None available"))?;
     audio.append(&midi_outputs)?;
     audio.append(&PredefinedMenuItem::separator(app)?)?;
     audio.append(&MenuItem::with_id(
         app,
         "macos-menu:refresh-devices",
-        "Refresh Audio & MIDI Devices",
+        label("refresh", "Refresh Audio & MIDI Devices"),
         true,
         None::<&str>,
     )?)?;
@@ -170,7 +179,7 @@ pub fn install(app: &AppHandle, state: &MacosMenuState) -> tauri::Result<()> {
     audio.append(&CheckMenuItem::with_id(
         app,
         "macos-menu:toggle-legato",
-        "Legato",
+        label("legato", "Legato"),
         true,
         state.legato,
         None::<&str>,
@@ -178,21 +187,21 @@ pub fn install(app: &AppHandle, state: &MacosMenuState) -> tauri::Result<()> {
     audio.append(&CheckMenuItem::with_id(
         app,
         "macos-menu:toggle-midi-free-play",
-        "Play MIDI Input Directly",
+        label("playMidiDirect", "Play MIDI Input Directly"),
         true,
         state.midi_free_play,
         Some("CmdOrCtrl+Period"),
     )?)?;
-    let parts = Submenu::new(app, "Parts", state.score_loaded)?;
-    append_choices(app, &parts, "part", &state.parts)?;
+    let parts = Submenu::new(app, label("parts", "Parts"), state.score_loaded)?;
+    append_choices(app, &parts, "part", &state.parts, label("noneAvailable", "None available"))?;
     audio.append(&parts)?;
     menu.append(&audio)?;
 
-    let navigation = Submenu::new(app, "Navigation", true)?;
+    let navigation = Submenu::new(app, label("navigation", "Navigation"), true)?;
     navigation.append(&MenuItem::with_id(
         app,
         "macos-menu:tap",
-        "TAP",
+        label("tap", "TAP"),
         state.score_loaded,
         Some("Enter"),
     )?)?;
@@ -200,35 +209,35 @@ pub fn install(app: &AppHandle, state: &MacosMenuState) -> tauri::Result<()> {
     navigation.append(&MenuItem::with_id(
         app,
         "macos-menu:back",
-        "Back",
+        label("back", "Back"),
         state.score_loaded,
         Some("ArrowLeft"),
     )?)?;
     navigation.append(&MenuItem::with_id(
         app,
         "macos-menu:forward",
-        "Forward",
+        label("forward", "Forward"),
         state.score_loaded,
         Some("ArrowRight"),
     )?)?;
     navigation.append(&MenuItem::with_id(
         app,
         "macos-menu:replay",
-        "Play Last Chord",
+        label("replay", "Play Last Chord"),
         state.can_replay,
         Some("Space"),
     )?)?;
     navigation.append(&MenuItem::with_id(
         app,
         "macos-menu:beginning",
-        "Go to Beginning of Score",
+        label("beginning", "Go to Beginning of Score"),
         state.score_loaded,
         Some("CmdOrCtrl+ArrowLeft"),
     )?)?;
     menu.append(&navigation)?;
 
-    let settings = Submenu::new(app, "Settings", true)?;
-    let shortcut_note = Submenu::new(app, "Piano Key Shortcut Note", true)?;
+    let settings = Submenu::new(app, label("settings", "Settings"), true)?;
+    let shortcut_note = Submenu::new(app, label("shortcutNote", "Piano Key Shortcut Note"), true)?;
     const NOTE_NAMES: [&str; 12] = [
         "C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B",
     ];
@@ -238,7 +247,11 @@ pub fn install(app: &AppHandle, state: &MacosMenuState) -> tauri::Result<()> {
         if first_pitch > last_pitch {
             continue;
         }
-        let octave_menu = Submenu::new(app, format!("Octave {octave}"), true)?;
+        let octave_menu = Submenu::new(
+            app,
+            label("octave", "Octave {octave}").replace("{octave}", &octave.to_string()),
+            true,
+        )?;
         for pitch in first_pitch..=last_pitch {
             let note = NOTE_NAMES[(pitch % 12) as usize];
             octave_menu.append(&CheckMenuItem::with_id(
@@ -255,18 +268,18 @@ pub fn install(app: &AppHandle, state: &MacosMenuState) -> tauri::Result<()> {
     settings.append(&shortcut_note)?;
     menu.append(&settings)?;
 
-    let window = Submenu::new(app, "Window", true)?;
+    let window = Submenu::new(app, label("window", "Window"), true)?;
     window.append(&PredefinedMenuItem::minimize(app, None)?)?;
     window.append(&PredefinedMenuItem::fullscreen(app, None)?)?;
     window.append(&PredefinedMenuItem::separator(app)?)?;
     window.append(&PredefinedMenuItem::bring_all_to_front(app, None)?)?;
     menu.append(&window)?;
 
-    let help = Submenu::new(app, "Help", true)?;
+    let help = Submenu::new(app, label("help", "Help"), true)?;
     help.append(&MenuItem::with_id(
         app,
         "macos-menu:info",
-        "TapConductor Info",
+        label("info", "TapConductor Info"),
         true,
         Some("F1"),
     )?)?;

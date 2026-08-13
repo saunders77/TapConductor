@@ -52,7 +52,7 @@ export async function appListen<T>(
   return listen<T>(event, handler);
 }
 
-export async function openScoreDialog(): Promise<File | string | null> {
+export async function openScoreDialog(filterName = "Musical scores"): Promise<File | string | null> {
   if (!webRuntime) {
     const { open } = await import("@tauri-apps/plugin-dialog");
     return open({
@@ -60,7 +60,7 @@ export async function openScoreDialog(): Promise<File | string | null> {
       directory: false,
       pickerMode: "document",
       fileAccessMode: "copy",
-      filters: [{ name: "Musical scores", extensions: ["musicxml", "xml", "mxl", "mid", "midi"] }],
+      filters: [{ name: filterName, extensions: ["musicxml", "xml", "mxl", "mid", "midi"] }],
     });
   }
 

@@ -59,6 +59,14 @@ import {
   saveAppSettings,
   type DevicePreference,
 } from "./app-settings";
+import {
+  LANGUAGE_OPTIONS,
+  createLocalizer,
+  localizedEmptyStateHtml,
+  localizedHelpHtml,
+  localizeDom,
+  resolveLocale,
+} from "./i18n";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing #app");
@@ -69,6 +77,16 @@ const standaloneFingerUrl = (
 ).__TAPCONDUCTOR_FINGER_URL__;
 const fingerIconUrl = standaloneFingerUrl
   ?? new URL("../assets/finger transparent-background.png", import.meta.url).href;
+const persistedSettings = loadAppSettings(localStorage);
+const activeLocale = resolveLocale(persistedSettings.language);
+const i18n = createLocalizer(activeLocale);
+const { t } = i18n;
+document.documentElement.lang = activeLocale;
+document.documentElement.dir = activeLocale === "ar" ? "rtl" : "ltr";
+document.querySelector<HTMLMetaElement>('meta[name="description"]')?.setAttribute(
+  "content",
+  t("appDescription"),
+);
 
 app.innerHTML = `
   <div class="shell">
@@ -164,6 +182,10 @@ app.innerHTML = `
           <a href="#acknowledgements">Acknowledgements</a> - 
           <a href="#feedback">Feedback</a>
         </nav>
+        <label class="language-setting" for="app-language" title="Use the system language or choose a language for TapConductor.">
+          <span><b>Language</b><small>Use the system language or choose a language for TapConductor.</small></span>
+          <select id="app-language" aria-label="Language"></select>
+        </label>
         <div class="help-content">
           <section id="about" tabindex="-1"><h3>About TapConductor</h3>
             <p>I made TapConductor for musicians like me whose piano skills aren't good enough or who have disabilities. You can use it <strong>with</strong> or <strong>without</strong> a piano for:
@@ -226,7 +248,7 @@ app.innerHTML = `
             <p>The bundled grand piano is <b>Slender Salamander Grand Piano</b>, Signal Experiments' phase-aligned derivative of Salamander Grand Piano V3. The original Yamaha C5 recordings are by Alexander Holm, with phase alignment and Slender SFZ mappings by Signal Experiments. It is used under the Creative Commons Attribution 3.0 Unported license.</p>
             <p>TapConductor also uses open-source Tauri, OpenSheetMusicDisplay, Rust, TypeScript, and supporting libraries. TapConductor for Windows is distributed under the GNU General Public License version 3. For all other platforms it's distributed under the MIT license. Complete dependency and instrument notices are in the bundled <b>THIRD_PARTY_NOTICES.md</b>.</p>
           </section>
-          <section id"feedback" tabindex="-1">
+          <section id="feedback" tabindex="-1">
             <h3>Feedback</h3>
             <p>
               Please send me any issues, bugs, feature requests, or praise on <a href="https://github.com/saunders77/TapConductor/issues">TapConductor's GitHub page</a>. I'm excited to hear what you think! TapConductor is a part-time project so I might not be able to address everything. And feel free to contribute code and make a pull request yourself!
@@ -337,6 +359,12 @@ app.innerHTML = `
   </div>
 `;
 
+const localizedHelp = localizedHelpHtml(activeLocale, t);
+if (localizedHelp) document.querySelector<HTMLElement>(".help-content")!.innerHTML = localizedHelp;
+const localizedEmpty = localizedEmptyStateHtml(activeLocale, t);
+if (localizedEmpty) document.getElementById("empty-state")!.innerHTML = localizedEmpty;
+localizeDom(app, i18n);
+
 // Keep the header actions in one layout container so the control deck cannot
 // overlap the score button or status indicator as the window is resized.
 const topbar = document.querySelector<HTMLElement>(".topbar");
@@ -356,6 +384,7 @@ const elements = {
   helpOverlay: byId("help-overlay"),
   helpClose: byId<HTMLButtonElement>("help-close"),
   helpDone: byId<HTMLButtonElement>("help-done"),
+  language: byId<HTMLSelectElement>("app-language"),
   helpDemoChoirOpen: byId<HTMLAnchorElement>("help-demo-choir-open"),
   helpDemoPianoOpen: byId<HTMLAnchorElement>("help-demo-piano-open"),
   telemetrySettingsLink: byId<HTMLAnchorElement>("telemetry-settings-link"),
@@ -414,6 +443,12 @@ const elements = {
   forward: byId<HTMLButtonElement>("forward-button"),
   toasts: byId("toast-region"),
 };
+
+for (const option of LANGUAGE_OPTIONS) {
+  const label = option.value === "system" ? t("systemDefault") : option.label;
+  elements.language.add(new Option(label, option.value));
+}
+elements.language.value = persistedSettings.language;
 
 const shell = document.querySelector<HTMLElement>(".shell");
 
@@ -482,7 +517,6 @@ let score: LoadedScore | null = null;
 let cursorIndex = 0;
 let highlightIndex = 0;
 let mostRecentChordIndex: number | null = null;
-const persistedSettings = loadAppSettings(localStorage);
 let zoom = persistedSettings.zoomPercent / 100;
 const ZOOM_STEPS = [50, 75, 90, 100, 110, 125, 150, 175];
 let osmd: OpenSheetMusicDisplay | null = null;
@@ -557,6 +591,7 @@ type MacosMenuState = {
   scoreLoaded: boolean;
   canReplay: boolean;
   headerFooterVisible: boolean;
+  labels: Record<string, string>;
 };
 
 function menuOptions(
@@ -584,6 +619,16 @@ function macosMenuState(): MacosMenuState {
     scoreLoaded: score !== null,
     canReplay: mostRecentChordIndex !== null,
     headerFooterVisible: !shell?.classList.contains("chrome-hidden"),
+    labels: {
+      noneAvailable: t("menuNoneAvailable"), file: t("menuFile"), openScore: t("menuOpenScore"),
+      view: t("menuView"), hideChrome: t("hideChrome"), showChrome: t("showChrome"),
+      audio: t("audio"), audioOutput: t("menuAudioOutput"), instrument: t("menuInstrument"),
+      midiIn: t("midiIn"), midiOut: t("midiOut"), refresh: t("menuRefresh"), legato: t("legato"),
+      playMidiDirect: t("playMidiDirect"), parts: t("parts"), navigation: t("menuNavigation"),
+      tap: t("tap"), back: t("menuBack"), forward: t("menuForward"), replay: t("menuReplay"),
+      beginning: t("menuBeginning"), settings: t("menuSettings"), shortcutNote: t("menuShortcutNote"),
+      octave: t("menuOctave"), window: t("menuWindow"), help: t("menuHelp"), info: t("menuInfo"),
+    },
   };
 }
 
@@ -601,8 +646,8 @@ function updateMidiFreePlayButton(): void {
   elements.panic.setAttribute("aria-pressed", String(midiFreePlay));
   elements.panic.textContent = midiFreePlay ? "☟" : "■";
   elements.panic.title = midiFreePlay
-    ? "Return to conducting the score"
-    : "Play MIDI input directly";
+    ? t("returnConducting")
+    : t("playMidiDirect");
   elements.panic.setAttribute("aria-label", elements.panic.title);
   elements.tap.disabled = midiFreePlay || score === null;
   void syncMacosMenu();
@@ -651,7 +696,7 @@ async function toggleMidiFreePlay(): Promise<void> {
   persistedSettings.midiFreePlay = midiFreePlay;
   persistSettings();
   updateMidiFreePlayButton();
-  toast(midiFreePlay ? "Direct MIDI play on." : "Following the score again.", "info");
+  toast(midiFreePlay ? t("directMidiOn") : t("followingAgain"), "info");
   if (tapMode === "beat") resetBeatTap();
 }
 const pendingDowns = new Map<string, Promise<void>>();
@@ -757,16 +802,18 @@ function updateTapButtonLabel(): void {
   const label = elements.tap.querySelector("span");
   if (!label) return;
   if (tapMode === "rhythm") {
-    label.textContent = "TAP";
+    label.textContent = t("tap");
   } else if (!beatPlaying) {
-    label.textContent = beatCounted === 0 ? "COUNT IN" : `COUNT ${beatCounted}/${beatCountRequired}`;
+    label.textContent = beatCounted === 0
+      ? t("countIn")
+      : t("count", { current: beatCounted, total: beatCountRequired });
   } else if (lastPressedBeatIndex !== null && score?.beats[lastPressedBeatIndex]) {
     const beat = score.beats[lastPressedBeatIndex]!;
-    label.textContent = `BEAT ${beat.beatIndex + 1}/${beat.beatsInMeasure}`;
+    label.textContent = t("beatCount", { current: beat.beatIndex + 1, total: beat.beatsInMeasure });
   } else {
-    label.textContent = "READY";
+    label.textContent = t("ready").toLocaleUpperCase(activeLocale);
   }
-  elements.tap.setAttribute("aria-label", `${label.textContent}. Play the next score event.`);
+  elements.tap.setAttribute("aria-label", `${label.textContent}. ${t("playNextEvent")}`);
 }
 
 function resetBeatTap(): void {
@@ -865,7 +912,7 @@ const displayedErrorToasts = new Map<string, HTMLElement>();
 const displayedScoreWarningGroups = new Set<HTMLElement>();
 
 const INACTIVE_AUDIO_ERROR =
-  "Audio is suspended while TapConductor is inactive. Reload devices from the AUDIO menu.";
+  t("inactiveAudio");
 
 function dismissErrorToast(message: string): void {
   const item = displayedErrorToasts.get(message);
@@ -889,7 +936,7 @@ function toast(message: string, kind: "info" | "warning" | "error" = "info"): vo
   const dismiss = document.createElement("button");
   dismiss.type = "button";
   dismiss.className = "toast-dismiss";
-  dismiss.setAttribute("aria-label", "Dismiss notification");
+  dismiss.setAttribute("aria-label", t("dismissNotification"));
   dismiss.textContent = "×";
   const remove = (): void => {
     item.remove();
@@ -967,7 +1014,7 @@ midiFreePlay = persistedSettings.midiFreePlay;
 elements.instrument.value = persistedSettings.instrument;
 elements.tapMode.value = tapMode;
 elements.legatoMode.checked = persistedSettings.legato;
-elements.legatoValue.textContent = persistedSettings.legato ? "On" : "Off";
+elements.legatoValue.textContent = persistedSettings.legato ? t("on") : t("off");
 elements.volume.value = String(persistedSettings.volumePercent);
 elements.volumeValue.value = `${persistedSettings.volumePercent}%`;
 elements.regularRoll.value = String(persistedSettings.tapRollMs);
@@ -980,18 +1027,18 @@ shell?.classList.toggle("chrome-hidden", persistedSettings.chromeHidden);
 elements.chromeToggle.setAttribute("aria-expanded", String(!persistedSettings.chromeHidden));
 elements.chromeToggle.setAttribute(
   "aria-label",
-  persistedSettings.chromeHidden ? "Show header and footer" : "Hide header and footer",
+  persistedSettings.chromeHidden ? t("showChrome") : t("hideChrome"),
 );
 elements.chromeToggle.title = persistedSettings.chromeHidden
-  ? "Show header and footer"
-  : "Hide header and footer";
+  ? t("showChrome")
+  : t("hideChrome");
 updateMidiFreePlayButton();
 
 function describeEvent(event: TapEventDto | undefined): { title: string; detail: string } {
-  if (!event) return { title: "End of score", detail: "—" };
+  if (!event) return { title: t("endScore"), detail: "—" };
   const pitches = event.notes.map((note) => noteName(note.midiPitch));
-  const title = pitches.length === 1 ? pitches[0]! : `${pitches.length}-note chord`;
-  return { title, detail: `Measure ${event.measureNumber} · ${pitches.join("  ")}` };
+  const title = pitches.length === 1 ? pitches[0]! : t("noteChord", { count: pitches.length });
+  return { title, detail: `${t("measure", { number: event.measureNumber })} · ${pitches.join("  ")}` };
 }
 
 function updatePosition(): void {
@@ -1002,7 +1049,10 @@ function updatePosition(): void {
   elements.positionDetail.textContent = current.detail;
   elements.nextTitle.textContent = next.title;
   elements.nextDetail.textContent = next.detail;
-  elements.scoreStatus.textContent = `Score position ${cursorIndex + 1} of ${score.events.length}. ${current.detail}. ${current.title}. Next: ${next.title}.`;
+  elements.scoreStatus.textContent = t("scorePosition", {
+    current: cursorIndex + 1, total: score.events.length, detail: current.detail,
+    title: current.title, next: next.title,
+  });
   elements.back.disabled = cursorIndex <= 0;
   elements.forward.disabled = cursorIndex >= score.events.length - 1;
   const activeGeneration = score.generation;
@@ -1043,7 +1093,7 @@ function reportIncrementalRenderError(error: unknown): void {
   const message = error instanceof Error ? error.message : String(error);
   if (message === incrementalRenderError) return;
   incrementalRenderError = message;
-  toast(`More notation could not be rendered: ${message}`, "error");
+  toast(t("moreNotationFailed", { message }), "error");
 }
 
 function updateVisualPosition(follow = true): void {
@@ -1151,11 +1201,11 @@ function scoreFileFormat(source: File | string): ScoreTelemetryContext["fileForm
 }
 
 async function chooseScore(): Promise<void> {
-  const path = await openScoreDialog();
+  const path = await openScoreDialog(t("musicalScores"));
   if (!path) return;
   await loadScore(
     () => invokeSafe<LoadedScore>("load_score", { path }, false),
-    "Loading score…",
+    t("loadingScore"),
     { sourceKind: "user_file", fileFormat: scoreFileFormat(path) },
   );
 }
@@ -1163,7 +1213,7 @@ async function chooseScore(): Promise<void> {
 async function loadDemoScore(kind: "choir" | "piano"): Promise<void> {
   await loadScore(
     () => invokeSafe<LoadedScore>("load_demo_score", { kind }, false),
-    `Loading demo ${kind} score…`,
+    t("loadingDemo", { kind: kind === "choir" ? t("choir") : t("piano") }),
     { sourceKind: "bundled_demo", fileFormat: "mxl" },
   );
 }
@@ -1217,7 +1267,7 @@ async function loadScore(
     // unresponsive file picker.
     if (loaded) {
       const message = error instanceof Error ? error.message : String(error);
-      toast(`The score loaded, but its notation could not be displayed: ${message}`, "error");
+      toast(t("notationDisplayFailed", { message }), "error");
     }
     telemetry.capture("score_loaded", {
       source_kind: telemetryContext.sourceKind,
@@ -1237,7 +1287,7 @@ async function loadScore(
       operation: loaded ? "display_score" : "load_score",
       context: { source_kind: telemetryContext.sourceKind, file_format: telemetryContext.fileFormat },
     });
-    setStatus("fault", "Score load failed");
+    setStatus("fault", t("scoreLoadFailed"));
   } finally {
     loadButtons.forEach((button) => {
       button.disabled = false;
@@ -1352,7 +1402,7 @@ async function displayScore(loaded: LoadedScore, preserved?: ScoreViewState): Pr
   if (scorePerformance) {
     console.info("TapConductor score display performance", { ...scorePerformance });
   }
-  setStatus("ready", "Ready");
+  setStatus("ready", t("ready"));
   showScoreWarnings(loaded.warnings);
 }
 
@@ -1673,7 +1723,7 @@ function renderMidiRoll(events: TapEventDto[]): void {
       noteButton.className = "midi-note";
       noteButton.textContent = noteName(note.midiPitch);
       noteButton.tabIndex = -1;
-      noteButton.setAttribute("aria-label", `Measure ${event.measureNumber}: Play note ${noteName(note.midiPitch)}`);
+    noteButton.setAttribute("aria-label", `${t("measure", { number: event.measureNumber })}: ${t("playNote", { note: noteName(note.midiPitch) })}`);
       installAuditionHandlers(noteButton, () => event.index, [note.midiPitch]);
       notes.append(noteButton);
     }
@@ -2061,10 +2111,10 @@ function buildScoreTargets(renderedThroughMeasure: number): { visualSteps: numbe
     noteButton.style.width = `${Math.max(18, group.right - group.left + 12)}px`;
     noteButton.style.height = `${Math.max(18, group.bottom - group.top + 12)}px`;
     const event = activeScore.events[group.resolveIndex()];
-    const measurePrefix = event ? `Measure ${event.measureNumber}: ` : "";
+    const measurePrefix = event ? `${t("measure", { number: event.measureNumber })}: ` : "";
     noteButton.title = midiPitches.length > 1
-      ? `${measurePrefix}Play this staff chord`
-      : `${measurePrefix}Play single note ${noteName(midiPitches[0]!)}`;
+      ? `${measurePrefix}${t("playChord")}`
+      : `${measurePrefix}${t("playNote", { note: noteName(midiPitches[0]!) })}`;
     noteButton.setAttribute("aria-label", noteButton.title);
     installAuditionHandlers(noteButton, group.resolveIndex, midiPitches);
     targetFragment.append(noteButton);
@@ -2143,7 +2193,7 @@ function createSliceControls(resolveIndex: () => number, measureNumber: string):
   play.type = "button";
   play.className = "slice-action play-chord";
   play.tabIndex = -1;
-  play.title = `Measure ${measureNumber}: Play single chord`;
+  play.title = t("measurePlayChord", { number: measureNumber });
   play.setAttribute("aria-label", play.title);
   play.append(createSoundIcon());
   installAuditionHandlers(play, resolveIndex);
@@ -2152,7 +2202,7 @@ function createSliceControls(resolveIndex: () => number, measureNumber: string):
   start.type = "button";
   start.className = "slice-action start-here";
   start.tabIndex = -1;
-  start.title = `Measure ${measureNumber}: Start here`;
+  start.title = t("measureStart", { number: measureNumber });
   start.setAttribute("aria-label", start.title);
   start.append(createStartIcon());
   const reposition = (event: Event): void => {
@@ -2310,8 +2360,8 @@ function renderParts(): void {
   if (!score) return;
   const enabledParts = score.parts.filter((part) => part.enabled).length;
   elements.partsValue.textContent = enabledParts === score.parts.length
-    ? "All parts"
-    : `${enabledParts} of ${score.parts.length}`;
+    ? t("allParts")
+    : t("partsCount", { enabled: enabledParts, total: score.parts.length });
   elements.partsList.replaceChildren();
   score.parts.forEach((part) => {
     const label = document.createElement("label");
@@ -2320,7 +2370,7 @@ function renderParts(): void {
     const input = document.createElement("input");
     input.type = "checkbox";
     input.checked = part.enabled;
-    input.setAttribute("aria-label", `Staff ${part.name}`);
+    input.setAttribute("aria-label", t("staff", { name: part.name }));
     input.addEventListener("keydown", (event) => {
       if (event.key !== "Enter") return;
       event.preventDefault();
@@ -2355,13 +2405,13 @@ function renderParts(): void {
 function populateSelect(select: HTMLSelectElement, devices: DeviceDto[], offLabel?: string): void {
   select.replaceChildren();
   if (offLabel) select.add(new Option(offLabel, ""));
-  for (const device of devices) select.add(new Option(`${device.name}${device.isDefault ? " (default)" : ""}`, device.id));
+  for (const device of devices) select.add(new Option(`${device.name}${device.isDefault ? t("defaultSuffix") : ""}`, device.id));
   fitSelect(select);
 }
 
 function populateAudioSelect(devices: DeviceDto[]): void {
   elements.audioOutput.replaceChildren();
-  elements.audioOutput.add(new Option("None (Mute)", NONE_AUDIO_OUTPUT_VALUE));
+  elements.audioOutput.add(new Option(t("noneMute"), NONE_AUDIO_OUTPUT_VALUE));
   for (const option of audioDeviceOptions(devices)) {
     elements.audioOutput.add(new Option(option.label, option.value));
   }
@@ -2369,7 +2419,7 @@ function populateAudioSelect(devices: DeviceDto[]): void {
   const separator = new Option(separatorLabel, "");
   separator.disabled = true;
   elements.audioOutput.add(separator);
-  elements.audioOutput.add(new Option("↻ Reload audio & MIDI devices", RELOAD_AUDIO_SYSTEMS_VALUE));
+  elements.audioOutput.add(new Option(t("reloadDevices"), RELOAD_AUDIO_SYSTEMS_VALUE));
   const selectionStillExists = [...elements.audioOutput.options]
     .some((option) => option.value === selectedAudioDeviceId && !option.disabled);
   elements.audioOutput.value = selectionStillExists ? selectedAudioDeviceId : "";
@@ -2394,7 +2444,7 @@ async function attemptPersistedDeviceRestoration(): Promise<void> {
   try {
     if (audioRestorePending && desiredAudioOutput) {
       const resolved = desiredAudioOutput.id === NONE_AUDIO_OUTPUT_VALUE
-        ? { id: NONE_AUDIO_OUTPUT_VALUE, name: "None (Mute)" }
+        ? { id: NONE_AUDIO_OUTPUT_VALUE, name: t("noneMute") }
         : resolveDevicePreference(desiredAudioOutput, availableAudioDevices);
       if (resolved) {
         try {
@@ -2496,14 +2546,14 @@ async function refreshDevices(): Promise<void> {
     availableAudioDevices = audioResult.value;
     populateAudioSelect(audioResult.value);
   } else {
-    errors.push(`Audio device discovery failed: ${String(audioResult.reason)}`);
+    errors.push(t("audioDiscoveryFailed", { message: String(audioResult.reason) }));
   }
   if (midiResult.status === "fulfilled") {
     const midiPorts = midiResult.value;
     availableMidiInputs = midiPorts.inputs;
     availableMidiOutputs = midiPorts.outputs;
-    populateSelect(elements.midiInput, midiPorts.inputs, "Off");
-    populateSelect(elements.midiOutput, midiPorts.outputs, "Off");
+    populateSelect(elements.midiInput, midiPorts.inputs, t("off"));
+    populateSelect(elements.midiOutput, midiPorts.outputs, t("off"));
     const selectedInputStillExists = midiPorts.inputs
       .some((device) => device.id === midiPorts.selectedInput);
     selectedMidiInputId = selectedInputStillExists ? midiPorts.selectedInput ?? "" : "";
@@ -2521,7 +2571,7 @@ async function refreshDevices(): Promise<void> {
     fitSelect(elements.midiInput);
     fitSelect(elements.midiOutput);
   } else {
-    errors.push(`MIDI device discovery failed: ${String(midiResult.reason)}`);
+    errors.push(t("midiDiscoveryFailed", { message: String(midiResult.reason) }));
   }
   if (diagnosticsResult.status === "fulfilled") {
     showDiagnostics(diagnosticsResult.value);
@@ -2529,11 +2579,11 @@ async function refreshDevices(): Promise<void> {
     if (isWebBuild()) {
       setStatus(
         diagnosticsResult.value.ready ? "ready" : "fault",
-        diagnosticsResult.value.ready ? "Browser audio ready" : "Audio needs attention",
+        diagnosticsResult.value.ready ? t("audioReady") : t("audioAttention"),
       );
     }
   } else {
-    errors.push(`Diagnostics failed: ${String(diagnosticsResult.reason)}`);
+    errors.push(t("diagnosticsFailed", { message: String(diagnosticsResult.reason) }));
   }
   if (errors.length > 0) {
     if (audioResult.status === "rejected") {
@@ -2554,10 +2604,10 @@ async function refreshDevices(): Promise<void> {
 
 async function reloadAudioSystems(): Promise<void> {
   elements.audioOutput.disabled = true;
-  setStatus("loading", "Reloading devices…");
+  setStatus("loading", t("reloadingDevices"));
   try {
     await invokeSafe("reload_audio_systems");
-    toast("Audio and MIDI devices reloaded.", "info");
+    toast(t("devicesReloaded"), "info");
   } finally {
     await refreshDevices();
     if (appleUiPlatform === "macos") {
@@ -2568,40 +2618,40 @@ async function reloadAudioSystems(): Promise<void> {
       await refreshDevices();
     }
     elements.audioOutput.disabled = false;
-    if (lastDiagnostics?.ready) setStatus("ready", "Audio ready");
-    else setStatus("fault", "Audio needs attention");
+    if (lastDiagnostics?.ready) setStatus("ready", t("audioReady"));
+    else setStatus("fault", t("audioAttention"));
   }
 }
 
 function showDiagnostics(diagnostics: DiagnosticsDto, renderDetails = !elements.diagnostics.classList.contains("hidden")): void {
   lastDiagnostics = diagnostics;
   if (diagnostics.ready) dismissErrorToast(INACTIVE_AUDIO_ERROR);
-  elements.diagnosticsValue.textContent = diagnostics.ready ? "Ready" : "Needs attention";
+  elements.diagnosticsValue.textContent = diagnostics.ready ? t("ready") : t("needsAttention");
   elements.diagnosticsButton.setAttribute(
     "aria-label",
-    `Audio diagnostics: ${diagnostics.ready ? "Ready" : "Needs attention"}`,
+    `${t("audioDiagnostics")}: ${diagnostics.ready ? t("ready") : t("needsAttention")}`,
   );
   // Health polling remains active during a performance, but a hidden panel
   // does not need twenty-plus DOM nodes rebuilt every second.
   if (!renderDetails) return;
   const rows: Array<[string, string]> = [
-    ["State", diagnostics.ready ? "Ready" : diagnostics.message ?? "Unavailable"],
-    ["Backend", diagnostics.audioBackend],
-    ["Mode", isWebBuild() ? "Browser Web Audio" : diagnostics.asioStream ? "ASIO low latency" : "Shared low latency"],
-    ["Output", diagnostics.outputDevice],
-    ["Format", `${diagnostics.sampleRate.toLocaleString()} Hz · ${diagnostics.bufferFrames} frames`],
-    ["Est. buffer", `${diagnostics.estimatedLatencyMs.toFixed(1)} ms`],
-    ["Active voices", String(diagnostics.activeVoices)],
-    ["Underruns", String(diagnostics.callbackUnderruns)],
-    ["Backend errors", String(diagnostics.backendErrors)],
-    ["Late commands", String(diagnostics.lateCommands)],
-    ["Invalid buffers", String(diagnostics.invalidAudioBuffers)],
-    ["Voice steals", String(diagnostics.voiceSteals)],
-    ["Queue overflow", String(diagnostics.queueOverflows)],
-    ["Direct WASAPI", isWebBuild() ? "Not available in browser" : diagnostics.directWasapiStream ? "Yes" : "No (CPAL fallback)"],
-    ["Native ASIO", isWebBuild() ? "Not available in browser" : diagnostics.asioStream ? "Yes" : "No"],
-    ["MIDI in", diagnostics.midiInput ?? "Off"],
-    ["MIDI out", diagnostics.midiOutput ?? "Off"],
+    [t("state"), diagnostics.ready ? t("ready") : diagnostics.message ?? t("unavailable")],
+    [t("backend"), diagnostics.audioBackend],
+    [t("mode"), isWebBuild() ? "Browser Web Audio" : diagnostics.asioStream ? "ASIO low latency" : "Shared low latency"],
+    [t("output"), diagnostics.outputDevice],
+    [t("format"), `${diagnostics.sampleRate.toLocaleString(activeLocale)} Hz · ${diagnostics.bufferFrames} frames`],
+    [t("estimatedBuffer"), `${diagnostics.estimatedLatencyMs.toFixed(1)} ms`],
+    [t("activeVoices"), String(diagnostics.activeVoices)],
+    [t("underruns"), String(diagnostics.callbackUnderruns)],
+    [t("backendErrors"), String(diagnostics.backendErrors)],
+    [t("lateCommands"), String(diagnostics.lateCommands)],
+    [t("invalidBuffers"), String(diagnostics.invalidAudioBuffers)],
+    [t("voiceSteals"), String(diagnostics.voiceSteals)],
+    [t("queueOverflow"), String(diagnostics.queueOverflows)],
+    [t("directWasapi"), isWebBuild() ? t("notBrowser") : diagnostics.directWasapiStream ? t("yes") : `No (CPAL fallback)`],
+    [t("nativeAsio"), isWebBuild() ? t("notBrowser") : diagnostics.asioStream ? t("yes") : t("no")],
+    [t("midiIn"), diagnostics.midiInput ?? t("off")],
+    [t("midiOut"), diagnostics.midiOutput ?? t("off")],
   ];
   if (lastUiNativeRoundTripMs !== null) {
     const callbackPeriodMs = diagnostics.sampleRate > 0
@@ -2652,7 +2702,7 @@ function showDiagnostics(diagnostics: DiagnosticsDto, renderDetails = !elements.
   }
   elements.diagnostics.replaceChildren();
   const heading = document.createElement("h3");
-  heading.textContent = "Live diagnostics";
+  heading.textContent = t("liveDiagnostics");
   elements.diagnostics.append(heading);
   for (const [key, value] of rows) {
     const row = document.createElement("div");
@@ -2699,8 +2749,8 @@ async function refreshDiagnostics(): Promise<void> {
   } catch {
     telemetry.recordError({ errorCode: "diagnostics.unavailable", component: "audio", operation: "diagnostics" });
     elements.diagnosticsButton.classList.add("not-ready");
-    elements.diagnosticsValue.textContent = "Unavailable";
-    elements.diagnosticsButton.setAttribute("aria-label", "Audio diagnostics: Unavailable");
+    elements.diagnosticsValue.textContent = t("unavailable");
+    elements.diagnosticsButton.setAttribute("aria-label", `${t("audioDiagnostics")}: ${t("unavailable")}`);
   }
 }
 
@@ -2721,7 +2771,7 @@ async function installListeners(): Promise<void> {
         if (payload.playedIndex !== undefined) mostRecentChordIndex = payload.playedIndex;
         if (replayWasUnavailable && mostRecentChordIndex !== null) void syncMacosMenu();
       }
-      if (payload.type === "ended") toast("End of score", "info");
+      if (payload.type === "ended") toast(t("endScore"), "info");
       updatePosition();
     }),
     listen<DiagnosticsDto>("audio-diagnostics", ({ payload }) => showDiagnostics(payload)),
@@ -2770,12 +2820,12 @@ function syncTelemetryControls(): void {
   elements.telemetryToggle.disabled = !configured;
   elements.telemetryToggle.checked = configured && consent === "enabled";
   elements.telemetryStatus.textContent = !configured
-    ? "Not configured in this build"
+    ? t("telemetryNotConfigured")
     : consent === "enabled"
-      ? "On."
+      ? t("telemetryOn")
       : consent === "disabled"
-        ? "Off. No telemetry is sent."
-        : "No data is sent until you choose.";
+        ? t("telemetryOff")
+        : t("telemetryUnknown");
 }
 
 async function syncNativeTelemetryConsent(enabled: boolean): Promise<void> {
@@ -2889,6 +2939,11 @@ elements.open.addEventListener("click", () => void chooseScore());
 elements.emptyOpen.addEventListener("click", () => void chooseScore());
 elements.demoChoirOpen.addEventListener("click", () => void loadDemoScore("choir"));
 elements.demoPianoOpen.addEventListener("click", () => void loadDemoScore("piano"));
+elements.language.addEventListener("change", () => {
+  persistedSettings.language = elements.language.value as typeof persistedSettings.language;
+  persistSettings();
+  window.location.reload();
+});
 let helpPreviousFocus: HTMLElement | null = null;
 let telemetrySettingsPreviousFocus: HTMLElement | null = null;
 
@@ -3097,7 +3152,7 @@ document.addEventListener("click", (event) => {
   void openExternalUrl(href)
     .catch((error: unknown) => {
       console.warn("TapConductor could not open the external link.", error);
-      toast("The link could not be opened.", "warning");
+      toast(t("linkFailed"), "warning");
     });
 });
 elements.announcementOverlay.addEventListener("keydown", (event) => {
@@ -3445,8 +3500,8 @@ elements.chromeToggle.addEventListener("click", () => {
   if (!shell) return;
   const hidden = shell.classList.toggle("chrome-hidden");
   elements.chromeToggle.setAttribute("aria-expanded", String(!hidden));
-  elements.chromeToggle.setAttribute("aria-label", hidden ? "Show header and footer" : "Hide header and footer");
-  elements.chromeToggle.title = hidden ? "Show header and footer" : "Hide header and footer";
+  elements.chromeToggle.setAttribute("aria-label", hidden ? t("showChrome") : t("hideChrome"));
+  elements.chromeToggle.title = hidden ? t("showChrome") : t("hideChrome");
   persistedSettings.chromeHidden = hidden;
   persistSettings();
   closeAllPopovers(false);
@@ -3694,7 +3749,7 @@ elements.tapMode.addEventListener("change", () => {
 });
 elements.legatoMode.addEventListener("change", () => {
   const enabled = elements.legatoMode.checked;
-  elements.legatoValue.textContent = enabled ? "On" : "Off";
+  elements.legatoValue.textContent = enabled ? t("on") : t("off");
   void syncMacosMenu();
   void invokeSafe("set_legato_mode", { enabled }).then(() => {
     persistedSettings.legato = enabled;
@@ -3745,7 +3800,7 @@ function commitZoomPercent(percent: number): void {
   void restartIncrementalRendering(currentTarget).then(() => {
     updateVisualPosition();
   }).catch((error: unknown) => {
-    toast(`The score could not be resized: ${String(error)}`, "error");
+    toast(t("resizeFailed", { message: String(error) }), "error");
   });
 }
 
@@ -3811,7 +3866,7 @@ function scheduleIpadOrientationLayoutRefresh(): void {
     if (settledLandscape === lastIpadLandscape) return;
     lastIpadLandscape = settledLandscape;
     void refreshIpadOrientationLayout(settledLandscape).catch((error: unknown) => {
-      toast(`The score could not be realigned after rotation: ${String(error)}`, "error");
+      toast(t("rotationFailed", { message: String(error) }), "error");
     });
   }, 120);
 }
@@ -3830,15 +3885,15 @@ if (isWebBuild()) {
   document.documentElement.classList.add("web-build");
   document.getElementById("web-edition-badge")?.classList.remove("hidden");
   elements.instrument.replaceChildren(
-    new Option("Web piano", "piano", persistedSettings.instrument === "piano", persistedSettings.instrument === "piano"),
-    new Option("Synthesizer", "synth", persistedSettings.instrument === "synth", persistedSettings.instrument === "synth"),
+    new Option(t("webPiano"), "piano", persistedSettings.instrument === "piano", persistedSettings.instrument === "piano"),
+    new Option(t("synth"), "synth", persistedSettings.instrument === "synth", persistedSettings.instrument === "synth"),
   );
   fitSelect(elements.instrument);
-  document.getElementById("instrument-help")!.textContent =
-    "The browser edition includes a lightweight Web piano and synthesizer.";
+  const instrumentHelp = document.getElementById("instrument-help");
+  if (instrumentHelp) instrumentHelp.textContent = t("webInstrumentHelp");
   document.querySelector(".brand")?.setAttribute(
     "title",
-    "Browser edition: scores and performances remain on this device",
+    t("webPrivacyTitle"),
   );
   if (import.meta.env.PROD && location.protocol !== "file:" && "serviceWorker" in navigator) {
     window.addEventListener("load", () => {
@@ -3848,7 +3903,7 @@ if (isWebBuild()) {
 }
 
 void initializeApp().catch((error: unknown) => {
-  setStatus("fault", "Core unavailable");
+  setStatus("fault", t("coreUnavailable"));
   toast(String(error), "error");
 });
 window.setInterval(() => void refreshDiagnostics(), 1_000);

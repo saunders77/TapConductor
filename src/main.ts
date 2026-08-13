@@ -324,6 +324,14 @@ app.innerHTML = `
       </section>
     </div>
 
+    <div id="loading-overlay" class="loading-overlay" role="status" aria-live="polite" aria-atomic="true">
+      <div class="loading-card">
+        <span class="loading-spinner" aria-hidden="true"></span>
+        <strong id="loading-message">Starting audio…</strong>
+        <small>Please wait. Tapping and playback are unavailable.</small>
+      </div>
+    </div>
+
     <main class="workspace">
       <section class="score-panel" aria-label="Musical score">
         <div class="score-toolbar">
@@ -437,6 +445,8 @@ const elements = {
   announcementContent: byId("announcement-content"),
   announcementDismissPermanently: byId<HTMLInputElement>("announcement-dismiss-permanently"),
   announcementOk: byId<HTMLButtonElement>("announcement-ok"),
+  loadingOverlay: byId("loading-overlay"),
+  loadingMessage: byId("loading-message"),
   emptyOpen: byId<HTMLButtonElement>("empty-open"),
   demoChoirOpen: byId<HTMLButtonElement>("demo-choir-open"),
   demoPianoOpen: byId<HTMLButtonElement>("demo-piano-open"),
@@ -491,6 +501,35 @@ for (const option of LANGUAGE_OPTIONS) {
 elements.language.value = persistedSettings.language;
 
 const shell = document.querySelector<HTMLElement>(".shell");
+type BlockingWaitToken = symbol;
+const blockingWaits = new Map<BlockingWaitToken, string>();
+
+function isPlaybackBlocked(): boolean {
+  return blockingWaits.size > 0;
+}
+
+function syncBlockingWaitUi(): void {
+  const message = [...blockingWaits.values()].at(-1);
+  const blocked = message !== undefined;
+  elements.loadingOverlay.classList.toggle("hidden", !blocked);
+  if (message) elements.loadingMessage.textContent = message;
+  shell?.setAttribute("aria-busy", String(blocked));
+  syncModalIsolation();
+}
+
+function beginBlockingWait(message: string): BlockingWaitToken {
+  const token = Symbol(message);
+  blockingWaits.set(token, message);
+  syncBlockingWaitUi();
+  return token;
+}
+
+function endBlockingWait(token: BlockingWaitToken): void {
+  blockingWaits.delete(token);
+  syncBlockingWaitUi();
+}
+
+const startupWait = beginBlockingWait(t("startingAudio"));
 
 function isInsideDialog(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('[role="dialog"]') !== null;
@@ -521,7 +560,9 @@ function syncModalIsolation(): void {
   const activeDialog = visibleDialogs.at(-1) ?? null;
   [...shell.children].forEach((child) => {
     if (!(child instanceof HTMLElement)) return;
-    child.inert = activeDialog !== null && child !== activeDialog && child !== elements.toasts;
+    child.inert = isPlaybackBlocked()
+      ? child !== elements.loadingOverlay
+      : activeDialog !== null && child !== activeDialog && child !== elements.toasts;
   });
 }
 
@@ -981,6 +1022,7 @@ const INACTIVE_AUDIO_ERROR =
 const NATIVE_INACTIVE_AUDIO_ERROR =
   "Audio is suspended while TapConductor is inactive.";
 let nativeInactiveAudioToast: string | null = null;
+let audioRecoveryWait: BlockingWaitToken | null = null;
 
 function dismissErrorToast(message: string): void {
   const item = displayedErrorToasts.get(message);
@@ -1300,6 +1342,7 @@ async function loadScore(
   const totalLoadStarted = performance.now();
   dismissScoreWarningGroups();
   setStatus("loading", loadingMessage);
+  const wait = beginBlockingWait(loadingMessage);
   const loadButtons = [elements.open, elements.emptyOpen, elements.demoChoirOpen, elements.demoPianoOpen];
   loadButtons.forEach((button) => {
     button.disabled = true;
@@ -1366,6 +1409,7 @@ async function loadScore(
     loadButtons.forEach((button) => {
       button.disabled = false;
     });
+    endBlockingWait(wait);
   }
 }
 
@@ -2360,7 +2404,7 @@ app.addEventListener("click", (event) => {
 });
 
 async function auditionDown(token: string, index: number, midiPitches?: number[]): Promise<void> {
-  if (!score || heldTokens.has(token)) return;
+  if (isPlaybackBlocked() || !score || heldTokens.has(token)) return;
   heldTokens.add(token);
   const command = midiPitches === undefined ? "audition_event" : midiPitches.length === 1 ? "audition_note" : "audition_chord";
   const pending = invokeSafe<void>(command, {
@@ -2381,7 +2425,7 @@ async function auditionDown(token: string, index: number, midiPitches?: number[]
 }
 
 async function performDown(token: string, velocity = DEFAULT_VELOCITY): Promise<void> {
-  if (midiFreePlay) return;
+  if (isPlaybackBlocked() || midiFreePlay) return;
   if (tapMode === "beat" && !token.startsWith("audition:")) {
     const shouldCountTap = Boolean(score) && !heldTokens.has(token);
     beatTapDown(token);
@@ -2452,6 +2496,7 @@ function renderParts(): void {
     });
     input.addEventListener("change", async () => {
       if (!score) return;
+      const wait = beginBlockingWait(t("updatingScore"));
       const previousEvent = score.events[cursorIndex];
       const previousScrollLeft = elements.scoreScroll.scrollLeft;
       try {
@@ -2465,6 +2510,11 @@ function renderParts(): void {
         await invokeSafe("set_cursor", { generation: updated.generation, index: restoredIndex });
       } catch {
         input.checked = part.enabled;
+      } finally {
+        endBlockingWait(wait);
+        if (!elements.partsPopover.classList.contains("hidden")) {
+          window.requestAnimationFrame(() => elements.partsList.querySelector<HTMLInputElement>("input")?.focus());
+        }
       }
     });
     label.append(input, document.createTextNode(part.name));
@@ -2677,23 +2727,31 @@ async function refreshDevices(): Promise<void> {
 }
 
 async function reloadAudioSystems(): Promise<void> {
-  elements.audioOutput.disabled = true;
-  setStatus("loading", t("reloadingDevices"));
+  const wait = beginBlockingWait(t("reloadingDevices"));
   try {
-    await invokeSafe("reload_audio_systems");
-    toast(t("devicesReloaded"), "info");
-  } finally {
-    await refreshDevices();
-    if (appleUiPlatform === "macos") {
-      // CoreMIDI driver registry notifications can land after MIDIRestart has
-      // returned. Refresh once more after the native client teardown/rescan
-      // cycle so slower USB drivers also reach the menus without an app restart.
-      await new Promise((resolve) => window.setTimeout(resolve, 750));
-      await refreshDevices();
+    elements.audioOutput.disabled = true;
+    setStatus("loading", t("reloadingDevices"));
+    try {
+      await invokeSafe("reload_audio_systems");
+      toast(t("devicesReloaded"), "info");
+    } finally {
+      try {
+        await refreshDevices();
+        if (appleUiPlatform === "macos") {
+          // CoreMIDI driver registry notifications can land after MIDIRestart has
+          // returned. Refresh once more after the native client teardown/rescan
+          // cycle so slower USB drivers also reach the menus without an app restart.
+          await new Promise((resolve) => window.setTimeout(resolve, 750));
+          await refreshDevices();
+        }
+      } finally {
+        elements.audioOutput.disabled = false;
+        if (lastDiagnostics?.ready) setStatus("ready", t("audioReady"));
+        else setStatus("fault", t("audioAttention"));
+      }
     }
-    elements.audioOutput.disabled = false;
-    if (lastDiagnostics?.ready) setStatus("ready", t("audioReady"));
-    else setStatus("fault", t("audioAttention"));
+  } finally {
+    endBlockingWait(wait);
   }
 }
 
@@ -2851,13 +2909,24 @@ async function installListeners(): Promise<void> {
       updatePosition();
     }),
     listen<DiagnosticsDto>("audio-diagnostics", ({ payload }) => showDiagnostics(payload)),
+    listen<void>("audio-lifecycle-restoring", () => {
+      if (!audioRecoveryWait) audioRecoveryWait = beginBlockingWait(t("restoringAudio"));
+      setStatus("loading", t("restoringAudio"));
+    }),
     listen<string>("audio-lifecycle-error", ({ payload }) => {
+      if (audioRecoveryWait) endBlockingWait(audioRecoveryWait);
+      audioRecoveryWait = null;
       telemetry.recordError({ errorCode: "audio.lifecycle_error", component: "audio", operation: "lifecycle" });
       elements.diagnosticsButton.classList.add("not-ready");
+      setStatus("fault", t("audioAttention"));
       toast(`${payload} Reload devices from the AUDIO menu.`, "error");
     }),
     listen<void>("audio-lifecycle-restored", () => {
-      void refreshDiagnostics();
+      if (audioRecoveryWait) endBlockingWait(audioRecoveryWait);
+      audioRecoveryWait = null;
+      void refreshDiagnostics().then(() => {
+        setStatus(lastDiagnostics?.ready ? "ready" : "fault", lastDiagnostics?.ready ? t("audioReady") : t("audioAttention"));
+      });
     }),
     listen<BeatMidiInput>("beat-midi-input", ({ payload }) => {
       if (payload.type === "down") void performDown(payload.token, payload.velocity);
@@ -3398,6 +3467,7 @@ const setCursorIndex = async (index: number): Promise<void> => {
 };
 
 async function handlePianoShortcut(input: PianoShortcutInput): Promise<void> {
+  if (isPlaybackBlocked()) return;
   const replayToken = `piano-shortcut:${input.token}`;
   if (input.command === "replay") {
     if (input.pressed && mostRecentChordIndex !== null) {
@@ -3435,6 +3505,7 @@ function chooseMenuOption(
 }
 
 async function handleMacosMenuAction(id: string): Promise<void> {
+  if (isPlaybackBlocked()) return;
   if (!id.startsWith("macos-menu:")) return;
   const action = id.slice("macos-menu:".length);
   if (action === "open-score") {
@@ -3519,6 +3590,10 @@ function hasBlockingModal(): boolean {
 
 document.addEventListener("keydown", (event) => {
   if (event.defaultPrevented) return;
+  if (isPlaybackBlocked()) {
+    event.preventDefault();
+    return;
+  }
   if (event.code === "Escape" && hasBlockingModal()) return;
   const commandModifier = event.ctrlKey || event.metaKey;
   if (event.key === "F1" && !event.altKey && !commandModifier) {
@@ -3734,6 +3809,7 @@ function releaseAudioOutputFocus(): void {
 }
 
 async function applyAudioOutputSelection(requested: string): Promise<boolean> {
+  const wait = beginBlockingWait(t("changingAudioOutput"));
   const previous = selectedAudioDeviceId;
   try {
     await invokeSafe("set_audio_device", { id: requested }, {
@@ -3760,6 +3836,8 @@ async function applyAudioOutputSelection(requested: string): Promise<boolean> {
     elements.audioOutput.value = previous;
     fitSelect(elements.audioOutput);
     return false;
+  } finally {
+    endBlockingWait(wait);
   }
 }
 
@@ -4033,7 +4111,11 @@ if (isWebBuild()) {
   }
 }
 
-void initializeApp().catch((error: unknown) => {
+void initializeApp().then(() => {
+  setStatus(lastDiagnostics?.ready ? "ready" : "fault", lastDiagnostics?.ready ? t("audioReady") : t("audioAttention"));
+  endBlockingWait(startupWait);
+}).catch((error: unknown) => {
+  endBlockingWait(startupWait);
   setStatus("fault", t("coreUnavailable"));
   toast(String(error), "error");
 });

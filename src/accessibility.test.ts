@@ -47,7 +47,9 @@ test("global performance commands work regardless of focused app control", () =>
 
 test("modal and score navigation manage focus without enormous tab sequences", () => {
   assert.match(source, /function syncModalIsolation/);
-  assert.match(source, /child\.inert = activeDialog !== null/);
+  assert.match(source, /child\.inert = isPlaybackBlocked\(\)/);
+  assert.match(source, /child !== elements\.loadingOverlay/);
+  assert.match(source, /activeDialog !== null && child !== activeDialog/);
   assert.match(source, /const SCORE_ACTION_SELECTOR/);
   assert.match(source, /button\.tabIndex = button === active \? 0 : -1/);
   assert.match(source, /\["ArrowUp", "ArrowDown", "Home", "End"\]/);

@@ -120,8 +120,21 @@ test("iPad TAP copy is touch-specific and footer sliders use touch order", () =>
 
 test("Stop disables score tapping until conducting mode is restored", () => {
   assert.match(source, /elements\.tap\.disabled = midiFreePlay \|\| score === null;/);
-  assert.match(source, /async function performDown[\s\S]*?if \(midiFreePlay\) return;/);
+  assert.match(source, /async function performDown[\s\S]*?if \(isPlaybackBlocked\(\) \|\| midiFreePlay\) return;/);
   assert.match(source, /elements\.tap\.disabled = midiFreePlay;/);
+});
+
+test("blocking waits cover the performance UI and suppress note input", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+  assert.match(source, /id="loading-overlay"[^>]+role="status"[^>]+aria-live="polite"/);
+  assert.match(source, /const blockingWaits = new Map<BlockingWaitToken, string>\(\)/);
+  assert.match(source, /const startupWait = beginBlockingWait\(t\("startingAudio"\)\)/);
+  assert.match(source, /async function loadScore[\s\S]*?beginBlockingWait\(loadingMessage\)[\s\S]*?endBlockingWait\(wait\)/);
+  assert.match(source, /async function reloadAudioSystems[\s\S]*?beginBlockingWait\(t\("reloadingDevices"\)\)[\s\S]*?endBlockingWait\(wait\)/);
+  assert.match(source, /async function auditionDown[\s\S]*?if \(isPlaybackBlocked\(\)/);
+  assert.match(source, /document\.addEventListener\("keydown"[\s\S]*?if \(isPlaybackBlocked\(\)\)/);
+  assert.match(styles, /\.loading-overlay\s*{[^}]*position:\s*fixed;[^}]*inset:\s*0;[^}]*z-index:\s*500;/s);
+  assert.match(styles, /\.loading-spinner\s*{[^}]*animation:\s*loading-spin/s);
 });
 
 test("compact footer controls leave vertical room for slider labels", () => {

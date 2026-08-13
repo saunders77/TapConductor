@@ -79,6 +79,7 @@ pub fn run() {
                             if !core.audio.is_suspended() {
                                 return;
                             }
+                            let _ = _window.emit("audio-lifecycle-restoring", ());
                             #[cfg(target_os = "ios")]
                             if let Err(error) = _window.apple_audio_session().activate() {
                                 let _ = _window.emit("audio-lifecycle-error", error.to_string());

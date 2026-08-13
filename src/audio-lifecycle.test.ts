@@ -29,7 +29,16 @@ test("iOS restores suspended audio whenever its scene becomes active", () => {
     /WindowEvent::Resumed \| tauri::WindowEvent::Focused\(true\)/,
   );
   assert.match(nativeSource, /if !core\.audio\.is_suspended\(\)/);
+  assert.match(nativeSource, /emit\("audio-lifecycle-restoring", \(\)\)[\s\S]*?core\.resume_audio\(\)/);
   assert.match(nativeSource, /emit\("audio-lifecycle-restored", \(\)\)/);
+  assert.match(
+    source,
+    /listen<void>\("audio-lifecycle-restoring"[\s\S]*?beginBlockingWait\(t\("restoringAudio"\)\)/,
+  );
+  assert.match(
+    source,
+    /listen<void>\("audio-lifecycle-restored"[\s\S]*?endBlockingWait\(audioRecoveryWait\)/,
+  );
   assert.match(audioRuntimeSource, /pub const fn is_suspended\(&self\) -> bool/);
   assert.match(audioRuntimeSource, /self\.suspended = false/);
 });

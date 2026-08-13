@@ -22,6 +22,8 @@ html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 body { overscroll-behavior: none; }
 button, select, input { font: inherit; }
 button { color: inherit; }
+.iphone-menu-button,
+.iphone-menu-overlay { display: none; }
 
 /*
  * Keep repeated performance gestures from turning into browser gestures on
@@ -498,3 +500,317 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
   }
   input[type="range"] { min-height: 34px; }
 }
+
+/*
+ * iPhone is selected by WebKit's device-family user agent in ui-platform.ts,
+ * never by viewport size or pixel density. Keep these rules independent of
+ * the iPad layout above so large phones and compact iPads cannot cross paths.
+ */
+.platform-ios .shell {
+  grid-template-rows: calc(50px + env(safe-area-inset-top, 0px)) minmax(0, 1fr);
+}
+.platform-ios .topbar,
+.platform-ios .shell.chrome-hidden .topbar {
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  align-content: normal;
+  gap: 10px;
+  padding: env(safe-area-inset-top, 0px) max(8px, env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 0px));
+  overflow: visible;
+}
+.platform-ios .topbar > .chrome-toggle,
+.platform-ios .topbar > .primary-button,
+.platform-ios .topbar > .help-button,
+.platform-ios .topbar > .control-deck,
+.platform-ios .topbar > .web-edition-badge { display: none !important; }
+.platform-ios .brand {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 8px;
+  font-size: 18px;
+  letter-spacing: -.2px;
+}
+.platform-ios .brand-mark {
+  width: 32px;
+  height: 32px;
+  max-width: 32px;
+  max-height: 32px;
+}
+.platform-ios .iphone-menu-button {
+  flex: 0 0 44px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+}
+.platform-ios .iphone-menu-button:active { background: #ffffff1a; }
+.platform-ios .iphone-menu-button svg { width: 25px; height: 25px; fill: currentColor; }
+
+.platform-ios .workspace,
+.platform-ios .shell.chrome-hidden .workspace {
+  grid-template-rows: minmax(0, 1fr) calc(.5in + env(safe-area-inset-bottom, 0px));
+}
+.platform-ios .performance-strip,
+.platform-ios .shell.chrome-hidden .performance-strip {
+  display: block;
+  height: calc(.5in + env(safe-area-inset-bottom, 0px));
+  min-height: calc(.5in + env(safe-area-inset-bottom, 0px));
+  padding: 0;
+  background: var(--accent);
+  box-shadow: 0 -1px 5px #25251f2b;
+}
+.platform-ios .performance-strip > :not(.tap-button) { display: none !important; }
+.platform-ios .tap-button {
+  display: block;
+  width: 100%;
+  max-width: none;
+  height: calc(.5in + env(safe-area-inset-bottom, 0px));
+  min-height: calc(.5in + env(safe-area-inset-bottom, 0px));
+  padding: 0 12px env(safe-area-inset-bottom, 0px);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.platform-ios .tap-button span { font-size: 19px; line-height: .5in; }
+.platform-ios .tap-button small { display: none; }
+.platform-ios .empty-actions { display: none; }
+.platform-ios .toast-region { bottom: calc(.5in + env(safe-area-inset-bottom, 0px) + 8px); }
+
+.platform-ios .iphone-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  display: block;
+  overflow: hidden;
+  background: #f2f2f7;
+  color: #111;
+}
+.platform-ios .iphone-menu-card {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: #f2f2f7;
+}
+.platform-ios .iphone-menu-header {
+  min-height: calc(52px + env(safe-area-inset-top, 0px));
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
+  padding: env(safe-area-inset-top, 0px) max(12px, env(safe-area-inset-right, 0px)) 6px max(12px, env(safe-area-inset-left, 0px));
+  border-bottom: 1px solid #c6c6c8;
+  background: #f9f9f9e8;
+}
+.platform-ios .iphone-menu-header h2 {
+  grid-column: 2;
+  margin: 0;
+  padding-bottom: 7px;
+  font: 600 17px/1.2 -apple-system, BlinkMacSystemFont, var(--font-sans);
+}
+.platform-ios .iphone-menu-header button {
+  grid-column: 3;
+  justify-self: end;
+  min-width: 54px;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: #007aff;
+  font-weight: 600;
+  cursor: pointer;
+}
+.platform-ios .iphone-menu-scroll {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px max(12px, env(safe-area-inset-right, 0px)) max(24px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  -webkit-overflow-scrolling: touch;
+}
+.platform-ios .iphone-menu-group { margin: 0 0 22px; }
+.platform-ios .iphone-menu-group > h3 {
+  margin: 0 16px 7px;
+  color: #6d6d72;
+  font: 400 13px/1.2 -apple-system, BlinkMacSystemFont, var(--font-sans);
+  text-transform: uppercase;
+}
+.platform-ios .iphone-menu-actions,
+.platform-ios .iphone-menu-navigation,
+.platform-ios #iphone-performance-settings,
+.platform-ios #iphone-display-settings {
+  overflow: hidden;
+  border-radius: 12px;
+  background: #fff;
+}
+.platform-ios .iphone-menu-actions button {
+  width: 100%;
+  min-height: 52px;
+  display: block;
+  padding: 0 16px;
+  border: 0;
+  border-bottom: 1px solid #e5e5ea;
+  border-radius: 0;
+  background: #fff;
+  color: #007aff;
+  box-shadow: none;
+  text-align: left;
+  font-size: 17px;
+  font-weight: 400;
+}
+.platform-ios .iphone-menu-actions button:last-child { border-bottom: 0; }
+.platform-ios .iphone-menu-navigation {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 12px;
+}
+.platform-ios .iphone-menu-navigation .transport {
+  width: 100%;
+  height: 52px;
+  min-height: 52px;
+  border: 0;
+  border-right: 1px solid #e5e5ea;
+  border-radius: 0;
+  background: #fff;
+  color: #007aff;
+}
+.platform-ios .iphone-menu-navigation .transport:last-child { border-right: 0; }
+
+.platform-ios .iphone-menu-overlay .control-deck {
+  position: static;
+  width: 100%;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  overflow: visible;
+  background: #fff;
+}
+.platform-ios .iphone-menu-overlay .control-deck > .field,
+.platform-ios .iphone-menu-overlay .control-deck > .deck-menu-button {
+  flex: none;
+  width: 100%;
+  min-height: 54px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 16px;
+  border: 0;
+  border-bottom: 1px solid #e5e5ea;
+  background: #fff;
+  color: #111;
+  text-align: left;
+}
+.platform-ios .iphone-menu-overlay .control-deck .field > span,
+.platform-ios .iphone-menu-overlay .control-deck .deck-menu-button > span {
+  flex: 1 1 auto;
+  color: #111;
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.platform-ios .iphone-menu-overlay .control-deck .field select {
+  flex: 0 1 58%;
+  width: auto !important;
+  color: #007aff;
+  font-size: 16px;
+  font-weight: 400;
+  text-align: right;
+  direction: ltr;
+}
+.platform-ios .iphone-menu-overlay .control-deck .switch-control { color: #111; }
+.platform-ios .iphone-menu-overlay .control-deck .deck-menu-button > strong {
+  color: #8e8e93;
+  font-size: 16px;
+  font-weight: 400;
+}
+.platform-ios .iphone-menu-overlay .control-deck .panic-button {
+  width: 100%;
+  height: 54px;
+  min-height: 54px;
+  margin: 0;
+  padding: 0 16px;
+  display: block;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  color: #ff3b30;
+  box-shadow: none;
+  text-align: left;
+  font-size: 16px;
+}
+.platform-ios .iphone-menu-overlay .popover {
+  position: static !important;
+  inset: auto !important;
+  width: 100%;
+  max-height: none;
+  padding: 12px 16px;
+  border: 0;
+  border-top: 1px solid #e5e5ea;
+  border-radius: 0;
+  background: #f8f8fa;
+  box-shadow: none;
+}
+.platform-ios .iphone-menu-overlay .popover h3 { font-size: 17px; }
+.platform-ios .iphone-menu-overlay .check-row { min-height: 48px; font-size: 16px; }
+
+.platform-ios .iphone-menu-overlay .bottom-controls {
+  position: static;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  display: flex !important;
+  flex-direction: column;
+  gap: 0;
+  overflow: visible;
+  transform: none;
+}
+.platform-ios .iphone-menu-overlay .bottom-controls .range-field,
+.platform-ios .iphone-menu-overlay .bottom-controls .zoom-controls {
+  flex: none;
+  width: 100%;
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px 10px;
+  padding: 9px 16px;
+  border: 0;
+  border-bottom: 1px solid #e5e5ea;
+  background: #fff;
+}
+.platform-ios .iphone-menu-overlay .bottom-controls .range-field > span {
+  grid-column: 1 / -1;
+  color: #111;
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.platform-ios .iphone-menu-overlay .bottom-controls .range-field output,
+.platform-ios .iphone-menu-overlay .bottom-controls .zoom-controls output { color: #8e8e93; }
+.platform-ios .iphone-menu-overlay .bottom-controls input[type="range"] {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 34px;
+}
+.platform-ios .iphone-menu-overlay .bottom-controls .zoom-controls {
+  grid-template-columns: 1fr auto;
+  padding-inline: 16px;
+}
+.platform-ios .iphone-menu-overlay .bottom-controls .zoom-label {
+  color: #111;
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.platform-ios .iphone-menu-overlay .bottom-controls .zoom-controls input { grid-column: 1 / -1; }
+.platform-ios .iphone-menu-overlay .bottom-controls > :last-child { border-bottom: 0; }

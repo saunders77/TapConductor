@@ -30,7 +30,13 @@
     "apple:mac:store": "bash tools/apple-release.sh mac-app-store",
     "apple:ipad:simulator": "bash tools/apple-release.sh ios-simulator",
     "apple:ipad:development": "bash tools/apple-release.sh ios-development",
-    "apple:ipad:store": "bash tools/apple-release.sh ios-app-store"
+    "apple:ipad:store": "bash tools/apple-release.sh ios-app-store",
+    "apple:ios:simulator": "bash tools/apple-release.sh ios-simulator",
+    "apple:ios:development": "bash tools/apple-release.sh ios-development",
+    "apple:ios:store": "bash tools/apple-release.sh ios-app-store",
+    "apple:iphone:simulator": "bash tools/apple-release.sh ios-simulator",
+    "apple:iphone:development": "bash tools/apple-release.sh ios-development",
+    "apple:iphone:store": "bash tools/apple-release.sh ios-app-store"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.8.0",

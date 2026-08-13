@@ -8,11 +8,13 @@ FAST=0
 
 usage() {
   cat <<'EOF'
-Usage: bash tools/rebuild-apple.sh [all|mac|ipad] [--fast]
+Usage: bash tools/rebuild-apple.sh [all|mac|ios|iphone|ipad] [--fast]
 
-  all      Run quality checks once, then build macOS and the iPad Simulator app.
+  all      Run quality checks once, then build macOS and the iPhone/iPad Simulator app.
   mac      Build the universal macOS app and DMG.
-  ipad     Build the arm64 iPad Simulator app.
+  ios      Build the arm64 iPhone/iPad Simulator app.
+  iphone   Alias for ios.
+  ipad     Backward-compatible alias for ios.
   --fast   Skip tests, formatting, and Clippy for this packaging pass.
 
 With no arguments, the script builds both platforms and runs all checks.
@@ -21,8 +23,11 @@ EOF
 
 for argument in "$@"; do
   case "${argument}" in
-    all|mac|ipad)
+    all|mac|ios)
       TARGET="${argument}"
+      ;;
+    iphone|ipad)
+      TARGET="ios"
       ;;
     --fast)
       FAST=1
@@ -64,7 +69,7 @@ require_command xcrun "Install Xcode and its command-line tools."
 require_command plutil "plutil is supplied by macOS."
 VERSION="$(node -p "require('${ROOT}/package.json').version")"
 
-if [[ ("${TARGET}" == "all" || "${TARGET}" == "ipad") &&
+if [[ ("${TARGET}" == "all" || "${TARGET}" == "ios") &&
       ! -d "${ROOT}/src-tauri/gen/apple" ]]; then
   require_command xcodegen "Install the first-run iOS helper with: brew install xcodegen"
   require_command pod "Install the first-run iOS helper with: brew install cocoapods"
@@ -82,7 +87,7 @@ build_mac() {
   fi
 }
 
-build_ipad() {
+build_ios() {
   if [[ "${FAST}" -eq 1 ]]; then
     SKIP_QUALITY_CHECKS=1 bash tools/apple-release.sh ios-simulator
   else
@@ -94,8 +99,8 @@ case "${TARGET}" in
   mac)
     build_mac
     ;;
-  ipad)
-    build_ipad
+  ios)
+    build_ios
     ;;
   all)
     build_mac
@@ -109,6 +114,6 @@ echo "Apple rebuild complete."
 if [[ "${TARGET}" == "all" || "${TARGET}" == "mac" ]]; then
   echo "macOS DMG: ${ROOT}/target/apple-artifacts/macos-ad-hoc/TapConductor_${VERSION}_universal.dmg"
 fi
-if [[ "${TARGET}" == "all" || "${TARGET}" == "ipad" ]]; then
-  echo "iPad Simulator app: ${ROOT}/src-tauri/gen/apple/build/arm64-sim/TapConductor.app"
+if [[ "${TARGET}" == "all" || "${TARGET}" == "ios" ]]; then
+  echo "iPhone/iPad Simulator app: ${ROOT}/src-tauri/gen/apple/build/arm64-sim/TapConductor.app"
 fi

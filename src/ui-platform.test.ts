@@ -4,6 +4,17 @@ import test from "node:test";
 
 import { detectAppleUiPlatform, initialTelemetryAction } from "./ui-platform.ts";
 
+test("detects an iPhone from its device family without screen dimensions", () => {
+  assert.equal(
+    detectAppleUiPlatform("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)", 5),
+    "ios",
+  );
+  assert.equal(
+    detectAppleUiPlatform("Mozilla/5.0 (iPod touch; CPU iPhone OS 17_0 like Mac OS X)", 5),
+    "ios",
+  );
+});
+
 test("detects an iPad using its native user agent", () => {
   assert.equal(detectAppleUiPlatform("Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X)", 5), "ipados");
 });

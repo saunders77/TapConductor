@@ -33,6 +33,17 @@ test("iPad transient dialogs stay content-sized", () => {
   );
 });
 
+test("iPhone uses one settings sheet and a dedicated device-family class", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(source, /appleUiPlatform === "ios"[\s\S]*?iphoneMenuActions\.append\([\s\S]*?iphonePerformanceSettings\.append\(controlDeck\)[\s\S]*?iphoneDisplaySettings\.append\(bottomControls\)/s);
+  assert.match(source, /id="iphone-menu-overlay"[\s\S]*?role="dialog" aria-modal="true"/s);
+  assert.match(styles, /\.platform-ios \.workspace[\s\S]*?grid-template-rows:\s*minmax\(0, 1fr\) calc\(\.5in \+ env\(safe-area-inset-bottom, 0px\)\);/s);
+  assert.match(styles, /\.platform-ios \.tap-button\s*{[^}]*width:\s*100%;[^}]*height:\s*calc\(\.5in \+ env\(safe-area-inset-bottom, 0px\)\);[^}]*border-radius:\s*0;/s);
+  assert.match(styles, /\.platform-ios \.performance-strip > :not\(\.tap-button\)\s*{[^}]*display:\s*none\s*!important;/s);
+  assert.match(styles, /\.platform-ios \.empty-actions\s*{[^}]*display:\s*none;/s);
+});
+
 test("iPad performance UI suppresses browser gestures but leaves dialogs alone", () => {
   const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 

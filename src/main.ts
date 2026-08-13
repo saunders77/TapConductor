@@ -106,6 +106,9 @@ app.innerHTML = `
       </button>
       <div class="status-pill loading" id="status-pill" role="status" aria-live="polite" aria-atomic="true"><span aria-hidden="true"></span><b>Starting audio…</b></div>
       <div class="web-edition-badge hidden" id="web-edition-badge">Browser edition</div>
+      <button id="iphone-menu-button" class="iphone-menu-button" type="button" aria-haspopup="dialog" aria-controls="iphone-menu-overlay" aria-expanded="false" aria-label="">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+      </button>
     </header>
 
     <section class="control-deck" aria-label="Performance controls">
@@ -166,6 +169,30 @@ app.innerHTML = `
     </aside>
 
     <aside id="diagnostics-popover" class="popover diagnostics hidden" role="dialog" aria-modal="false" aria-label="Audio diagnostics" tabindex="-1"></aside>
+
+    <div id="iphone-menu-overlay" class="iphone-menu-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="iphone-menu-title">
+      <section class="iphone-menu-card">
+        <header class="iphone-menu-header">
+          <h2 id="iphone-menu-title"></h2>
+          <button id="iphone-menu-done" type="button">Done</button>
+        </header>
+        <div class="iphone-menu-scroll">
+          <section class="iphone-menu-group" aria-labelledby="iphone-score-heading">
+            <h3 id="iphone-score-heading"></h3>
+            <div id="iphone-menu-actions" class="iphone-menu-actions"></div>
+            <div id="iphone-menu-navigation" class="iphone-menu-navigation" aria-label=""></div>
+          </section>
+          <section class="iphone-menu-group" aria-labelledby="iphone-performance-heading">
+            <h3 id="iphone-performance-heading"></h3>
+            <div id="iphone-performance-settings"></div>
+          </section>
+          <section class="iphone-menu-group" aria-labelledby="iphone-display-heading">
+            <h3 id="iphone-display-heading"></h3>
+            <div id="iphone-display-settings"></div>
+          </section>
+        </div>
+      </section>
+    </div>
 
     <div id="help-overlay" class="help-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="help-title">
       <section class="help-card">
@@ -364,6 +391,12 @@ if (localizedHelp) document.querySelector<HTMLElement>(".help-content")!.innerHT
 const localizedEmpty = localizedEmptyStateHtml(activeLocale, t);
 if (localizedEmpty) document.getElementById("empty-state")!.innerHTML = localizedEmpty;
 localizeDom(app, i18n);
+document.getElementById("iphone-menu-title")!.textContent = t("menuSettings");
+document.getElementById("iphone-score-heading")!.textContent = t("menuFile");
+document.getElementById("iphone-performance-heading")!.textContent = t("performanceControls");
+document.getElementById("iphone-display-heading")!.textContent = t("menuView");
+document.getElementById("iphone-menu-button")!.setAttribute("aria-label", t("menuSettings"));
+document.getElementById("iphone-menu-navigation")!.setAttribute("aria-label", t("menuNavigation"));
 
 // Keep the header actions in one layout container so the control deck cannot
 // overlap the score button or status indicator as the window is resized.
@@ -379,6 +412,13 @@ const byId = <T extends HTMLElement>(id: string): T => {
 
 const elements = {
   open: byId<HTMLButtonElement>("open-score"),
+  iphoneMenuButton: byId<HTMLButtonElement>("iphone-menu-button"),
+  iphoneMenuOverlay: byId("iphone-menu-overlay"),
+  iphoneMenuDone: byId<HTMLButtonElement>("iphone-menu-done"),
+  iphoneMenuActions: byId("iphone-menu-actions"),
+  iphoneMenuNavigation: byId("iphone-menu-navigation"),
+  iphonePerformanceSettings: byId("iphone-performance-settings"),
+  iphoneDisplaySettings: byId("iphone-display-settings"),
   chromeToggle: byId<HTMLButtonElement>("chrome-toggle"),
   helpButton: byId<HTMLButtonElement>("help-button"),
   helpOverlay: byId("help-overlay"),
@@ -493,7 +533,7 @@ bottomControls.className = "bottom-controls";
 const footerBrand = document.querySelector<HTMLElement>(".brand");
 const zoomControls = document.querySelector<HTMLElement>(".zoom-controls");
 if (performanceStrip) {
-  if (footerBrand) {
+  if (footerBrand && appleUiPlatform !== "ios") {
     footerBrand.classList.add("footer-brand");
     performanceStrip.prepend(footerBrand);
   }
@@ -506,9 +546,32 @@ if (performanceStrip) {
     .forEach((element) => bottomControls.append(element));
 }
 
+if (appleUiPlatform === "ios") {
+  elements.iphoneMenuActions.append(
+    elements.open,
+    elements.demoChoirOpen,
+    elements.demoPianoOpen,
+    elements.helpButton,
+  );
+  if (controlDeck) elements.iphonePerformanceSettings.append(controlDeck);
+  elements.iphonePerformanceSettings.append(elements.partsPopover, elements.diagnostics);
+  elements.iphoneMenuNavigation.append(elements.back, elements.forward);
+  elements.iphoneDisplaySettings.append(bottomControls);
+  // These panels expand inside the one iPhone settings sheet instead of
+  // presenting additional floating menus.
+  for (const panel of [elements.partsPopover, elements.diagnostics]) {
+    panel.setAttribute("role", "group");
+    panel.removeAttribute("aria-modal");
+  }
+}
+
+const bottomControlsHost = appleUiPlatform === "ios"
+  ? elements.iphoneDisplaySettings
+  : performanceStrip;
+
 function ensureBottomControls(): void {
-  if (!performanceStrip) return;
-  if (bottomControls.parentElement !== performanceStrip) performanceStrip.append(bottomControls);
+  if (!bottomControlsHost) return;
+  if (bottomControls.parentElement !== bottomControlsHost) bottomControlsHost.append(bottomControls);
   bottomControls.classList.remove("hidden");
   bottomControls.style.display = "flex";
 }
@@ -644,10 +707,12 @@ async function syncMacosMenu(): Promise<void> {
 function updateMidiFreePlayButton(): void {
   elements.panic.classList.toggle("midi-free-play", midiFreePlay);
   elements.panic.setAttribute("aria-pressed", String(midiFreePlay));
-  elements.panic.textContent = midiFreePlay ? "☟" : "■";
   elements.panic.title = midiFreePlay
     ? t("returnConducting")
     : t("playMidiDirect");
+  elements.panic.textContent = appleUiPlatform === "ios"
+    ? elements.panic.title
+    : midiFreePlay ? "☟" : "■";
   elements.panic.setAttribute("aria-label", elements.panic.title);
   elements.tap.disabled = midiFreePlay || score === null;
   void syncMacosMenu();
@@ -1023,7 +1088,7 @@ elements.auditionRoll.value = String(persistedSettings.chordRollMs);
 elements.auditionRollValue.value = `${persistedSettings.chordRollMs} ms`;
 elements.zoomRange.value = String(persistedSettings.zoomPercent);
 elements.zoomValue.value = `${persistedSettings.zoomPercent}%`;
-shell?.classList.toggle("chrome-hidden", persistedSettings.chromeHidden);
+shell?.classList.toggle("chrome-hidden", appleUiPlatform !== "ios" && persistedSettings.chromeHidden);
 elements.chromeToggle.setAttribute("aria-expanded", String(!persistedSettings.chromeHidden));
 elements.chromeToggle.setAttribute(
   "aria-label",
@@ -2946,6 +3011,28 @@ elements.language.addEventListener("change", () => {
 });
 let helpPreviousFocus: HTMLElement | null = null;
 let telemetrySettingsPreviousFocus: HTMLElement | null = null;
+let iphoneMenuPreviousFocus: HTMLElement | null = null;
+
+function closeIphoneMenu(restoreFocus: boolean = true): void {
+  if (elements.iphoneMenuOverlay.classList.contains("hidden")) return;
+  closeAllPopovers(false);
+  elements.iphoneMenuOverlay.classList.add("hidden");
+  elements.iphoneMenuButton.setAttribute("aria-expanded", "false");
+  syncModalIsolation();
+  if (restoreFocus) iphoneMenuPreviousFocus?.focus();
+  iphoneMenuPreviousFocus = null;
+}
+
+function openIphoneMenu(): void {
+  if (appleUiPlatform !== "ios" || !elements.iphoneMenuOverlay.classList.contains("hidden")) return;
+  iphoneMenuPreviousFocus = document.activeElement instanceof HTMLElement
+    ? document.activeElement
+    : null;
+  elements.iphoneMenuOverlay.classList.remove("hidden");
+  elements.iphoneMenuButton.setAttribute("aria-expanded", "true");
+  syncModalIsolation();
+  elements.iphoneMenuDone.focus();
+}
 
 function closeTelemetrySettings(restoreFocus: boolean = true): void {
   elements.telemetrySettings.classList.add("hidden");
@@ -3103,6 +3190,36 @@ async function showLatestAnnouncement(): Promise<void> {
 }
 
 elements.helpButton.addEventListener("click", openHelp);
+elements.iphoneMenuButton.addEventListener("click", openIphoneMenu);
+elements.iphoneMenuDone.addEventListener("click", () => closeIphoneMenu());
+elements.iphoneMenuOverlay.addEventListener("click", (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  if (target?.closest("#open-score, #demo-choir-open, #demo-piano-open, #help-button")) {
+    closeIphoneMenu(false);
+  }
+});
+elements.iphoneMenuOverlay.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeIphoneMenu();
+  } else if (event.key === "Tab") {
+    const focusable = [...elements.iphoneMenuOverlay.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )].filter((element) => !element.closest(".hidden"));
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (first && last) {
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  }
+  event.stopPropagation();
+});
 elements.helpClose.addEventListener("click", closeHelp);
 elements.helpDone.addEventListener("click", closeHelp);
 elements.telemetrySettingsLink.addEventListener("click", (event) => {

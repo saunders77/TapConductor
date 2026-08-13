@@ -1020,7 +1020,7 @@ const displayedScoreWarningGroups = new Set<HTMLElement>();
 const INACTIVE_AUDIO_ERROR =
   t("inactiveAudio");
 const NATIVE_INACTIVE_AUDIO_ERROR =
-  "Audio is suspended while TapConductor is inactive.";
+  "Audio is suspended while TapConductor is inactive. Reload from the AUDIO menu.";
 let nativeInactiveAudioToast: string | null = null;
 let audioRecoveryWait: BlockingWaitToken | null = null;
 

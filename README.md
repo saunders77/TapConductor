@@ -18,6 +18,8 @@
   <h3><a href="https://github.com/saunders77/TapConductor/releases/download/TapConductor/v0.1.0_TapConductor_universal.dmg">⬇️ Download Windows installer v0.1.0_TapConductor_x64-setup.exe</a></h3>
 </p>
 
+<p>For support beyond the help on this page, please open a ticket on the <a href="https://github.com/saunders77/TapConductor/issues">GitHub issues page</a>.</p>
+
 ![TapConductor application screenshot](assets/screenshot.png) 
 
 [<img src="assets/video.png">](https://www.youtube.com/shorts/d9GjJh0hbyc)
@@ -65,7 +67,7 @@
             <p>The bundled grand piano is <b>Slender Salamander Grand Piano</b>, Signal Experiments' phase-aligned derivative of Salamander Grand Piano V3. The original Yamaha C5 recordings are by Alexander Holm, with phase alignment and Slender SFZ mappings by Signal Experiments. It is used under the Creative Commons Attribution 3.0 Unported license.</p>
 
 
-  <h2>Feedback</h2>
+  <h2>Feedback and Support</h2>
             <p>
               Please send me any issues, bugs, feature requests, or praise on <a href="https://github.com/saunders77/TapConductor/issues">TapConductor's GitHub page</a>. I'm excited to hear what you think! TapConductor is a part-time project so I might not be able to address everything. And feel free to contribute code and make a pull request yourself!
             </p>

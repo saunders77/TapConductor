@@ -5,23 +5,8 @@ Effective date: August 9, 2026
 TapConductor is a local music-performance application with no account system, advertising, sale of
 personal data, or cloud synchronization. Scores and performances stay on the device. Pseudonymous
 usage and diagnostic telemetry is enabled by default to help improve the application. It can be
-turned off in the Windows installer or at any time on the app's Info > Privacy page, and the app
+turned off in at any time on the app's Info > Privacy page (and, for Windows, via the installer), and the app
 remains fully functional when telemetry is off.
-
-## Startup announcements
-
-At startup, TapConductor requests the public `LATEST_ANNOUNCEMENT.md` file from GitHub. When the file
-contains an announcement, it also requests the file's latest commit timestamp. This lets the
-developer display an announcement and ensures that dismissing one announcement permanently does
-not suppress a later announcement. TapConductor sends no score,
-performance, MIDI, device, telemetry identifier, account, or contact data in these requests. GitHub
-receives ordinary connection information such as the source IP address and request headers under
-GitHub's own privacy terms.
-
-If the user selects **Don't show this announcement again**, TapConductor stores only that
-announcement's public update timestamp or content identifier in origin-scoped application storage.
-It is not uploaded. Clearing the app's site/application data clears this preference. The app makes
-no continuing announcement request after the startup check.
 
 ## Data processed on the device
 
@@ -58,7 +43,7 @@ TapConductor may send:
   the event payload.
 
 The identifiers are random and are not derived from hardware serials, advertising identifiers,
-email, login, username, or contact information. The data is pseudonymous, not anonymous, because
+email, login, username, or contact information. The data is pseudonymous because
 events from the same application instance can be correlated.
 
 ## Sending, processors, and retention
@@ -69,7 +54,7 @@ immediately, and a graceful close attempts one final batch. A healthy open-but-i
 telemetry heartbeat or continuing announcement request. Repeating handled errors are combined
 locally before upload.
 
-The app sends consented batches directly to PostHog in the United States; TapConductor operates no
+The app sends consented batches directly to PostHog; TapConductor operates no
 telemetry intermediary. As with any direct HTTPS service, PostHog receives the connection's source
 IP for network delivery and may process it for approximate geographic enrichment. TapConductor does
 not include the IP as an event property. PostHog is used for product analytics and handled-error
@@ -77,11 +62,23 @@ aggregates with person profiles, autocapture, cookies, replay, and advertising f
 Release owners must configure PostHog privacy controls and product-data retention of no more than
 12 months.
 
-Sentry is not used for ordinary handled errors. A future release may enable it only for fatal native
-crash dumps that cannot be diagnosed adequately in PostHog; that release must use a project DSN,
-scrub personal data, update store disclosures, and apply a retention period no longer than 90 days.
 PostHog, Apple, Microsoft, and distribution stores may independently process ordinary
 service, download, or crash information under their own policies.
+
+## Startup announcements
+
+At startup, TapConductor requests the public `LATEST_ANNOUNCEMENT.md` file from GitHub. When the file
+contains an announcement, it also requests the file's latest commit timestamp. This lets the
+developer display an announcement and ensures that dismissing one announcement permanently does
+not suppress a later announcement. TapConductor sends no score,
+performance, MIDI, device, telemetry identifier, account, or contact data in these requests. GitHub
+receives ordinary connection information such as the source IP address and request headers under
+GitHub's own privacy terms.
+
+If the user selects **Don't show this announcement again**, TapConductor stores only that
+announcement's public update timestamp or content identifier in origin-scoped application storage.
+It is not uploaded. Clearing the app's site/application data clears this preference. The app makes
+no continuing announcement request after the startup check.
 
 ## User choices and deletion
 
@@ -102,6 +99,5 @@ Privacy questions and deletion requests can be filed through the project's publi
 <https://github.com/saunders77/TapConductor/issues>. Do not include score files, device names, or
 other sensitive information in a public issue; ask for a private submission route when needed.
 
-This repository copy is the source text for the public privacy-policy URL required by the Apple App
-Store and Microsoft Store. Release owners must publish the same text at a stable HTTPS URL and keep
-that URL available for the lifetime of the store listing.
+This is the public privacy-policy required by the Apple App
+Store and Microsoft Store.

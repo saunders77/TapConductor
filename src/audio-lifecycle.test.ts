@@ -23,6 +23,21 @@ test("a successful audio reconnection dismisses the inactive-audio error", () =>
   assert.match(source, /listen<void>\("audio-lifecycle-restored"[\s\S]*?refreshDiagnostics\(\)/);
 });
 
+test("audio recovery instructions expose Reload as a direct action", () => {
+  assert.match(
+    source,
+    /function appendAudioReloadPrompt[\s\S]*?reload\.addEventListener\("click"[\s\S]*?await reloadAudioSystems\(\)/,
+  );
+  assert.match(
+    source,
+    /toast\(message, "error", true\)/,
+  );
+  assert.match(
+    source,
+    /key === t\("state"\) && !diagnostics\.ready[\s\S]*?appendAudioReloadPrompt/,
+  );
+});
+
 test("iOS restores suspended audio whenever its scene becomes active", () => {
   assert.match(
     nativeSource,

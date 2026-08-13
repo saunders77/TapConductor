@@ -1037,7 +1037,51 @@ function dismissInactiveAudioError(): void {
   nativeInactiveAudioToast = null;
 }
 
-function toast(message: string, kind: "info" | "warning" | "error" = "info"): void {
+function appendAudioReloadPrompt(
+  container: HTMLElement,
+  message: string,
+  onReloaded?: () => void,
+): void {
+  const reloadLabel = "Reload";
+  const reloadIndex = message.indexOf(reloadLabel);
+  if (reloadIndex >= 0) {
+    container.append(document.createTextNode(message.slice(0, reloadIndex)));
+  } else {
+    container.append(document.createTextNode(`${message} `));
+  }
+
+  const reload = document.createElement("button");
+  reload.type = "button";
+  reload.className = "inline-reload-link";
+  reload.textContent = reloadLabel;
+  reload.addEventListener("click", async () => {
+    reload.disabled = true;
+    try {
+      await reloadAudioSystems();
+      onReloaded?.();
+    } catch {
+      // The existing reload workflow surfaces command and refresh failures.
+    } finally {
+      reload.disabled = false;
+    }
+  });
+  container.append(reload);
+  if (reloadIndex >= 0) {
+    container.append(document.createTextNode(message.slice(reloadIndex + reloadLabel.length)));
+  }
+}
+
+function audioReloadInstruction(message: string): string {
+  return message.includes("Reload")
+    ? message
+    : `${message} Reload devices from the AUDIO menu.`;
+}
+
+function toast(
+  message: string,
+  kind: "info" | "warning" | "error" = "info",
+  audioReloadAction = false,
+): void {
   if (kind === "error") {
     if (displayedErrorToasts.has(message)) return;
   }
@@ -1047,8 +1091,6 @@ function toast(message: string, kind: "info" | "warning" | "error" = "info"): vo
   item.setAttribute("role", kind === "error" ? "alert" : "status");
   item.setAttribute("aria-atomic", "true");
   const text = document.createElement("span");
-  text.textContent = message;
-  item.append(text);
   const dismiss = document.createElement("button");
   dismiss.type = "button";
   dismiss.className = "toast-dismiss";
@@ -1060,6 +1102,9 @@ function toast(message: string, kind: "info" | "warning" | "error" = "info"): vo
       displayedErrorToasts.delete(message);
     }
   };
+  if (audioReloadAction) appendAudioReloadPrompt(text, message, remove);
+  else text.textContent = message;
+  item.append(text);
   dismiss.addEventListener("click", remove);
   item.append(dismiss);
   elements.toasts.append(item);
@@ -2841,7 +2886,11 @@ function showDiagnostics(diagnostics: DiagnosticsDto, renderDetails = !elements.
     const label = document.createElement("span");
     label.textContent = key;
     const result = document.createElement("b");
-    result.textContent = value;
+    if (key === t("state") && !diagnostics.ready) {
+      appendAudioReloadPrompt(result, audioReloadInstruction(value));
+    } else {
+      result.textContent = value;
+    }
     row.append(label, result);
     elements.diagnostics.append(row);
   }
@@ -2872,12 +2921,13 @@ async function refreshDiagnostics(): Promise<void> {
         operation: "diagnostics",
         context: { backend: telemetryAudioBackend(diagnostics.audioBackend) },
       });
-      const message =
-        `${diagnostics.message ?? "The audio output is unavailable."} Reload devices from the AUDIO menu.`;
+      const message = audioReloadInstruction(
+        diagnostics.message ?? "The audio output is unavailable.",
+      );
       if (diagnostics.message === NATIVE_INACTIVE_AUDIO_ERROR) {
         nativeInactiveAudioToast = message;
       }
-      toast(message, "error");
+      toast(message, "error", true);
     }
     elements.diagnosticsButton.classList.toggle("not-ready", !diagnostics.ready);
   } catch {
@@ -2919,7 +2969,7 @@ async function installListeners(): Promise<void> {
       telemetry.recordError({ errorCode: "audio.lifecycle_error", component: "audio", operation: "lifecycle" });
       elements.diagnosticsButton.classList.add("not-ready");
       setStatus("fault", t("audioAttention"));
-      toast(`${payload} Reload devices from the AUDIO menu.`, "error");
+      toast(audioReloadInstruction(payload), "error", true);
     }),
     listen<void>("audio-lifecycle-restored", () => {
       if (audioRecoveryWait) endBlockingWait(audioRecoveryWait);

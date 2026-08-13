@@ -978,12 +978,21 @@ const displayedScoreWarningGroups = new Set<HTMLElement>();
 
 const INACTIVE_AUDIO_ERROR =
   t("inactiveAudio");
+const NATIVE_INACTIVE_AUDIO_ERROR =
+  "Audio is suspended while TapConductor is inactive.";
+let nativeInactiveAudioToast: string | null = null;
 
 function dismissErrorToast(message: string): void {
   const item = displayedErrorToasts.get(message);
   if (!item) return;
   item.remove();
   displayedErrorToasts.delete(message);
+}
+
+function dismissInactiveAudioError(): void {
+  dismissErrorToast(INACTIVE_AUDIO_ERROR);
+  if (nativeInactiveAudioToast) dismissErrorToast(nativeInactiveAudioToast);
+  nativeInactiveAudioToast = null;
 }
 
 function toast(message: string, kind: "info" | "warning" | "error" = "info"): void {
@@ -2690,7 +2699,7 @@ async function reloadAudioSystems(): Promise<void> {
 
 function showDiagnostics(diagnostics: DiagnosticsDto, renderDetails = !elements.diagnostics.classList.contains("hidden")): void {
   lastDiagnostics = diagnostics;
-  if (diagnostics.ready) dismissErrorToast(INACTIVE_AUDIO_ERROR);
+  if (diagnostics.ready) dismissInactiveAudioError();
   elements.diagnosticsValue.textContent = diagnostics.ready ? t("ready") : t("needsAttention");
   elements.diagnosticsButton.setAttribute(
     "aria-label",
@@ -2805,10 +2814,12 @@ async function refreshDiagnostics(): Promise<void> {
         operation: "diagnostics",
         context: { backend: telemetryAudioBackend(diagnostics.audioBackend) },
       });
-      toast(
-        `${diagnostics.message ?? "The audio output is unavailable."} Reload devices from the AUDIO menu.`,
-        "error",
-      );
+      const message =
+        `${diagnostics.message ?? "The audio output is unavailable."} Reload devices from the AUDIO menu.`;
+      if (diagnostics.message === NATIVE_INACTIVE_AUDIO_ERROR) {
+        nativeInactiveAudioToast = message;
+      }
+      toast(message, "error");
     }
     elements.diagnosticsButton.classList.toggle("not-ready", !diagnostics.ready);
   } catch {
@@ -2844,6 +2855,9 @@ async function installListeners(): Promise<void> {
       telemetry.recordError({ errorCode: "audio.lifecycle_error", component: "audio", operation: "lifecycle" });
       elements.diagnosticsButton.classList.add("not-ready");
       toast(`${payload} Reload devices from the AUDIO menu.`, "error");
+    }),
+    listen<void>("audio-lifecycle-restored", () => {
+      void refreshDiagnostics();
     }),
     listen<BeatMidiInput>("beat-midi-input", ({ payload }) => {
       if (payload.type === "down") void performDown(payload.token, payload.velocity);

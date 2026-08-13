@@ -66,16 +66,31 @@ pub fn run() {
                         let _ = _window.emit("audio-lifecycle-error", error.to_string());
                     }
                 }
-                tauri::WindowEvent::Resumed => {
-                    #[cfg(target_os = "ios")]
-                    if let Err(error) = _window.apple_audio_session().activate() {
-                        let _ = _window.emit("audio-lifecycle-error", error.to_string());
-                        return;
-                    }
+                // On iOS, Resumed maps to entering the foreground, while
+                // Focused(true) maps to the scene becoming active. The latter
+                // also covers temporary interruptions that resign activity
+                // without sending the application to the background.
+                tauri::WindowEvent::Resumed | tauri::WindowEvent::Focused(true) => {
                     if let Some(state) = _window.try_state::<Arc<AppState>>() {
                         if let Ok(mut core) = state.core.lock() {
-                            if let Err(message) = core.resume_audio() {
-                                let _ = _window.emit("audio-lifecycle-error", message);
+                            // Resumed and Focused(true) commonly arrive as a
+                            // pair after foregrounding. Only rebuild the stream
+                            // once, and do nothing on ordinary focus changes.
+                            if !core.audio.is_suspended() {
+                                return;
+                            }
+                            #[cfg(target_os = "ios")]
+                            if let Err(error) = _window.apple_audio_session().activate() {
+                                let _ = _window.emit("audio-lifecycle-error", error.to_string());
+                                return;
+                            }
+                            match core.resume_audio() {
+                                Ok(()) => {
+                                    let _ = _window.emit("audio-lifecycle-restored", ());
+                                }
+                                Err(message) => {
+                                    let _ = _window.emit("audio-lifecycle-error", message);
+                                }
                             }
                         }
                     }

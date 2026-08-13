@@ -4,14 +4,34 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const source = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+const nativeSource = readFileSync(
+  new URL("../src-tauri/src/lib.rs", import.meta.url),
+  "utf8",
+);
+const audioRuntimeSource = readFileSync(
+  new URL("../src-tauri/src/audio_runtime.rs", import.meta.url),
+  "utf8",
+);
 
 test("a successful audio reconnection dismisses the inactive-audio error", () => {
   assert.match(
     source,
-    /if \(diagnostics\.ready\) dismissErrorToast\(INACTIVE_AUDIO_ERROR\)/,
+    /if \(diagnostics\.ready\) dismissInactiveAudioError\(\)/,
   );
   assert.match(source, /const displayedErrorToasts = new Map<string, HTMLElement>\(\)/);
   assert.match(source, /displayedErrorToasts\.set\(message, item\)/);
+  assert.match(source, /listen<void>\("audio-lifecycle-restored"[\s\S]*?refreshDiagnostics\(\)/);
+});
+
+test("iOS restores suspended audio whenever its scene becomes active", () => {
+  assert.match(
+    nativeSource,
+    /WindowEvent::Resumed \| tauri::WindowEvent::Focused\(true\)/,
+  );
+  assert.match(nativeSource, /if !core\.audio\.is_suspended\(\)/);
+  assert.match(nativeSource, /emit\("audio-lifecycle-restored", \(\)\)/);
+  assert.match(audioRuntimeSource, /pub const fn is_suspended\(&self\) -> bool/);
+  assert.match(audioRuntimeSource, /self\.suspended = false/);
 });
 
 test("changing audio output releases the native selector before performance input resumes", () => {

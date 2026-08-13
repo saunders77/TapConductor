@@ -46,6 +46,8 @@ struct AudioRuntime {
 pub struct AudioManager {
     backend: PlatformAudioBackend,
     runtime: Option<AudioRuntime>,
+    #[cfg(mobile)]
+    suspended: bool,
     selected_device: Option<String>,
     selected_device_name: String,
     last_error: Option<String>,
@@ -91,6 +93,8 @@ impl AudioManager {
         let mut manager = Self {
             backend: new_platform_audio_backend(),
             runtime: None,
+            #[cfg(mobile)]
+            suspended: false,
             selected_device: None,
             selected_device_name: "System default".to_owned(),
             last_error: None,
@@ -205,7 +209,13 @@ impl AudioManager {
         let handoff_sample = self.now_sample();
         self.runtime.take();
         self.clock_epoch = handoff_sample;
+        self.suspended = true;
         self.last_error = Some("Audio is suspended while TapConductor is inactive.".to_owned());
+    }
+
+    #[cfg(mobile)]
+    pub const fn is_suspended(&self) -> bool {
+        self.suspended
     }
 
     /// Re-open the retained endpoint after a mobile foreground transition.
@@ -304,6 +314,10 @@ impl AudioManager {
         self.wasapi_periods = wasapi_periods;
         self.sample_rate = sample_rate;
         self.last_error = None;
+        #[cfg(mobile)]
+        {
+            self.suspended = false;
+        }
         Ok(())
     }
 

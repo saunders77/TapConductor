@@ -349,8 +349,7 @@ app.innerHTML = `
             <h1>Play sheet music by tapping for each chord</h1>
             <p>If your piano skills aren't great or if you don't have a piano, TapConductor can help you accompany other musicians, lead a rehearsal, perform, or make a recording. Connecting TapConductor to a piano via USB is recommended for the best experience.</p>
             <p>TapConductor reads any of these file formats: <b>.musicxml</b>, <b>.xml</b>, <b>.mxl</b>, <b>.mid</b>, <b>.midi</b>.</p>
-            <p>If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read.
-            <p>If you only have a PDF, you can use a converter program to create a file TapConductor can read (free options like Audiveris or MuseScore or paid options like SmartScore, PlayScore, Soundslice, NewZik, or PhotoScore).</p>
+            <p>If you use notation software (like MuseScore, Sibelius, or Dorico) or a DAW (like Ableton Live, Logic Pro, or Cubase), you can use the Export function to create a MusicXML or MIDI file that TapConductor can read. If you only have a PDF, you can use a converter program to create a file TapConductor can read (free options like Audiveris or MuseScore or paid options like SmartScore, PlayScore, Soundslice, NewZik, or PhotoScore).</p>
             <div class="empty-actions" aria-label="Choose a score">
               <button id="empty-open" class="primary-button large" type="button">Open a score</button>
               <button id="demo-choir-open" class="secondary-button large" type="button">Demo choir score</button>

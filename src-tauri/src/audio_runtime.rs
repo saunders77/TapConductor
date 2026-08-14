@@ -210,7 +210,10 @@ impl AudioManager {
         self.runtime.take();
         self.clock_epoch = handoff_sample;
         self.suspended = true;
-        self.last_error = Some("Audio is suspended while TapConductor is inactive. Reload from the AUDIO menu.".to_owned());
+        self.last_error = Some(
+            "Audio is suspended while TapConductor is inactive. Reload from the AUDIO menu."
+                .to_owned(),
+        );
     }
 
     #[cfg(mobile)]

@@ -111,7 +111,11 @@ pub fn install(app: &AppHandle, state: &MacosMenuState) -> tauri::Result<()> {
     }
 
     let label = |key: &str, fallback: &'static str| -> &str {
-        state.labels.get(key).map(String::as_str).unwrap_or(fallback)
+        state
+            .labels
+            .get(key)
+            .map(String::as_str)
+            .unwrap_or(fallback)
     };
 
     let menu = Menu::new(app)?;
@@ -156,16 +160,40 @@ pub fn install(app: &AppHandle, state: &MacosMenuState) -> tauri::Result<()> {
     // not edited, so macOS' stock text-editing commands do not apply here.
     let audio = Submenu::new(app, label("audio", "Audio"), true)?;
     let audio_outputs = Submenu::new(app, label("audioOutput", "Audio Output"), true)?;
-    append_choices(app, &audio_outputs, "audio-output", &state.audio_outputs, label("noneAvailable", "None available"))?;
+    append_choices(
+        app,
+        &audio_outputs,
+        "audio-output",
+        &state.audio_outputs,
+        label("noneAvailable", "None available"),
+    )?;
     audio.append(&audio_outputs)?;
     let instruments = Submenu::new(app, label("instrument", "Instrument"), true)?;
-    append_choices(app, &instruments, "instrument", &state.instruments, label("noneAvailable", "None available"))?;
+    append_choices(
+        app,
+        &instruments,
+        "instrument",
+        &state.instruments,
+        label("noneAvailable", "None available"),
+    )?;
     audio.append(&instruments)?;
     let midi_inputs = Submenu::new(app, label("midiIn", "MIDI IN"), true)?;
-    append_choices(app, &midi_inputs, "midi-input", &state.midi_inputs, label("noneAvailable", "None available"))?;
+    append_choices(
+        app,
+        &midi_inputs,
+        "midi-input",
+        &state.midi_inputs,
+        label("noneAvailable", "None available"),
+    )?;
     audio.append(&midi_inputs)?;
     let midi_outputs = Submenu::new(app, label("midiOut", "MIDI OUT"), true)?;
-    append_choices(app, &midi_outputs, "midi-output", &state.midi_outputs, label("noneAvailable", "None available"))?;
+    append_choices(
+        app,
+        &midi_outputs,
+        "midi-output",
+        &state.midi_outputs,
+        label("noneAvailable", "None available"),
+    )?;
     audio.append(&midi_outputs)?;
     audio.append(&PredefinedMenuItem::separator(app)?)?;
     audio.append(&MenuItem::with_id(
@@ -193,7 +221,13 @@ pub fn install(app: &AppHandle, state: &MacosMenuState) -> tauri::Result<()> {
         Some("CmdOrCtrl+Period"),
     )?)?;
     let parts = Submenu::new(app, label("parts", "Parts"), state.score_loaded)?;
-    append_choices(app, &parts, "part", &state.parts, label("noneAvailable", "None available"))?;
+    append_choices(
+        app,
+        &parts,
+        "part",
+        &state.parts,
+        label("noneAvailable", "None available"),
+    )?;
     audio.append(&parts)?;
     menu.append(&audio)?;
 

@@ -77,6 +77,7 @@ const standaloneFingerUrl = (
 ).__TAPCONDUCTOR_FINGER_URL__;
 const fingerIconUrl = standaloneFingerUrl
   ?? new URL("../assets/finger transparent-background.png", import.meta.url).href;
+const devicesImageUrl = new URL("../assets/devices.png", import.meta.url).href;
 const persistedSettings = loadAppSettings(localStorage);
 const activeLocale = resolveLocale(persistedSettings.language);
 const i18n = createLocalizer(activeLocale);
@@ -397,7 +398,14 @@ app.innerHTML = `
 const localizedHelp = localizedHelpHtml(activeLocale, t);
 if (localizedHelp) document.querySelector<HTMLElement>(".help-content")!.innerHTML = localizedHelp;
 const localizedEmpty = localizedEmptyStateHtml(activeLocale, t);
-if (localizedEmpty) document.getElementById("empty-state")!.innerHTML = localizedEmpty;
+const emptyState = document.getElementById("empty-state")!;
+if (localizedEmpty) emptyState.innerHTML = localizedEmpty;
+const devicesImage = document.createElement("img");
+devicesImage.className = "empty-devices";
+devicesImage.src = devicesImageUrl;
+devicesImage.alt = "";
+devicesImage.setAttribute("aria-hidden", "true");
+emptyState.append(devicesImage);
 localizeDom(app, i18n);
 document.getElementById("iphone-menu-title")!.textContent = t("menuSettings");
 document.getElementById("iphone-score-heading")!.textContent = t("menuFile");

@@ -741,6 +741,15 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
   font-weight: 400;
   text-align: right;
   direction: ltr;
+  -webkit-tap-highlight-color: transparent;
+}
+.platform-ios .iphone-menu-overlay .control-deck .field select:focus,
+.platform-ios .iphone-menu-overlay .control-deck .field select:focus-visible,
+.platform-ios .iphone-menu-overlay .control-deck .field select:active {
+  outline: none !important;
+  outline-offset: 0;
+  box-shadow: none;
+  background: transparent;
 }
 .platform-ios .iphone-menu-overlay .control-deck .switch-control { color: #111; }
 .platform-ios .iphone-menu-overlay .control-deck .deck-menu-button > strong {

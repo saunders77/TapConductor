@@ -44,6 +44,13 @@ test("iPhone uses one settings sheet and a dedicated device-family class", () =>
   assert.match(styles, /\.platform-ios \.empty-actions\s*{[^}]*display:\s*none;/s);
 });
 
+test("iPhone settings selects do not retain a focus highlight after choosing an option", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(styles, /\.platform-ios \.iphone-menu-overlay \.control-deck \.field select\s*{[^}]*-webkit-tap-highlight-color:\s*transparent;/s);
+  assert.match(styles, /\.platform-ios \.iphone-menu-overlay \.control-deck \.field select:focus,[\s\S]*?select:focus-visible,[\s\S]*?select:active\s*{[^}]*outline:\s*none\s*!important;[^}]*box-shadow:\s*none;[^}]*background:\s*transparent;/s);
+});
+
 test("iPad performance UI suppresses browser gestures but leaves dialogs alone", () => {
   const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 

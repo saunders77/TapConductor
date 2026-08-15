@@ -71,7 +71,7 @@ const rows: readonly MessageRow[] = [
   ["midiIn", "MIDI in", "MIDI 输入", "Entrada MIDI", "MIDI入力", "MIDI-Eingang", "Entrée MIDI", "MIDI 입력", "Entrada MIDI", "Ingresso MIDI", "Вход MIDI", "إدخال MIDI", "MIDI girişi"],
   ["midiOut", "MIDI out", "MIDI 输出", "Salida MIDI", "MIDI出力", "MIDI-Ausgang", "Sortie MIDI", "MIDI 출력", "Saída MIDI", "Uscita MIDI", "Выход MIDI", "إخراج MIDI", "MIDI çıkışı"],
   ["off", "Off", "关", "Desactivado", "オフ", "Aus", "Désactivé", "끄기", "Desativado", "Disattivato", "Выкл.", "إيقاف", "Kapalı"],
-  ["tapMode", "Tap mode", "敲击模式", "Modo de pulsación", "タップモード", "Tippmodus", "Mode de frappe", "탭 모드", "Modo de toque", "Modalità tocco", "Режим касания", "وضع النقر", "Dokunma modu"],
+  ["tapMode", "Mode", "敲击模式", "Modo de pulsación", "タップモード", "Tippmodus", "Mode de frappe", "탭 모드", "Modo de toque", "Modalità tocco", "Режим касания", "وضع النقر", "Dokunma modu"],
   ["rhythm", "Rhythm", "节奏", "Ritmo", "リズム", "Rhythmus", "Rythme", "리듬", "Ritmo", "Ritmo", "Ритм", "الإيقاع", "Ritim"],
   ["beat", "Beat", "拍", "Pulso", "拍", "Schlag", "Pulsation", "박자", "Pulso", "Battito", "Доля", "النبضة", "Vuruş"],
   ["legato", "Legato", "连奏", "Legato", "レガート", "Legato", "Legato", "레가토", "Legato", "Legato", "Легато", "ليغاتو", "Legato"],

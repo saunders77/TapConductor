@@ -100,7 +100,7 @@ app.innerHTML = `
         <span><strong>Tap</strong>Conductor</span>
       </div>
       <button id="open-score" class="primary-button" type="button" aria-keyshortcuts="Control+O Meta+O">
-        <span aria-hidden="true">＋</span> Open score
+        <span aria-hidden="true">＋</span> Open
       </button>
       <button id="help-button" class="help-button" type="button" aria-haspopup="dialog" aria-controls="help-overlay" aria-expanded="false" aria-keyshortcuts="F1">
         Info
@@ -133,8 +133,8 @@ app.innerHTML = `
         <select id="midi-output" aria-label="MIDI output"><option value="">Off</option></select>
       </label>
       <label class="field tap-mode-field" title="Choose whether each tap plays a written event or conducts whole beats.">
-        <span>Tap mode</span>
-        <select id="tap-mode" aria-label="Tap mode">
+        <span>Mode</span>
+        <select id="tap-mode" aria-label="Mode">
           <option value="rhythm">Rhythm</option>
           <option value="beat">Beat</option>
         </select>
@@ -250,9 +250,9 @@ app.innerHTML = `
             <p>The <b>MIDI OUT</b> setting can also be used to route your performance to another program on your computer for recording or further manipulation.</p>
           </section>
           <section><h3>Conduct the score</h3>
-            <p>Press the large <b>TAP</b> button, a supported keyboard key (A-Z, numbers, Shift, or punctuation), or your MIDI instrument/piano to play the next written note or chord, starting from the beginning. The location marker will automatically progress to the next note or chord. If you do nothing further, playing does not continue; every note waits for your tap. You may hold down the keys (or mouse) as long as desired and play future notes with or without releasing previous ones, just like on a piano. Turn on <b>Legato</b> to connect notes automatically (except for rests and staccato). This mode is useful for rehearsals with a choir, performance, or recording. If you want each tap to roll each chord, you can use the ROLL slider at the bottom of the window.</p>
+            <p>Press the large <b>TAP</b> button, a supported keyboard key (A-Z, numbers, Shift, or punctuation), or your MIDI instrument/piano to play the next written note or chord, starting from the beginning. The location marker will automatically progress to the next note or chord. If you do nothing further, playing does not continue; every note waits for your tap. You may hold down the keys (or mouse) as long as desired and play future notes with or without releasing previous ones, just like on a piano. Turn on <b>Legato</b> to connect notes automatically (except for rests and staccato). This mode is useful for rehearsals with a choir, performance, or recording. If you want each tap to roll each chord, you can use the <b>TAP ROLL</b> slider at the bottom of the window.</p>
             <p>By default, all staves (parts) will play during tapping, but you can select specific staves in the PARTS menu.</p>
-            <p>If you don't want to play a note/chord on every tap, but you instead want to use the program for normal conducting, keeping a steady beat while the notes play, then switch from the <b>Rhythm</b> mode to the <b>Beat</b> mode in the TAP MODE menu. Then you'll need to start by counting in with taps, and each tap will be interpreted as one beat in the music.</p>
+            <p>If you don't want to play a note/chord on every tap, but you instead want to use the program for normal conducting, keeping a steady beat while the notes play, then switch from the <b>Rhythm</b> mode to the <b>Beat</b> mode in the <b>MODE</b> menu. Then you'll need to start by counting in with taps, and each tap will be interpreted as one beat in the music.</p>
             <p>The Stop button on the top right switches to a mode where TapConductor ignores your taps, except for MIDI IN, which it plays directly. Use this mode if you want to play on your piano as you would normally.</p>
             </section>
           <section><h3>Hear specific notes and chords</h3>

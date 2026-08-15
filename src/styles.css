@@ -98,6 +98,7 @@ button { color: inherit; }
 .control-deck > .range-field { flex: 0 1 130px; }
 .control-deck > .delay-field { flex-basis: 105px; }
 .platform-ipados .control-deck > .field { justify-content: flex-start; }
+.platform-ipados .control-deck .field select { color-scheme: dark; }
 .field > span, .range-field > span, .position-readout > span, .next-readout > span { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .field select { width: 100%; max-width: 100%; min-width: 0; overflow: hidden; border: 0; background: transparent; font-size: 13px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; outline: none; cursor: pointer; }
 .legato-field { min-width: 88px; }

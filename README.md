@@ -69,7 +69,7 @@
 
   <h2>Feedback and Support</h2>
             <p>
-              Please send me any issues, bugs, feature requests, or praise on <a href="https://github.com/saunders77/TapConductor/issues">TapConductor's GitHub page</a>. I'm excited to hear what you think! TapConductor is a part-time project so I might not be able to address everything. And feel free to contribute code and make a pull request yourself!
+              Please send me any issues, bugs, feature requests, or praise on <a href="https://github.com/saunders77/TapConductor/issues">TapConductor's GitHub page</a> or email <a href="mailto:tapconductor@outlook.com">tapconductor@outlook.com</a>. I'm excited to hear what you think! TapConductor is a part-time project so I might not be able to address everything. And feel free to contribute code and make a pull request yourself!
             </p>
           
 

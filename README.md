@@ -18,7 +18,7 @@
   <h3><a href="https://github.com/saunders77/TapConductor/releases/download/TapConductor/v0.1.0_TapConductor_universal.dmg">⬇️ Download Windows installer v0.1.0_TapConductor_x64-setup.exe</a></h3>
 </p>
 
-<p>For support beyond the help on this page, please open a ticket on the <a href="https://github.com/saunders77/TapConductor/issues">GitHub issues page</a>.</p>
+<p>For <b>support</b> beyond the help on this page, please open a ticket on the <a href="https://github.com/saunders77/TapConductor/issues">GitHub issues page</a> or email <a href="mailto:tapconductor@outlook.com">tapconductor@outlook.com</a>.</p>
 
 ![TapConductor application screenshot](assets/screenshot.png) 
 

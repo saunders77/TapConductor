@@ -96,8 +96,7 @@ the configured retention limit.
 ## Contact
 
 Privacy questions and deletion requests can be filed through the project's public support channel:
-<https://github.com/saunders77/TapConductor/issues>. Do not include score files, device names, or
-other sensitive information in a public issue; ask for a private submission route when needed.
+<https://github.com/saunders77/TapConductor/issues> or email <a href="mailto:tapconductor@outlook.com">tapconductor@outlook.com</a>. Do not include score files, device names, or other sensitive information in a public issue.
 
 This is the public privacy-policy required by the Apple App
 Store and Microsoft Store.

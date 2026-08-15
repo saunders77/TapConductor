@@ -1,1 +1,1 @@
-Welcome to TapConductor! Please report any bugs on [GitHub](https://github.com/saunders77/TapConductor/issues). Thank you!
+Welcome to TapConductor! Please report any bugs on [GitHub](https://github.com/saunders77/TapConductor/issues) or email <a href="mailto:tapconductor@outlook.com">tapconductor@outlook.com</a>. Thank you!

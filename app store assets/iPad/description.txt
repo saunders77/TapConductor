@@ -1,0 +1,23 @@
+If your piano skills aren't great, TapConductor can help you play music live, chord by chord, as you step through the score. It always plays the right notes with your rhythm and articulation.
+
+Open your sheet music score (MusicXML or MIDI), then connect a piano or just tap the screen. Perfect for:
+  • Leading a rehearsal, especially choirs learning unaccompanied or accompanied music
+  • Accompanying other musicians in auditions or rehearsals
+  • Accompanying yourself while you sing
+  • Playing any piece on piano before you've learned the notes, for your own enjoyment
+  • Performing for an audience
+  • Recording with MIDI to capture subtle expression, timing, and dynamics
+  • (Caution) Pretending you can play piano music that's actually too difficult for you
+
+Features include:
+  • Multitouch so you can overlap chords for legato using the touchscreen
+  • Dynamics and articulation based on how you hit the notes on your piano
+  • Tapping individual notes or chords on the score to hear them arpeggiated
+  • Easy navigation around the score
+  • Muting certain parts or staves to play only the selected voices
+  • Playing through your speakers, a piano's speakers, or an audio interface
+  • Piano key shortcut keys to navigate and control the app
+  • Quickly flip between playing the actual notes from your piano and the notes from the score
+  • Optional Legato mode to automatically hold notes until the next note or rest
+
+TapConductor is free and open-source!

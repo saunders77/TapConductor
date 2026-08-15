@@ -90,7 +90,7 @@ document.querySelector<HTMLMetaElement>('meta[name="description"]')?.setAttribut
 );
 
 app.innerHTML = `
-  <div class="shell">
+  <div class="shell score-empty">
     <header class="topbar">
       <button id="chrome-toggle" class="chrome-toggle" type="button" aria-label="Hide header and footer" aria-expanded="true" title="Hide header and footer">
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 12 6-6 6 6" /></svg>
@@ -729,7 +729,8 @@ function macosMenuState(): MacosMenuState {
     pianoShortcutPitch,
     scoreLoaded: score !== null,
     canReplay: mostRecentChordIndex !== null,
-    headerFooterVisible: !shell?.classList.contains("chrome-hidden"),
+    headerFooterVisible: !shell?.classList.contains("score-empty")
+      && !shell?.classList.contains("chrome-hidden"),
     labels: {
       noneAvailable: t("menuNoneAvailable"), file: t("menuFile"), openScore: t("menuOpenScore"),
       view: t("menuView"), hideChrome: t("hideChrome"), showChrome: t("showChrome"),
@@ -1504,6 +1505,7 @@ async function displayScore(loaded: LoadedScore, preserved?: ScoreViewState): Pr
   const preservedCursor = indexForPreservedEvent(loaded.events, preserved?.event);
   const preservedScrollLeft = preserved?.scrollLeft ?? 0;
   score = loaded;
+  shell?.classList.remove("score-empty");
   osmdBeatSteps = [];
   eventHorizontalPositions = [];
   beatHorizontalPositions = [];

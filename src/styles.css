@@ -63,6 +63,14 @@ button { color: inherit; }
 .shell.chrome-hidden .chrome-toggle svg { transform: rotate(180deg); }
 .shell.chrome-hidden .workspace { grid-template-rows: minmax(0, 1fr) 0; }
 .shell.chrome-hidden .performance-strip { display: none; }
+/* The welcome view stands alone until a score has been opened. Error toasts
+ * remain mounted so persistent startup errors can become visible with it. */
+.shell.score-empty { grid-template-rows: minmax(0, 1fr) !important; }
+.shell.score-empty .topbar,
+.shell.score-empty .performance-strip { display: none !important; }
+.shell.score-empty .workspace { grid-template-rows: minmax(0, 1fr) !important; }
+.shell.score-empty .toast.error,
+.shell.score-empty .grouped-warning { display: none !important; }
 .brand { display: flex; align-items: center; gap: 22px; min-width: 380px; font-size: 38px; letter-spacing: -.4px; }
 .brand strong { color: var(--accent); }
 .brand-mark { width: 256px; height: 256px; max-width: 256px; max-height: 256px; display: block; object-fit: contain; }

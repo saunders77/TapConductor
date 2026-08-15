@@ -15,6 +15,16 @@ test("every required UI element is present in the application markup", () => {
   assert.deepEqual(requiredIds.filter((id) => !markupIds.has(id)), []);
 });
 
+test("the empty score view stands alone and defers errors until a score opens", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(source, /<div class="shell score-empty">/);
+  assert.match(source, /score = loaded;\s*shell\?\.classList\.remove\("score-empty"\);/);
+  assert.match(styles, /\.shell\.score-empty \.topbar,[\s\S]*?\.shell\.score-empty \.performance-strip\s*{[^}]*display:\s*none\s*!important;/s);
+  assert.match(styles, /\.shell\.score-empty \.workspace\s*{[^}]*grid-template-rows:\s*minmax\(0, 1fr\)\s*!important;/s);
+  assert.match(styles, /\.shell\.score-empty \.toast\.error,[\s\S]*?\.shell\.score-empty \.grouped-warning\s*{[^}]*display:\s*none\s*!important;/s);
+});
+
 test("the Info privacy section links to a separate telemetry settings view", () => {
   const privacySection = source.match(/<section id="privacy"[\s\S]*?<\/section>/)?.[0] ?? "";
   const settingsView = source.match(/<div id="telemetry-settings"[\s\S]*?<div id="announcement-overlay"/)?.[0] ?? "";

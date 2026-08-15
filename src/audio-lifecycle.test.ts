@@ -12,6 +12,10 @@ const audioRuntimeSource = readFileSync(
   new URL("../src-tauri/src/audio_runtime.rs", import.meta.url),
   "utf8",
 );
+const midiBackendSource = readFileSync(
+  new URL("../crates/tapconductor-midi/src/backend.rs", import.meta.url),
+  "utf8",
+);
 
 test("a successful audio reconnection dismisses the inactive-audio error", () => {
   assert.match(
@@ -69,14 +73,26 @@ test("changing audio output releases the native selector before performance inpu
   );
 });
 
-test("CoreMIDI setup changes refresh both device selectors and the native menu", () => {
+test("CoreMIDI setup changes refresh MIDI devices on macOS and iOS", () => {
   assert.match(source, /listen<void>\("midi-devices-changed", scheduleMidiDeviceRefresh\)/);
   assert.match(
     source,
-    /function scheduleMidiDeviceRefresh\(\)[\s\S]*?window\.setTimeout[\s\S]*?void refreshDevices\(\)/,
+    /function scheduleMidiDeviceRefresh\(\)[\s\S]*?appleUiPlatform !== "ipados"[\s\S]*?window\.setTimeout[\s\S]*?void refreshDevices\(\)/,
   );
   assert.match(
     source,
     /async function refreshDevices\(\)[\s\S]*?await syncMacosMenu\(\);\s*\}/,
+  );
+  assert.match(
+    nativeSource,
+    /cfg\(any\(target_os = "macos", target_os = "ios"\)\)[\s\S]*?Client::new_with_notifications/,
+  );
+  assert.match(
+    nativeSource,
+    /WindowEvent::Resumed \| tauri::WindowEvent::Focused\(true\)[\s\S]*?emit\("midi-devices-changed", \(\)\)/,
+  );
+  assert.match(
+    midiBackendSource,
+    /cfg\(any\(target_os = "macos", target_os = "ios"\)\)\]\s*coremidi::restart\(\)/,
   );
 });

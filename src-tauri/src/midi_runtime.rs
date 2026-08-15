@@ -433,7 +433,7 @@ impl MidiManager {
         // MIDIRestart asks drivers to rescan, but registry notifications can
         // arrive after the call returns. Do not immediately recreate clients
         // against the pre-refresh endpoint snapshot.
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
         thread::sleep(Duration::from_millis(750));
 
         if let Err(error) = self.set_input(input) {

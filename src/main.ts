@@ -768,7 +768,11 @@ function updateMidiFreePlayButton(): void {
 }
 
 function scheduleMidiDeviceRefresh(): void {
-  if (appleUiPlatform !== "macos") return;
+  if (
+    appleUiPlatform !== "macos"
+    && appleUiPlatform !== "ipados"
+    && appleUiPlatform !== "ios"
+  ) return;
   if (midiDeviceRefreshTimer !== undefined) window.clearTimeout(midiDeviceRefreshTimer);
   midiDeviceRefreshTimer = window.setTimeout(() => {
     midiDeviceRefreshTimer = undefined;
@@ -2791,7 +2795,11 @@ async function reloadAudioSystems(): Promise<void> {
     } finally {
       try {
         await refreshDevices();
-        if (appleUiPlatform === "macos") {
+        if (
+          appleUiPlatform === "macos"
+          || appleUiPlatform === "ipados"
+          || appleUiPlatform === "ios"
+        ) {
           // CoreMIDI driver registry notifications can land after MIDIRestart has
           // returned. Refresh once more after the native client teardown/rescan
           // cycle so slower USB drivers also reach the menus without an app restart.

@@ -92,7 +92,7 @@ mod midir_impl {
 
     impl MidiBackend for MidirBackend {
         fn reload(&self) -> Result<(), MidiBackendError> {
-            #[cfg(target_os = "macos")]
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
             coremidi::restart().map_err(|status| {
                 MidiBackendError::new(
                     "CoreMIDI reload",

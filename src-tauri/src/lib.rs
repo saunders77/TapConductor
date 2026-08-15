@@ -23,8 +23,8 @@ pub struct AppState {
     core: Mutex<AppCore>,
 }
 
-#[cfg(target_os = "macos")]
-struct MacosMidiWatcher {
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+struct AppleMidiWatcher {
     _client: coremidi::Client,
 }
 
@@ -71,6 +71,11 @@ pub fn run() {
                 // also covers temporary interruptions that resign activity
                 // without sending the application to the background.
                 tauri::WindowEvent::Resumed | tauri::WindowEvent::Focused(true) => {
+                    // CoreMIDI notifications that arrive while an iOS scene is
+                    // inactive are not guaranteed to reach WebKit. Re-enumerate
+                    // after every foreground transition; the UI debounces the
+                    // common Resumed/Focused pair.
+                    let _ = _window.emit("midi-devices-changed", ());
                     if let Some(state) = _window.try_state::<Arc<AppState>>() {
                         if let Ok(mut core) = state.core.lock() {
                             // Resumed and Focused(true) commonly arrive as a
@@ -137,7 +142,7 @@ pub fn run() {
                     macos_window::force_light_appearance_for_ns_window(window.ns_window()?);
                 }
             }
-            #[cfg(target_os = "macos")]
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
             {
                 let handle = app.handle().clone();
                 match coremidi::Client::new_with_notifications(
@@ -147,7 +152,7 @@ pub fn run() {
                     },
                 ) {
                     Ok(client) => {
-                        app.manage(MacosMidiWatcher { _client: client });
+                        app.manage(AppleMidiWatcher { _client: client });
                     }
                     Err(status) => tracing::warn!(
                         status,

@@ -36,13 +36,13 @@ windows = { version = "0.62", features = [
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 tapconductor-audio = { path = "../crates/tapconductor-audio", features = ["cpal-backend"] }
+coremidi = "0.9.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-app-kit = { version = "0.3.2", default-features = false, features = [
   "NSAppearance",
   "NSWindow",
 ] }
-coremidi = "0.9.1"
 
 [target.'cfg(target_os = "ios")'.dependencies]
 tauri-plugin-apple-audio-session = { path = "../crates/tauri-plugin-apple-audio-session" }

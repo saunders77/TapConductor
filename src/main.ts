@@ -100,7 +100,7 @@ app.innerHTML = `
         <span><strong>Tap</strong>Conductor</span>
       </div>
       <button id="open-score" class="primary-button" type="button" aria-keyshortcuts="Control+O Meta+O">
-        <span aria-hidden="true">＋</span> Open
+        Open
       </button>
       <button id="help-button" class="help-button" type="button" aria-haspopup="dialog" aria-controls="help-overlay" aria-expanded="false" aria-keyshortcuts="F1">
         Info

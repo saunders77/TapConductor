@@ -808,6 +808,8 @@ export class WebRuntime {
       midiInput: midiPorts.inputs.find((port) => port.id === this.selectedMidiInput)?.name,
       midiOutput: midiPorts.outputs.find((port) => port.id === this.selectedMidiOutput)?.name,
       midiOutputError: this.lastMidiError,
+      midiInputsAvailable: midiPorts.inputs.map((port) => port.name),
+      midiOutputsAvailable: midiPorts.outputs.map((port) => port.name),
       ready,
       message: state === "suspended"
         ? "Audio is suspended until you interact with the page."

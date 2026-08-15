@@ -512,6 +512,10 @@ impl AudioManager {
         midi_input: Option<String>,
         midi_output: Option<String>,
         midi_output_error: Option<String>,
+        midi_inputs_available: Vec<String>,
+        midi_outputs_available: Vec<String>,
+        midi_input_discovery_error: Option<String>,
+        midi_output_discovery_error: Option<String>,
     ) -> DiagnosticsDto {
         let snapshot = self
             .runtime
@@ -543,6 +547,10 @@ impl AudioManager {
             midi_input,
             midi_output,
             midi_output_error,
+            midi_inputs_available,
+            midi_outputs_available,
+            midi_input_discovery_error,
+            midi_output_discovery_error,
             ready: self.runtime.is_some() && snapshot.backend_errors == 0,
             message: self
                 .last_error

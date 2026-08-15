@@ -98,6 +98,8 @@ export interface MidiPortsDto {
   outputs: DeviceDto[];
   selectedInput?: string;
   selectedOutput?: string;
+  inputDiscoveryError?: string;
+  outputDiscoveryError?: string;
 }
 
 export interface DiagnosticsDto {
@@ -126,6 +128,10 @@ export interface DiagnosticsDto {
   midiInput?: string;
   midiOutput?: string;
   midiOutputError?: string;
+  midiInputsAvailable: string[];
+  midiOutputsAvailable: string[];
+  midiInputDiscoveryError?: string;
+  midiOutputDiscoveryError?: string;
   ready: boolean;
   message?: string;
 }

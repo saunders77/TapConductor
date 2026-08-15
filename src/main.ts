@@ -2752,6 +2752,21 @@ async function refreshDevices(): Promise<void> {
     }
     fitSelect(elements.midiInput);
     fitSelect(elements.midiOutput);
+    const midiDirectionErrors = [midiPorts.inputDiscoveryError, midiPorts.outputDiscoveryError]
+      .filter((message): message is string => Boolean(message));
+    if (midiDirectionErrors.length > 0) {
+      const message = midiDirectionErrors.join(" ");
+      telemetry.recordError({
+        errorCode: "midi.discovery_failed",
+        component: "midi",
+        operation: "midi_ports",
+        context: {
+          input_count: midiPorts.inputs.length,
+          output_count: midiPorts.outputs.length,
+        },
+      });
+      toast(t("midiDiscoveryFailed", { message }), "warning");
+    }
   } else {
     errors.push(t("midiDiscoveryFailed", { message: String(midiResult.reason) }));
   }
@@ -2846,7 +2861,19 @@ function showDiagnostics(diagnostics: DiagnosticsDto, renderDetails = !elements.
     [t("nativeAsio"), isWebBuild() ? t("notBrowser") : diagnostics.asioStream ? t("yes") : t("no")],
     [t("midiIn"), diagnostics.midiInput ?? t("off")],
     [t("midiOut"), diagnostics.midiOutput ?? t("off")],
+    ["MIDI inputs detected", diagnostics.midiInputsAvailable.length > 0
+      ? diagnostics.midiInputsAvailable.join(", ")
+      : "None"],
+    ["MIDI outputs detected", diagnostics.midiOutputsAvailable.length > 0
+      ? diagnostics.midiOutputsAvailable.join(", ")
+      : "None"],
   ];
+  if (diagnostics.midiInputDiscoveryError) {
+    rows.push(["MIDI input discovery error", diagnostics.midiInputDiscoveryError]);
+  }
+  if (diagnostics.midiOutputDiscoveryError) {
+    rows.push(["MIDI output discovery error", diagnostics.midiOutputDiscoveryError]);
+  }
   if (lastUiNativeRoundTripMs !== null) {
     const callbackPeriodMs = diagnostics.sampleRate > 0
       ? diagnostics.bufferFrames * 1_000 / diagnostics.sampleRate

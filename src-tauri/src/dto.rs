@@ -202,6 +202,10 @@ pub struct MidiPortsDto {
     pub selected_input: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selected_output: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_discovery_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_discovery_error: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -232,6 +236,12 @@ pub struct DiagnosticsDto {
     pub midi_output: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub midi_output_error: Option<String>,
+    pub midi_inputs_available: Vec<String>,
+    pub midi_outputs_available: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub midi_input_discovery_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub midi_output_discovery_error: Option<String>,
     pub ready: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,

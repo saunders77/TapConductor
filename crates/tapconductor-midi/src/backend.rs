@@ -90,6 +90,38 @@ mod midir_impl {
             .filter(|id| !id.is_empty())
     }
 
+    #[cfg(target_os = "ios")]
+    fn coremidi_input_devices() -> Vec<MidiDeviceInfo> {
+        coremidi::Sources
+            .into_iter()
+            .map(|source| MidiDeviceInfo {
+                // midir uses the CoreMIDI unique ID as its opaque port ID, so
+                // IDs produced here remain compatible with connect_input.
+                id: port_id("in", &source.unique_id().unwrap_or(0).to_string()),
+                name: source
+                    .display_name()
+                    .or_else(|| source.name())
+                    .unwrap_or_else(|| "Unknown MIDI input".to_owned()),
+                direction: MidiPortDirection::Input,
+            })
+            .collect()
+    }
+
+    #[cfg(target_os = "ios")]
+    fn coremidi_output_devices() -> Vec<MidiDeviceInfo> {
+        coremidi::Destinations
+            .into_iter()
+            .map(|destination| MidiDeviceInfo {
+                id: port_id("out", &destination.unique_id().unwrap_or(0).to_string()),
+                name: destination
+                    .display_name()
+                    .or_else(|| destination.name())
+                    .unwrap_or_else(|| "Unknown MIDI output".to_owned()),
+                direction: MidiPortDirection::Output,
+            })
+            .collect()
+    }
+
     impl MidiBackend for MidirBackend {
         fn reload(&self) -> Result<(), MidiBackendError> {
             #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -103,37 +135,55 @@ mod midir_impl {
         }
 
         fn input_devices(&self) -> Result<Vec<MidiDeviceInfo>, MidiBackendError> {
-            let input = MidiInput::new("TapConductor discovery")
-                .map_err(|error| MidiBackendError::new("input discovery", error.to_string()))?;
-            let mut devices = Vec::new();
-            for port in input.ports() {
-                let name = input
-                    .port_name(&port)
-                    .unwrap_or_else(|_| "Unknown MIDI input".into());
-                devices.push(MidiDeviceInfo {
-                    id: port_id("in", &port.id()),
-                    name,
-                    direction: MidiPortDirection::Input,
-                });
+            #[cfg(target_os = "ios")]
+            {
+                // Enumeration does not require a MIDI client. Query CoreMIDI
+                // directly on iOS so a client-initialization failure cannot
+                // hide endpoints that the operating system already exposes.
+                return Ok(coremidi_input_devices());
             }
-            Ok(devices)
+            #[cfg(not(target_os = "ios"))]
+            {
+                let input = MidiInput::new("TapConductor discovery")
+                    .map_err(|error| MidiBackendError::new("input discovery", error.to_string()))?;
+                let mut devices = Vec::new();
+                for port in input.ports() {
+                    let name = input
+                        .port_name(&port)
+                        .unwrap_or_else(|_| "Unknown MIDI input".into());
+                    devices.push(MidiDeviceInfo {
+                        id: port_id("in", &port.id()),
+                        name,
+                        direction: MidiPortDirection::Input,
+                    });
+                }
+                Ok(devices)
+            }
         }
 
         fn output_devices(&self) -> Result<Vec<MidiDeviceInfo>, MidiBackendError> {
-            let output = MidiOutput::new("TapConductor discovery")
-                .map_err(|error| MidiBackendError::new("output discovery", error.to_string()))?;
-            let mut devices = Vec::new();
-            for port in output.ports() {
-                let name = output
-                    .port_name(&port)
-                    .unwrap_or_else(|_| "Unknown MIDI output".into());
-                devices.push(MidiDeviceInfo {
-                    id: port_id("out", &port.id()),
-                    name,
-                    direction: MidiPortDirection::Output,
-                });
+            #[cfg(target_os = "ios")]
+            {
+                return Ok(coremidi_output_devices());
             }
-            Ok(devices)
+            #[cfg(not(target_os = "ios"))]
+            {
+                let output = MidiOutput::new("TapConductor discovery").map_err(|error| {
+                    MidiBackendError::new("output discovery", error.to_string())
+                })?;
+                let mut devices = Vec::new();
+                for port in output.ports() {
+                    let name = output
+                        .port_name(&port)
+                        .unwrap_or_else(|_| "Unknown MIDI output".into());
+                    devices.push(MidiDeviceInfo {
+                        id: port_id("out", &port.id()),
+                        name,
+                        direction: MidiPortDirection::Output,
+                    });
+                }
+                Ok(devices)
+            }
         }
 
         fn connect_input(

@@ -95,4 +95,10 @@ test("CoreMIDI setup changes refresh MIDI devices on macOS and iOS", () => {
     midiBackendSource,
     /cfg\(any\(target_os = "macos", target_os = "ios"\)\)\]\s*coremidi::restart\(\)/,
   );
+  assert.match(
+    midiBackendSource,
+    /cfg\(target_os = "ios"\)[\s\S]*?coremidi::Sources[\s\S]*?coremidi::Destinations/,
+  );
+  assert.match(source, /MIDI inputs detected[\s\S]*?midiInputsAvailable/);
+  assert.match(source, /MIDI input discovery error[\s\S]*?midiInputDiscoveryError/);
 });

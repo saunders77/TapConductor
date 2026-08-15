@@ -293,5 +293,9 @@ pub fn diagnostics(state: State<'_, Arc<AppState>>) -> Result<DiagnosticsDto, St
         core.midi.selected_input_name(),
         core.midi.selected_output_name(),
         core.midi.output_error(),
+        core.midi.discovered_input_names(),
+        core.midi.discovered_output_names(),
+        core.midi.input_discovery_error(),
+        core.midi.output_discovery_error(),
     ))
 }

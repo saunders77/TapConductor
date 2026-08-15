@@ -13,7 +13,9 @@ use std::{
 use tapconductor_midi::{
     MidiChannel, MidiInputConfig, MidiInputMapper, MidiMessage, MidiNote, MidiOutGroupId,
     MidiOutNote, MidiOutState, MidiTapEvent, Velocity,
-    backend::{MidiBackend, MidiInputConnection, MidiOutputConnection, MidirBackend},
+    backend::{
+        MidiBackend, MidiDeviceInfo, MidiInputConnection, MidiOutputConnection, MidirBackend,
+    },
 };
 use tapconductor_performance as performance;
 
@@ -179,6 +181,10 @@ pub struct MidiManager {
     selected_input_name: Option<String>,
     selected_output_name: Option<String>,
     last_output_error: Option<String>,
+    last_discovered_input_names: Vec<String>,
+    last_discovered_output_names: Vec<String>,
+    last_input_discovery_error: Option<String>,
+    last_output_discovery_error: Option<String>,
     sample_rate: u32,
     shortcut_function_pitch: Arc<AtomicU8>,
 }
@@ -195,12 +201,67 @@ impl MidiManager {
             selected_input_name: None,
             selected_output_name: None,
             last_output_error: None,
+            last_discovered_input_names: Vec::new(),
+            last_discovered_output_names: Vec::new(),
+            last_input_discovery_error: None,
+            last_output_discovery_error: None,
             sample_rate,
             shortcut_function_pitch: Arc::new(AtomicU8::new(36)),
         }
     }
 
-    pub fn ports(&self) -> Result<MidiPortsDto, String> {
+    pub fn ports(&mut self) -> Result<MidiPortsDto, String> {
+        let (input_result, output_result) = self.discover_ports()?;
+        self.last_input_discovery_error = input_result.as_ref().err().cloned();
+        self.last_output_discovery_error = output_result.as_ref().err().cloned();
+        let inputs = input_result.unwrap_or_default();
+        let outputs = output_result.unwrap_or_default();
+        self.last_discovered_input_names =
+            inputs.iter().map(|device| device.name.clone()).collect();
+        self.last_discovered_output_names =
+            outputs.iter().map(|device| device.name.clone()).collect();
+        Ok(MidiPortsDto {
+            inputs: inputs.into_iter().map(device_dto).collect(),
+            outputs: outputs.into_iter().map(device_dto).collect(),
+            selected_input: self.selected_input_id.clone(),
+            selected_output: self.selected_output_id.clone(),
+            input_discovery_error: self.last_input_discovery_error.clone(),
+            output_discovery_error: self.last_output_discovery_error.clone(),
+        })
+    }
+
+    #[cfg(target_os = "ios")]
+    fn discover_ports(
+        &self,
+    ) -> Result<
+        (
+            Result<Vec<MidiDeviceInfo>, String>,
+            Result<Vec<MidiDeviceInfo>, String>,
+        ),
+        String,
+    > {
+        // CoreMIDI enumeration is fast and synchronous. Keeping both queries on
+        // this command thread avoids concurrent MIDIClientCreate calls on iOS.
+        Ok((
+            self.backend
+                .input_devices()
+                .map_err(|error| error.to_string()),
+            self.backend
+                .output_devices()
+                .map_err(|error| error.to_string()),
+        ))
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    fn discover_ports(
+        &self,
+    ) -> Result<
+        (
+            Result<Vec<MidiDeviceInfo>, String>,
+            Result<Vec<MidiDeviceInfo>, String>,
+        ),
+        String,
+    > {
         let backend = self.backend;
         let (input_sender, input_receiver) = mpsc::sync_channel(1);
         thread::Builder::new()
@@ -222,20 +283,9 @@ impl MidiManager {
             .map_err(|error| format!("Unable to start MIDI output discovery: {error}"))?;
 
         let deadline = Instant::now() + MIDI_OPERATION_TIMEOUT;
-        let inputs = receive_midi_result(input_receiver, deadline, "input discovery")?
-            .into_iter()
-            .map(device_dto)
-            .collect();
-        let outputs = receive_midi_result(output_receiver, deadline, "output discovery")?
-            .into_iter()
-            .map(device_dto)
-            .collect();
-        Ok(MidiPortsDto {
-            inputs,
-            outputs,
-            selected_input: self.selected_input_id.clone(),
-            selected_output: self.selected_output_id.clone(),
-        })
+        let inputs = receive_midi_result(input_receiver, deadline, "input discovery");
+        let outputs = receive_midi_result(output_receiver, deadline, "output discovery");
+        Ok((inputs, outputs))
     }
 
     pub fn selected_input_name(&self) -> Option<String> {
@@ -248,6 +298,22 @@ impl MidiManager {
 
     pub fn output_error(&self) -> Option<String> {
         self.last_output_error.clone()
+    }
+
+    pub fn discovered_input_names(&self) -> Vec<String> {
+        self.last_discovered_input_names.clone()
+    }
+
+    pub fn discovered_output_names(&self) -> Vec<String> {
+        self.last_discovered_output_names.clone()
+    }
+
+    pub fn input_discovery_error(&self) -> Option<String> {
+        self.last_input_discovery_error.clone()
+    }
+
+    pub fn output_discovery_error(&self) -> Option<String> {
+        self.last_output_discovery_error.clone()
     }
 
     pub fn set_sample_rate(&mut self, sample_rate: u32) {

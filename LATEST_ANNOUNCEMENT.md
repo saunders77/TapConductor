@@ -1,1 +1,1 @@
-Welcome to TapConductor! Select the <strong>Info</strong> button near the top left for help. Please report any bugs on [GitHub](https://github.com/saunders77/TapConductor/issues). Thank you!
+Welcome to TapConductor! Please report any bugs on [GitHub](https://github.com/saunders77/TapConductor/issues). Thank you!

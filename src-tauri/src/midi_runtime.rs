@@ -171,6 +171,9 @@ impl OutputWorker {
 
 const MIDI_OPERATION_TIMEOUT: Duration = Duration::from_secs(5);
 
+type MidiDeviceDiscoveryResult = Result<Vec<MidiDeviceInfo>, String>;
+type MidiDiscoveryResult = Result<(MidiDeviceDiscoveryResult, MidiDeviceDiscoveryResult), String>;
+
 pub struct MidiManager {
     backend: MidirBackend,
     input_action_sender: Sender<MidiInputAction>,
@@ -231,15 +234,7 @@ impl MidiManager {
     }
 
     #[cfg(target_os = "ios")]
-    fn discover_ports(
-        &self,
-    ) -> Result<
-        (
-            Result<Vec<MidiDeviceInfo>, String>,
-            Result<Vec<MidiDeviceInfo>, String>,
-        ),
-        String,
-    > {
+    fn discover_ports(&self) -> MidiDiscoveryResult {
         // CoreMIDI enumeration is fast and synchronous. Keeping both queries on
         // this command thread avoids concurrent MIDIClientCreate calls on iOS.
         Ok((
@@ -253,15 +248,7 @@ impl MidiManager {
     }
 
     #[cfg(not(target_os = "ios"))]
-    fn discover_ports(
-        &self,
-    ) -> Result<
-        (
-            Result<Vec<MidiDeviceInfo>, String>,
-            Result<Vec<MidiDeviceInfo>, String>,
-        ),
-        String,
-    > {
+    fn discover_ports(&self) -> MidiDiscoveryResult {
         let backend = self.backend;
         let (input_sender, input_receiver) = mpsc::sync_channel(1);
         thread::Builder::new()

@@ -20,6 +20,16 @@ const COMMAND_QUEUE: usize = 2_048;
 const SCHEDULE_CAPACITY: usize = 2_048;
 const VOICES: usize = 256;
 
+pub struct MidiDiagnosticsState {
+    pub input: Option<String>,
+    pub output: Option<String>,
+    pub output_error: Option<String>,
+    pub inputs_available: Vec<String>,
+    pub outputs_available: Vec<String>,
+    pub input_discovery_error: Option<String>,
+    pub output_discovery_error: Option<String>,
+}
+
 #[cfg(not(windows))]
 fn new_platform_audio_backend() -> PlatformAudioBackend {
     PlatformAudioBackend
@@ -507,16 +517,7 @@ impl AudioManager {
         result
     }
 
-    pub fn diagnostics(
-        &self,
-        midi_input: Option<String>,
-        midi_output: Option<String>,
-        midi_output_error: Option<String>,
-        midi_inputs_available: Vec<String>,
-        midi_outputs_available: Vec<String>,
-        midi_input_discovery_error: Option<String>,
-        midi_output_discovery_error: Option<String>,
-    ) -> DiagnosticsDto {
+    pub fn diagnostics(&self, midi: MidiDiagnosticsState) -> DiagnosticsDto {
         let snapshot = self
             .runtime
             .as_ref()
@@ -544,13 +545,13 @@ impl AudioManager {
             direct_wasapi_stream: self.uses_direct_wasapi_stream(),
             asio_stream: self.uses_asio_stream(),
             wasapi_periods: self.wasapi_periods,
-            midi_input,
-            midi_output,
-            midi_output_error,
-            midi_inputs_available,
-            midi_outputs_available,
-            midi_input_discovery_error,
-            midi_output_discovery_error,
+            midi_input: midi.input,
+            midi_output: midi.output,
+            midi_output_error: midi.output_error,
+            midi_inputs_available: midi.inputs_available,
+            midi_outputs_available: midi.outputs_available,
+            midi_input_discovery_error: midi.input_discovery_error,
+            midi_output_discovery_error: midi.output_discovery_error,
             ready: self.runtime.is_some() && snapshot.backend_errors == 0,
             message: self
                 .last_error

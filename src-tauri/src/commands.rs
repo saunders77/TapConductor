@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Michael Saunders
 use crate::{
     AppState,
+    audio_runtime::MidiDiagnosticsState,
     core::AppCore,
     crash_marker::NativeTelemetryState,
     dto::{DeviceDto, DiagnosticsDto, LoadedScoreDto, MidiPortsDto},
@@ -289,13 +290,13 @@ pub fn set_midi_output(state: State<'_, Arc<AppState>>, id: Option<String>) -> R
 #[tauri::command]
 pub fn diagnostics(state: State<'_, Arc<AppState>>) -> Result<DiagnosticsDto, String> {
     let core = lock_core(&state)?;
-    Ok(core.audio.diagnostics(
-        core.midi.selected_input_name(),
-        core.midi.selected_output_name(),
-        core.midi.output_error(),
-        core.midi.discovered_input_names(),
-        core.midi.discovered_output_names(),
-        core.midi.input_discovery_error(),
-        core.midi.output_discovery_error(),
-    ))
+    Ok(core.audio.diagnostics(MidiDiagnosticsState {
+        input: core.midi.selected_input_name(),
+        output: core.midi.selected_output_name(),
+        output_error: core.midi.output_error(),
+        inputs_available: core.midi.discovered_input_names(),
+        outputs_available: core.midi.discovered_output_names(),
+        input_discovery_error: core.midi.input_discovery_error(),
+        output_discovery_error: core.midi.output_discovery_error(),
+    }))
 }

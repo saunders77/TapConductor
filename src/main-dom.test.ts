@@ -132,6 +132,17 @@ test("iPad collapsed chrome retains only the compact transport footer", () => {
   assert.match(styles, /\.platform-ipados \.shell\.chrome-hidden \.bottom-controls\s*{[^}]*display:\s*none\s*!important;/s);
 });
 
+test("iPad collapsed chrome hides the entire footer while MIDI input is active", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(source, /function syncMidiInputChromeState\(\): void\s*{[^}]*classList\.toggle\("midi-input-active", selectedMidiInputId\.length > 0\);/s);
+  assert.match(source, /selectedMidiInputId = requested;\s*syncMidiInputChromeState\(\);/s);
+  assert.match(source, /selectedMidiInputId = selectedInputStillExists[\s\S]*?elements\.midiInput\.value = selectedMidiInputId;\s*syncMidiInputChromeState\(\);/s);
+  assert.match(source, /selectedMidiInputId = resolved\.id;\s*elements\.midiInput\.value = resolved\.id;\s*syncMidiInputChromeState\(\);/s);
+  assert.match(styles, /\.platform-ipados \.shell\.chrome-hidden\.midi-input-active \.workspace\s*{[^}]*grid-template-rows:\s*minmax\(0, 1fr\) 0;/s);
+  assert.match(styles, /\.platform-ipados \.shell\.chrome-hidden\.midi-input-active \.performance-strip\s*{[^}]*display:\s*none;/s);
+});
+
 test("iPad TAP copy is touch-specific and footer sliders use touch order", () => {
   assert.match(source, /class="ipad-tap-help">Hold for longer notes\. Use multiple fingers separately to hold each chord its desired length\./);
   assert.match(source, /appleUiPlatform === "ipados"\s*\? \[elements\.regularRoll\.parentElement, elements\.auditionRoll\.parentElement, elements\.volume\.parentElement, zoomControls\]/s);

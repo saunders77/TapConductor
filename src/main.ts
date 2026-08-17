@@ -689,6 +689,10 @@ let midiDeviceRefreshTimer: number | undefined;
 let currentAnnouncementId: string | null = null;
 let announcementPreviousFocus: HTMLElement | null = null;
 
+function syncMidiInputChromeState(): void {
+  shell?.classList.toggle("midi-input-active", selectedMidiInputId.length > 0);
+}
+
 type MacosMenuOption = { label: string; selected: boolean };
 type MacosMenuState = {
   audioOutputs: MacosMenuOption[];
@@ -2654,6 +2658,7 @@ async function attemptPersistedDeviceRestoration(): Promise<void> {
           await invokeSafe("set_midi_input", { id: resolved.id });
           selectedMidiInputId = resolved.id;
           elements.midiInput.value = resolved.id;
+          syncMidiInputChromeState();
           desiredMidiInput = { id: resolved.id, name: resolved.name };
           persistedSettings.midiInput = desiredMidiInput;
           midiInputRestorePending = false;
@@ -2740,6 +2745,7 @@ async function refreshDevices(): Promise<void> {
       .some((device) => device.id === midiPorts.selectedInput);
     selectedMidiInputId = selectedInputStillExists ? midiPorts.selectedInput ?? "" : "";
     elements.midiInput.value = selectedMidiInputId;
+    syncMidiInputChromeState();
     if (desiredMidiInput?.id && desiredMidiInput.id !== selectedMidiInputId) {
       midiInputRestorePending = true;
     }
@@ -3970,6 +3976,7 @@ elements.midiInput.addEventListener("change", async () => {
   try {
     await invokeSafe("set_midi_input", { id: requested || null });
     selectedMidiInputId = requested;
+    syncMidiInputChromeState();
     desiredMidiInput = preferenceForDevice(requested, availableMidiInputs);
     persistedSettings.midiInput = desiredMidiInput;
     midiInputRestorePending = false;
@@ -3987,6 +3994,7 @@ elements.midiInput.addEventListener("change", async () => {
     if (isWebBuild()) await refreshDevices();
   } catch {
     elements.midiInput.value = previous;
+    syncMidiInputChromeState();
     fitSelect(elements.midiInput);
   }
 });

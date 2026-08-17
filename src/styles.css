@@ -484,6 +484,10 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
   padding-bottom: max(2px, env(safe-area-inset-bottom, 0px));
 }
 .platform-ipados .shell.chrome-hidden .bottom-controls { display: none !important; }
+.platform-ipados .shell.chrome-hidden.midi-input-active .workspace {
+  grid-template-rows: minmax(0, 1fr) 0;
+}
+.platform-ipados .shell.chrome-hidden.midi-input-active .performance-strip { display: none; }
 
 .web-edition-badge {
   flex: 0 0 auto;

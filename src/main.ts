@@ -3881,6 +3881,21 @@ for (const [button, popover] of [
 
 elements.partsButton.addEventListener("click", () => togglePopover(elements.partsButton, elements.partsPopover));
 
+function releaseSelectionFocus(selection: HTMLSelectElement): void {
+  // Native selection menus can leave their WebView/AppKit control focused
+  // after a choice is committed. That stale focus may consume the first
+  // pointer activation aimed at a button. Release every select immediately,
+  // on every platform, then verify again after the native menu has closed.
+  selection.blur();
+  window.requestAnimationFrame(() => {
+    if (document.activeElement === selection) selection.blur();
+  });
+}
+
+for (const selection of document.querySelectorAll<HTMLSelectElement>("select")) {
+  selection.addEventListener("change", () => releaseSelectionFocus(selection));
+}
+
 for (const control of controlDeck?.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select") ?? []) {
   if (control instanceof HTMLSelectElement) fitSelect(control);
   control.addEventListener("change", () => {
@@ -3890,16 +3905,6 @@ for (const control of controlDeck?.querySelectorAll<HTMLInputElement | HTMLSelec
   control.addEventListener("blur", () => control.classList.remove("selection-committed"));
   control.addEventListener("keydown", () => control.classList.remove("selection-committed"));
   control.addEventListener("pointerdown", () => control.classList.remove("selection-committed"));
-}
-
-function releaseAudioOutputFocus(): void {
-  // On macOS, the native select can retain a committed menu interaction and
-  // consume the next key or pointer activation. Relinquish it immediately,
-  // then again after WebKit/AppKit has finished closing the native menu.
-  elements.audioOutput.blur();
-  window.requestAnimationFrame(() => {
-    if (document.activeElement === elements.audioOutput) elements.audioOutput.blur();
-  });
 }
 
 async function applyAudioOutputSelection(requested: string): Promise<boolean> {
@@ -3936,7 +3941,6 @@ async function applyAudioOutputSelection(requested: string): Promise<boolean> {
 }
 
 elements.audioOutput.addEventListener("change", async () => {
-  releaseAudioOutputFocus();
   const requested = elements.audioOutput.value;
   if (requested === RELOAD_AUDIO_SYSTEMS_VALUE) {
     elements.audioOutput.value = selectedAudioDeviceId;

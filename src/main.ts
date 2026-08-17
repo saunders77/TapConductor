@@ -2442,6 +2442,32 @@ app.addEventListener("pointerdown", (event) => {
   auditionPointerHolds.set(event.pointerId, createPointerHold(token, down, finalOnsetDelayMs));
 });
 
+let auditionMouseFallback: { button: HTMLButtonElement; hold: PointerHold } | null = null;
+app.addEventListener("mousedown", (event) => {
+  if (event.button !== 0) return;
+  const match = auditionTargetFromEvent(event);
+  if (!match || isPointerManagedButtonPressed(match.button)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const token = `audition:mouse:${crypto.randomUUID()}`;
+  const index = match.target.resolveIndex();
+  const noteCount = match.target.midiPitches?.length ?? score?.events[index]?.notes.length ?? 1;
+  const finalOnsetDelayMs = rolledFinalOnsetDelay(noteCount, Number(elements.auditionRoll.value));
+  const down = auditionDown(token, index, match.target.midiPitches);
+  auditionMouseFallback = {
+    button: match.button,
+    hold: createPointerHold(token, down, finalOnsetDelayMs),
+  };
+});
+
+window.addEventListener("mouseup", (event) => {
+  if (event.button !== 0 || !auditionMouseFallback) return;
+  const { button, hold } = auditionMouseFallback;
+  auditionMouseFallback = null;
+  markPointerManagedClickCompleted(button);
+  void releasePointerHold(hold);
+});
+
 const releaseAuditionPointer = (event: PointerEvent): void => {
   const hold = auditionPointerHolds.get(event.pointerId);
   if (!hold) return;
@@ -3541,6 +3567,30 @@ elements.tap.addEventListener("pointerdown", (event) => {
     createPointerHold(token, down, finalOnsetDelayMs, tapMode === "rhythm" ? MINIMUM_POINTER_NOTE_HOLD_MS : 0),
   );
 });
+let tapMouseFallback: PointerHold | null = null;
+elements.tap.addEventListener("mousedown", (event) => {
+  if (event.button !== 0 || isPointerManagedButtonPressed(elements.tap)) return;
+  event.preventDefault();
+  const token = `pointer:mouse:${crypto.randomUUID()}`;
+  const noteCount = score?.events[cursorIndex]?.notes.length ?? 1;
+  const finalOnsetDelayMs = tapMode === "rhythm"
+    ? rolledFinalOnsetDelay(noteCount, Number(elements.regularRoll.value))
+    : 0;
+  const down = performDown(token);
+  tapMouseFallback = createPointerHold(
+    token,
+    down,
+    finalOnsetDelayMs,
+    tapMode === "rhythm" ? MINIMUM_POINTER_NOTE_HOLD_MS : 0,
+  );
+});
+window.addEventListener("mouseup", (event) => {
+  if (event.button !== 0 || !tapMouseFallback) return;
+  const hold = tapMouseFallback;
+  tapMouseFallback = null;
+  markPointerManagedClickCompleted(elements.tap);
+  void releasePointerHold(hold);
+});
 const releaseTapPointer = (event: PointerEvent): void => {
   const hold = tapPointerHolds.get(event.pointerId);
   if (!hold) return;
@@ -3917,6 +3967,15 @@ function shouldActivatePointerManagedButtonFromClick(
   return false;
 }
 
+function isPointerManagedButtonPressed(button: HTMLButtonElement): boolean {
+  return [...pressedPointerManagedButtons.values()].includes(button);
+}
+
+function markPointerManagedClickCompleted(button: HTMLButtonElement): void {
+  completedPointerManagedClicks.add(button);
+  window.setTimeout(() => completedPointerManagedClicks.delete(button), 0);
+}
+
 document.addEventListener("pointerdown", (event) => {
   const button = enabledButtonFromPointer(event);
   if (!button) return;
@@ -3931,8 +3990,7 @@ document.addEventListener("pointerup", (event) => {
   const pointerManaged = pressedPointerManagedButtons.get(event.pointerId);
   pressedPointerManagedButtons.delete(event.pointerId);
   if (pointerManaged && enabledButtonFromPointer(event) === pointerManaged) {
-    completedPointerManagedClicks.add(pointerManaged);
-    window.setTimeout(() => completedPointerManagedClicks.delete(pointerManaged), 0);
+    markPointerManagedClickCompleted(pointerManaged);
     return;
   }
   const pressed = pressedButtons.get(event.pointerId);

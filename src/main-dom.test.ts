@@ -263,3 +263,10 @@ test("pointer-managed Audition and TAP buttons recover click-only activation wit
   assert.doesNotMatch(source, /app\.addEventListener\("click", \(event\) => \{\s*if \(event\.detail !== 0\) return/);
   assert.doesNotMatch(source, /elements\.tap\.addEventListener\("click", \(event\) => \{\s*if \(event\.detail !== 0\) return/);
 });
+
+test("Audition and TAP recover immediate mouse-down holds when pointerdown is omitted", () => {
+  assert.match(source, /app\.addEventListener\("mousedown"[\s\S]*?isPointerManagedButtonPressed\(match\.button\)[\s\S]*?auditionDown\(token, index, match\.target\.midiPitches\)[\s\S]*?createPointerHold/);
+  assert.match(source, /elements\.tap\.addEventListener\("mousedown"[\s\S]*?isPointerManagedButtonPressed\(elements\.tap\)[\s\S]*?performDown\(token\)[\s\S]*?createPointerHold/);
+  assert.match(source, /window\.addEventListener\("mouseup"[\s\S]*?markPointerManagedClickCompleted\(button\)[\s\S]*?releasePointerHold\(hold\)/);
+  assert.match(source, /function markPointerManagedClickCompleted[\s\S]*?completedPointerManagedClicks\.add\(button\)/);
+});

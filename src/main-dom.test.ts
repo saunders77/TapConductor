@@ -244,3 +244,13 @@ test("normal position changes do not mutate OSMD or animate the engraving stack"
   assert.match(styles, /\.score-position-highlight\.current\s*{[^}]*visibility:\s*visible;/s);
   assert.doesNotMatch(styles, /\.score-position-highlight\s*{[^}]*transition:/s);
 });
+
+test("ordinary buttons recover a click suppressed by native focus transitions", () => {
+  assert.match(source, /const pressedButtons = new Map<number, HTMLButtonElement>\(\)/);
+  assert.match(source, /document\.addEventListener\("pointerup"[\s\S]*?window\.setTimeout\([\s\S]*?pressed\.click\(\)/);
+  assert.match(source, /document\.addEventListener\("click"[\s\S]*?window\.clearTimeout\(fallback\)/);
+  assert.match(source, /start\.addEventListener\("click", reposition\)/);
+  assert.doesNotMatch(source, /start\.addEventListener\("pointerdown", reposition\)/);
+  assert.match(source, /data-pointer-activation="hold"/);
+  assert.match(source, /button\.dataset\.pointerActivation = "hold"/);
+});

@@ -62,14 +62,14 @@ test("iOS restores suspended audio whenever its scene becomes active", () => {
   assert.match(audioRuntimeSource, /self\.suspended = false/);
 });
 
-test("every committed selection releases native focus before the next button activation", () => {
+test("changing audio output releases the native selector before performance input resumes", () => {
   assert.match(
     source,
-    /function releaseSelectionFocus\(selection: HTMLSelectElement\)[\s\S]*?selection\.blur\(\)[\s\S]*?requestAnimationFrame[\s\S]*?document\.activeElement === selection[\s\S]*?selection\.blur\(\)/,
+    /function releaseAudioOutputFocus\(\)[\s\S]*?elements\.audioOutput\.blur\(\)[\s\S]*?requestAnimationFrame[\s\S]*?document\.activeElement === elements\.audioOutput[\s\S]*?elements\.audioOutput\.blur\(\)/,
   );
   assert.match(
     source,
-    /document\.querySelectorAll<HTMLSelectElement>\("select"\)[\s\S]*?selection\.addEventListener\("change", \(\) => releaseSelectionFocus\(selection\)\)/,
+    /elements\.audioOutput\.addEventListener\("change", async \(\) => \{\s*releaseAudioOutputFocus\(\);/,
   );
 });
 

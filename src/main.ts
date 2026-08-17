@@ -373,7 +373,7 @@ app.innerHTML = `
           <small id="position-detail">—</small>
         </div>
         <button id="back-button" class="transport" type="button" disabled aria-label="Previous score event" aria-keyshortcuts="ArrowLeft"><span aria-hidden="true">‹</span></button>
-        <button id="tap-button" class="tap-button" type="button" disabled aria-label="Tap to play the next score event" aria-keyshortcuts="Enter">
+        <button id="tap-button" class="tap-button" type="button" data-pointer-activation="hold" disabled aria-label="Tap to play the next score event" aria-keyshortcuts="Enter">
           <span>TAP</span>
           <small class="keyboard-tap-help">Tap <strong>any key A-Z</strong> to play.</small>
           <small class="keyboard-tap-help">Hold for longer notes.</small>
@@ -2397,10 +2397,7 @@ function createSliceControls(resolveIndex: () => number, measureNumber: string):
       if (tapMode === "beat") resetBeatTap();
     });
   };
-  start.addEventListener("pointerdown", reposition);
-  start.addEventListener("click", (event) => {
-    if (event.detail === 0) reposition(event);
-  });
+  start.addEventListener("click", reposition);
   controls.append(play, start);
   return controls;
 }
@@ -2410,6 +2407,7 @@ function installAuditionHandlers(
   resolveIndex: () => number,
   midiPitches?: number[],
 ): void {
+  button.dataset.pointerActivation = "hold";
   auditionTargets.set(button, { resolveIndex, midiPitches });
 }
 
@@ -3887,20 +3885,50 @@ for (const [button, popover] of [
 
 elements.partsButton.addEventListener("click", () => togglePopover(elements.partsButton, elements.partsPopover));
 
-function releaseSelectionFocus(selection: HTMLSelectElement): void {
-  // Native selection menus can leave their WebView/AppKit control focused
-  // after a choice is committed. That stale focus may consume the first
-  // pointer activation aimed at a button. Release every select immediately,
-  // on every platform, then verify again after the native menu has closed.
-  selection.blur();
-  window.requestAnimationFrame(() => {
-    if (document.activeElement === selection) selection.blur();
-  });
+// A native selector or host focus transition can occasionally suppress the
+// synthesized `click` that normally follows pointerup. Recover that missing
+// activation for every ordinary button at the click layer. Controls whose
+// pointer duration shapes sound already own their complete pointer lifecycle.
+const pressedButtons = new Map<number, HTMLButtonElement>();
+const buttonClickFallbacks = new WeakMap<HTMLButtonElement, number>();
+
+function ordinaryButtonFromPointer(event: PointerEvent): HTMLButtonElement | null {
+  if (event.button !== 0 || !(event.target instanceof Element)) return null;
+  const button = event.target.closest("button");
+  if (!(button instanceof HTMLButtonElement) || button.disabled) return null;
+  return button.dataset.pointerActivation === "hold" ? null : button;
 }
 
-for (const selection of document.querySelectorAll<HTMLSelectElement>("select")) {
-  selection.addEventListener("change", () => releaseSelectionFocus(selection));
-}
+document.addEventListener("pointerdown", (event) => {
+  const button = ordinaryButtonFromPointer(event);
+  if (button) pressedButtons.set(event.pointerId, button);
+}, { capture: true });
+
+document.addEventListener("pointerup", (event) => {
+  const pressed = pressedButtons.get(event.pointerId);
+  pressedButtons.delete(event.pointerId);
+  if (!pressed || ordinaryButtonFromPointer(event) !== pressed) return;
+  const fallback = window.setTimeout(() => {
+    buttonClickFallbacks.delete(pressed);
+    if (pressed.isConnected && !pressed.disabled) pressed.click();
+  }, 0);
+  buttonClickFallbacks.set(pressed, fallback);
+}, { capture: true });
+
+const cancelPressedButton = (event: PointerEvent): void => {
+  pressedButtons.delete(event.pointerId);
+};
+document.addEventListener("pointercancel", cancelPressedButton, { capture: true });
+document.addEventListener("lostpointercapture", cancelPressedButton, { capture: true });
+document.addEventListener("click", (event) => {
+  if (!(event.target instanceof Element)) return;
+  const button = event.target.closest("button");
+  if (!(button instanceof HTMLButtonElement)) return;
+  const fallback = buttonClickFallbacks.get(button);
+  if (fallback === undefined) return;
+  window.clearTimeout(fallback);
+  buttonClickFallbacks.delete(button);
+}, { capture: true });
 
 for (const control of controlDeck?.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select") ?? []) {
   if (control instanceof HTMLSelectElement) fitSelect(control);
@@ -3911,6 +3939,16 @@ for (const control of controlDeck?.querySelectorAll<HTMLInputElement | HTMLSelec
   control.addEventListener("blur", () => control.classList.remove("selection-committed"));
   control.addEventListener("keydown", () => control.classList.remove("selection-committed"));
   control.addEventListener("pointerdown", () => control.classList.remove("selection-committed"));
+}
+
+function releaseAudioOutputFocus(): void {
+  // Changing audio devices can rebuild native audio state while the selector
+  // is closing, so retain its targeted lifecycle safeguard independently of
+  // the general button-activation recovery above.
+  elements.audioOutput.blur();
+  window.requestAnimationFrame(() => {
+    if (document.activeElement === elements.audioOutput) elements.audioOutput.blur();
+  });
 }
 
 async function applyAudioOutputSelection(requested: string): Promise<boolean> {
@@ -3947,6 +3985,7 @@ async function applyAudioOutputSelection(requested: string): Promise<boolean> {
 }
 
 elements.audioOutput.addEventListener("change", async () => {
+  releaseAudioOutputFocus();
   const requested = elements.audioOutput.value;
   if (requested === RELOAD_AUDIO_SYSTEMS_VALUE) {
     elements.audioOutput.value = selectedAudioDeviceId;

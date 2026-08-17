@@ -2452,9 +2452,9 @@ app.addEventListener("pointerup", releaseAuditionPointer);
 app.addEventListener("pointercancel", releaseAuditionPointer);
 app.addEventListener("lostpointercapture", releaseAuditionPointer);
 app.addEventListener("click", (event) => {
-  if (event.detail !== 0) return;
   const match = auditionTargetFromEvent(event);
   if (!match) return;
+  if (!shouldActivatePointerManagedButtonFromClick(match.button, event)) return;
   const keyboardToken = `audition-keyboard:${crypto.randomUUID()}`;
   void auditionDown(
     keyboardToken,
@@ -3551,7 +3551,7 @@ elements.tap.addEventListener("pointerup", releaseTapPointer);
 elements.tap.addEventListener("pointercancel", releaseTapPointer);
 elements.tap.addEventListener("lostpointercapture", releaseTapPointer);
 elements.tap.addEventListener("click", (event) => {
-  if (event.detail !== 0) return;
+  if (!shouldActivatePointerManagedButtonFromClick(elements.tap, event)) return;
   const token = `tap-keyboard:${crypto.randomUUID()}`;
   void performDown(token).then(() => performUp(token));
 });
@@ -3888,23 +3888,53 @@ elements.partsButton.addEventListener("click", () => togglePopover(elements.part
 // A native selector or host focus transition can occasionally suppress the
 // synthesized `click` that normally follows pointerup. Recover that missing
 // activation for every ordinary button at the click layer. Controls whose
-// pointer duration shapes sound already own their complete pointer lifecycle.
+// pointer duration shapes sound use the same recovery only when their normal
+// pointer lifecycle did not already activate them.
 const pressedButtons = new Map<number, HTMLButtonElement>();
+const pressedPointerManagedButtons = new Map<number, HTMLButtonElement>();
+const completedPointerManagedClicks = new WeakSet<HTMLButtonElement>();
 const buttonClickFallbacks = new WeakMap<HTMLButtonElement, number>();
 
-function ordinaryButtonFromPointer(event: PointerEvent): HTMLButtonElement | null {
+function enabledButtonFromPointer(event: PointerEvent): HTMLButtonElement | null {
   if (event.button !== 0 || !(event.target instanceof Element)) return null;
   const button = event.target.closest("button");
   if (!(button instanceof HTMLButtonElement) || button.disabled) return null;
-  return button.dataset.pointerActivation === "hold" ? null : button;
+  return button;
+}
+
+function ordinaryButtonFromPointer(event: PointerEvent): HTMLButtonElement | null {
+  const button = enabledButtonFromPointer(event);
+  return button?.dataset.pointerActivation === "hold" ? null : button;
+}
+
+function shouldActivatePointerManagedButtonFromClick(
+  button: HTMLButtonElement,
+  event: MouseEvent,
+): boolean {
+  if (event.detail === 0) return true;
+  if (!completedPointerManagedClicks.has(button)) return true;
+  completedPointerManagedClicks.delete(button);
+  return false;
 }
 
 document.addEventListener("pointerdown", (event) => {
-  const button = ordinaryButtonFromPointer(event);
-  if (button) pressedButtons.set(event.pointerId, button);
+  const button = enabledButtonFromPointer(event);
+  if (!button) return;
+  if (button.dataset.pointerActivation === "hold") {
+    pressedPointerManagedButtons.set(event.pointerId, button);
+  } else {
+    pressedButtons.set(event.pointerId, button);
+  }
 }, { capture: true });
 
 document.addEventListener("pointerup", (event) => {
+  const pointerManaged = pressedPointerManagedButtons.get(event.pointerId);
+  pressedPointerManagedButtons.delete(event.pointerId);
+  if (pointerManaged && enabledButtonFromPointer(event) === pointerManaged) {
+    completedPointerManagedClicks.add(pointerManaged);
+    window.setTimeout(() => completedPointerManagedClicks.delete(pointerManaged), 0);
+    return;
+  }
   const pressed = pressedButtons.get(event.pointerId);
   pressedButtons.delete(event.pointerId);
   if (!pressed || ordinaryButtonFromPointer(event) !== pressed) return;
@@ -3917,6 +3947,7 @@ document.addEventListener("pointerup", (event) => {
 
 const cancelPressedButton = (event: PointerEvent): void => {
   pressedButtons.delete(event.pointerId);
+  pressedPointerManagedButtons.delete(event.pointerId);
 };
 document.addEventListener("pointercancel", cancelPressedButton, { capture: true });
 document.addEventListener("lostpointercapture", cancelPressedButton, { capture: true });

@@ -254,3 +254,12 @@ test("ordinary buttons recover a click suppressed by native focus transitions", 
   assert.match(source, /data-pointer-activation="hold"/);
   assert.match(source, /button\.dataset\.pointerActivation = "hold"/);
 });
+
+test("pointer-managed Audition and TAP buttons recover click-only activation without double-playing", () => {
+  assert.match(source, /const completedPointerManagedClicks = new WeakSet<HTMLButtonElement>\(\)/);
+  assert.match(source, /function shouldActivatePointerManagedButtonFromClick[\s\S]*?event\.detail === 0[\s\S]*?!completedPointerManagedClicks\.has\(button\)[\s\S]*?return false/);
+  assert.match(source, /app\.addEventListener\("click"[\s\S]*?shouldActivatePointerManagedButtonFromClick\(match\.button, event\)/);
+  assert.match(source, /elements\.tap\.addEventListener\("click"[\s\S]*?shouldActivatePointerManagedButtonFromClick\(elements\.tap, event\)/);
+  assert.doesNotMatch(source, /app\.addEventListener\("click", \(event\) => \{\s*if \(event\.detail !== 0\) return/);
+  assert.doesNotMatch(source, /elements\.tap\.addEventListener\("click", \(event\) => \{\s*if \(event\.detail !== 0\) return/);
+});

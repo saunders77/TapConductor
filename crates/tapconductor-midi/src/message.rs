@@ -172,6 +172,20 @@ impl Midi1Packet {
 }
 
 impl MidiMessage {
+    /// Returns whether this message selects an instrument on a MIDI receiver.
+    ///
+    /// Bank Select is represented by controller 0 (MSB) and controller 32
+    /// (LSB); a following Program Change selects the program in that bank.
+    pub const fn is_instrument_selection(self) -> bool {
+        matches!(
+            self,
+            Self::ControlChange {
+                controller: 0 | 32,
+                ..
+            } | Self::ProgramChange { .. }
+        )
+    }
+
     /// Serializes channel voice and supported real-time messages without heap
     /// allocation. Every enum variant currently has a MIDI 1.0 representation.
     pub fn to_midi1(self) -> Midi1Packet {
@@ -362,5 +376,48 @@ mod tests {
         }
         .to_midi1();
         assert_eq!(packet.bytes(), &[0x90, 64, 127]);
+    }
+
+    #[test]
+    fn identifies_only_bank_select_and_program_change_as_instrument_selection() {
+        let channel = MidiChannel::new(5).unwrap();
+        for message in [
+            MidiMessage::ControlChange {
+                channel,
+                controller: 0,
+                value: 2,
+            },
+            MidiMessage::ControlChange {
+                channel,
+                controller: 32,
+                value: 0,
+            },
+            MidiMessage::ProgramChange {
+                channel,
+                program: 40,
+            },
+        ] {
+            assert!(message.is_instrument_selection());
+        }
+        assert!(!MidiMessage::ControlChange {
+            channel,
+            controller: 64,
+            value: 127,
+        }
+        .is_instrument_selection());
+    }
+
+    #[test]
+    fn instrument_selection_messages_round_trip_as_exact_midi_bytes() {
+        for bytes in [
+            &[0xb0, 0x00, 0x02][..],
+            &[0xb0, 0x20, 0x00][..],
+            &[0xc0, 0x28][..],
+            &[0xcf, 0x7f][..],
+        ] {
+            let message = parse_midi1(bytes).unwrap().unwrap();
+            assert!(message.is_instrument_selection());
+            assert_eq!(message.to_midi1().bytes(), bytes);
+        }
     }
 }

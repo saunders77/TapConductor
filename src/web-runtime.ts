@@ -17,6 +17,7 @@ import {
   type ScoreReleasePlan,
 } from "./web-note-gate";
 import { AsyncSerialQueue } from "./async-serial-queue";
+import { midiInstrumentSelectionMessage } from "./midi-instrument-selection";
 
 type EventHandler<T> = (event: { payload: T }) => void;
 type Listener = EventHandler<unknown>;
@@ -755,6 +756,8 @@ export class WebRuntime {
   }
 
   private onMidiMessage(inputId: string, data: Uint8Array): void {
+    const instrumentSelection = midiInstrumentSelectionMessage(data);
+    if (instrumentSelection) this.midiOutput()?.send(instrumentSelection);
     const status = data[0] ?? 0;
     const kind = status & 0xf0;
     const pitch = data[1] ?? 0;

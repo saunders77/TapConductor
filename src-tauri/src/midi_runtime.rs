@@ -3,7 +3,7 @@ use crate::dto::{DeviceDto, MidiPortsDto, PianoShortcutCommandDto};
 use std::{
     collections::{HashMap, HashSet},
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicU8, Ordering},
         mpsc::{self, Receiver, RecvTimeoutError, Sender},
     },
@@ -134,6 +134,7 @@ enum OutputWorkerCommand {
         due: Instant,
         group: MidiOutGroupId,
     },
+    InstrumentSelection(MidiMessage),
     Panic,
     Shutdown,
 }
@@ -190,6 +191,7 @@ pub struct MidiManager {
     last_output_discovery_error: Option<String>,
     sample_rate: u32,
     shortcut_function_pitch: Arc<AtomicU8>,
+    instrument_selection_sender: Arc<Mutex<Option<Sender<OutputWorkerCommand>>>>,
 }
 
 impl MidiManager {
@@ -210,6 +212,7 @@ impl MidiManager {
             last_output_discovery_error: None,
             sample_rate,
             shortcut_function_pitch: Arc::new(AtomicU8::new(36)),
+            instrument_selection_sender: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -341,6 +344,7 @@ impl MidiManager {
             .ok_or_else(|| "The selected MIDI input is unavailable.".to_owned())?;
         let sender = self.input_action_sender.clone();
         let shortcut_function_pitch = self.shortcut_function_pitch.clone();
+        let instrument_selection_sender = Arc::clone(&self.instrument_selection_sender);
         // In normal rhythm/free-play modes, keep a MIDI key's input token
         // latched while CC64 sustain is down. The mapper emits its matching
         // Up when the pedal is released, so the existing performance gate
@@ -359,6 +363,13 @@ impl MidiManager {
                 .connect_input(
                     &connection_id,
                     Box::new(move |message| {
+                        if message.message.is_instrument_selection()
+                            && let Ok(sender) = instrument_selection_sender.lock()
+                            && let Some(sender) = sender.as_ref()
+                        {
+                            let _ = sender
+                                .send(OutputWorkerCommand::InstrumentSelection(message.message));
+                        }
                         let function_pitch = shortcut_function_pitch.load(Ordering::Relaxed);
                         match message.message {
                             MidiMessage::NoteOn {
@@ -421,6 +432,10 @@ impl MidiManager {
     }
 
     pub fn set_output(&mut self, device_id: Option<String>) -> Result<(), String> {
+        *self
+            .instrument_selection_sender
+            .lock()
+            .expect("instrument-selection sender lock is not poisoned") = None;
         self.output_worker.take();
         self.selected_output_id = None;
         self.selected_output_name = None;
@@ -445,7 +460,13 @@ impl MidiManager {
                 .connect_output(&connection_id)
                 .map_err(|error| error.to_string())
         })?;
-        self.output_worker = Some(spawn_output_worker(connection)?);
+        let worker = spawn_output_worker(connection)?;
+        *self
+            .instrument_selection_sender
+            .lock()
+            .expect("instrument-selection sender lock is not poisoned") =
+            Some(worker.sender.clone());
+        self.output_worker = Some(worker);
         self.selected_output_id = Some(device_id);
         self.selected_output_name = Some(name);
         Ok(())
@@ -467,6 +488,10 @@ impl MidiManager {
         {
             errors.push(error);
         }
+        *self
+            .instrument_selection_sender
+            .lock()
+            .expect("instrument-selection sender lock is not poisoned") = None;
         if let Some(worker) = self.output_worker.take()
             && let Err(error) = worker.shutdown()
         {
@@ -594,6 +619,10 @@ impl MidiManager {
     }
 
     fn disable_output(&mut self, message: String) {
+        *self
+            .instrument_selection_sender
+            .lock()
+            .expect("instrument-selection sender lock is not poisoned") = None;
         self.output_worker.take();
         self.selected_output_id = None;
         self.selected_output_name = None;
@@ -680,6 +709,12 @@ fn output_worker_loop(
             None => receiver.recv().map_err(|_| RecvTimeoutError::Disconnected),
         };
         match received {
+            Ok(OutputWorkerCommand::InstrumentSelection(message)) => {
+                if output.send(message).is_err() {
+                    let _ = state.panic(output.as_mut());
+                    return;
+                }
+            }
             Ok(OutputWorkerCommand::Panic) => {
                 pending.clear();
                 let _ = state.panic(output.as_mut());
@@ -725,7 +760,9 @@ fn output_worker_loop(
                             result => result,
                         }
                     }
-                    OutputWorkerCommand::Panic | OutputWorkerCommand::Shutdown => Ok(()),
+                    OutputWorkerCommand::InstrumentSelection(_)
+                    | OutputWorkerCommand::Panic
+                    | OutputWorkerCommand::Shutdown => Ok(()),
                 };
                 if result.is_err() {
                     // Attempt controller-based silence even after a partial
@@ -747,16 +784,21 @@ fn command_due(command: &OutputWorkerCommand) -> Option<Instant> {
         OutputWorkerCommand::Play { due, .. } | OutputWorkerCommand::Release { due, .. } => {
             Some(*due)
         }
-        OutputWorkerCommand::Panic | OutputWorkerCommand::Shutdown => None,
+        OutputWorkerCommand::InstrumentSelection(_)
+        | OutputWorkerCommand::Panic
+        | OutputWorkerCommand::Shutdown => None,
     }
 }
 
 #[cfg(test)]
 mod piano_shortcut_tests {
-    use super::{MidiInputAction, PianoShortcutGate, ShortcutGateOutput, spawn_output_worker};
+    use super::{
+        MidiInputAction, OutputWorkerCommand, PianoShortcutGate, ShortcutGateOutput,
+        spawn_output_worker,
+    };
     use crate::dto::PianoShortcutCommandDto;
     use std::sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     };
     use tapconductor_midi::{
@@ -766,6 +808,8 @@ mod piano_shortcut_tests {
 
     struct DropTrackingOutput(Arc<AtomicBool>);
 
+    struct RecordingOutput(Arc<Mutex<Vec<MidiMessage>>>);
+
     impl Drop for DropTrackingOutput {
         fn drop(&mut self) {
             self.0.store(true, Ordering::Release);
@@ -774,6 +818,13 @@ mod piano_shortcut_tests {
 
     impl MidiOutputConnection for DropTrackingOutput {
         fn send(&mut self, _message: MidiMessage) -> Result<(), MidiBackendError> {
+            Ok(())
+        }
+    }
+
+    impl MidiOutputConnection for RecordingOutput {
+        fn send(&mut self, message: MidiMessage) -> Result<(), MidiBackendError> {
+            self.0.lock().unwrap().push(message);
             Ok(())
         }
     }
@@ -851,5 +902,39 @@ mod piano_shortcut_tests {
         worker.shutdown().expect("output worker stops");
 
         assert!(dropped.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn output_worker_preserves_instrument_selection_messages_and_order() {
+        let messages = Arc::new(Mutex::new(Vec::new()));
+        let worker = spawn_output_worker(Box::new(RecordingOutput(Arc::clone(&messages))))
+            .expect("output worker starts");
+        let channel = tapconductor_midi::MidiChannel::new(3).unwrap();
+        let expected = [
+            MidiMessage::ControlChange {
+                channel,
+                controller: 0,
+                value: 2,
+            },
+            MidiMessage::ControlChange {
+                channel,
+                controller: 32,
+                value: 0,
+            },
+            MidiMessage::ProgramChange {
+                channel,
+                program: 40,
+            },
+        ];
+        for message in expected {
+            worker
+                .sender
+                .send(OutputWorkerCommand::InstrumentSelection(message))
+                .unwrap();
+        }
+
+        worker.shutdown().expect("output worker stops");
+
+        assert_eq!(*messages.lock().unwrap(), expected);
     }
 }

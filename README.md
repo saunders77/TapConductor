@@ -81,6 +81,6 @@
 <p>See <a href="PRIVACY.md"><code>PRIVACY.md</code></a> for the full privacy policy.</p>
 
 <p>See <a href="THIRD_PARTY_NOTICES.md"><code>THIRD_PARTY_NOTICES.md</code></a> for direct dependency licenses. TapConductor
-for Windows is licensed under <a href="LICENSE">GNU GPL version 3 only</a>; TapConductor for every other
+for Windows is licensed under <a href="WINDOWS-LICENSE">GNU GPL version 3 only</a>; TapConductor for every other
 platform is licensed under the <a href="LICENSE-MIT">MIT License</a>. See the complete
 <a href="LICENSING.md">platform-specific licensing policy</a>. Copyright (c) 2026 Michael Saunders.</p>

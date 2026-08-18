@@ -112,7 +112,7 @@ function Assert-StoreOverlay {
         "../assets/SlenderSalamander44khz16bit" = "instruments/salamander"
         "../assets/demo/Prelude in C Minor - Chopin 1839.musicxml" = "demo/Prelude in C Minor - Chopin 1839.musicxml"
         "../assets/demo/All-Night Vigil - Rachmaninoff 1915.musicxml" = "demo/All-Night Vigil - Rachmaninoff 1915.musicxml"
-        "../LICENSE" = "LICENSE"
+        "../WINDOWS-LICENSE" = "LICENSE"
         "../PRIVACY.md" = "PRIVACY.md"
         "../THIRD_PARTY_NOTICES.md" = "THIRD_PARTY_NOTICES.md"
     }
@@ -388,7 +388,7 @@ try {
     }
     $outputArtifact = Join-Path $outputDirectory $outputName
     Copy-Item -LiteralPath $builtArtifact -Destination $outputArtifact -Force
-    Copy-Item -LiteralPath (Join-Path $repositoryRoot "LICENSE") -Destination $outputDirectory -Force
+    Copy-Item -LiteralPath (Join-Path $repositoryRoot "WINDOWS-LICENSE") -Destination $outputDirectory -Force
     Copy-Item -LiteralPath (Join-Path $repositoryRoot "PRIVACY.md") -Destination $outputDirectory -Force
     Copy-Item -LiteralPath (
         Join-Path $repositoryRoot "THIRD_PARTY_NOTICES.md"

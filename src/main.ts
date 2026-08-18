@@ -846,6 +846,9 @@ function noteNonMousePointerEvent(event: PointerEvent): void {
 }
 
 function isTouchCompatibilityMouseEvent(event: MouseEvent): boolean {
+  // iOS/iPadOS already use Pointer Events for touch, Pencil, trackpad, and
+  // mouse input. Their compatibility mouse events must never start a new hold.
+  if (appleUiPlatform === "ios" || appleUiPlatform === "ipados") return true;
   const sourceCapabilities = (event as MouseEvent & {
     sourceCapabilities?: { firesTouchEvents?: boolean };
   }).sourceCapabilities;
@@ -2547,6 +2550,7 @@ app.addEventListener("mousedown", (event) => {
   const noteCount = match.target.midiPitches?.length ?? score?.events[index]?.notes.length ?? 1;
   const finalOnsetDelayMs = rolledFinalOnsetDelay(noteCount, Number(elements.auditionRoll.value));
   const down = auditionDown(token, index, match.target.midiPitches);
+  beginPointerManagedButtonPress(match.button, -1);
   auditionMouseFallback = {
     button: match.button,
     hold: createPointerHold(token, down, finalOnsetDelayMs),
@@ -2557,7 +2561,7 @@ window.addEventListener("mouseup", (event) => {
   if (event.button !== 0 || !auditionMouseFallback) return;
   const { button, hold } = auditionMouseFallback;
   auditionMouseFallback = null;
-  markPointerManagedClickCompleted(button);
+  finishPointerManagedButtonPress(button, -1);
   void releasePointerHold(hold);
 });
 
@@ -3772,6 +3776,7 @@ elements.tap.addEventListener("mousedown", (event) => {
     ? rolledFinalOnsetDelay(noteCount, Number(elements.regularRoll.value))
     : 0;
   const down = performDown(token);
+  beginPointerManagedButtonPress(elements.tap, -1);
   tapMouseFallback = createPointerHold(
     token,
     down,
@@ -3783,7 +3788,7 @@ window.addEventListener("mouseup", (event) => {
   if (event.button !== 0 || !tapMouseFallback) return;
   const hold = tapMouseFallback;
   tapMouseFallback = null;
-  markPointerManagedClickCompleted(elements.tap);
+  finishPointerManagedButtonPress(elements.tap, -1);
   void releasePointerHold(hold);
 });
 const releaseTapPointer = (event: PointerEvent): void => {
@@ -4138,13 +4143,17 @@ elements.partsButton.addEventListener("click", () => togglePopover(elements.part
 const pressedButtons = new Map<number, HTMLButtonElement>();
 const pressedPointerManagedButtons = new Map<number, HTMLButtonElement>();
 const CLICK_DEDUPLICATION_MS = 2_000;
+type PointerManagedButtonPresses = {
+  pointerIds: Set<number>;
+  cleanups: Map<number, number>;
+};
 type CompletedButtonClick = {
   pointerId: number | null;
   expiresAt: number;
   cleanup: number;
 };
 type ButtonClickFallback = { timer: number; pointerId: number };
-const completedPointerManagedClicks = new WeakMap<HTMLButtonElement, CompletedButtonClick>();
+const pointerManagedButtonPresses = new WeakMap<HTMLButtonElement, PointerManagedButtonPresses>();
 const recoveredOrdinaryButtonClicks = new WeakMap<HTMLButtonElement, CompletedButtonClick>();
 const buttonClickFallbacks = new WeakMap<HTMLButtonElement, ButtonClickFallback>();
 
@@ -4164,7 +4173,25 @@ function shouldActivatePointerManagedButtonFromClick(
   button: HTMLButtonElement,
   event: MouseEvent,
 ): boolean {
-  return !consumeCompletedButtonClick(completedPointerManagedClicks, button, event);
+  if (!event.isTrusted) return true;
+  const presses = pointerManagedButtonPresses.get(button);
+  if (!presses || presses.pointerIds.size === 0) return true;
+  const eventPointerId = typeof (event as PointerEvent).pointerId === "number"
+    ? (event as PointerEvent).pointerId
+    : null;
+  const pointerId = eventPointerId !== null && presses.pointerIds.has(eventPointerId)
+    ? eventPointerId
+    : presses.pointerIds.values().next().value;
+  if (pointerId !== undefined) presses.pointerIds.delete(pointerId);
+  if (pointerId !== undefined) {
+    const cleanup = presses.cleanups.get(pointerId);
+    if (cleanup !== undefined) window.clearTimeout(cleanup);
+    presses.cleanups.delete(pointerId);
+  }
+  if (presses.pointerIds.size === 0) {
+    pointerManagedButtonPresses.delete(button);
+  }
+  return false;
 }
 
 function isPointerManagedButtonPressed(button: HTMLButtonElement): boolean {
@@ -4225,8 +4252,43 @@ function consumeCompletedButtonClick(
   return true;
 }
 
-function markPointerManagedClickCompleted(button: HTMLButtonElement, pointerId: number | null = null): void {
-  markCompletedButtonClick(completedPointerManagedClicks, button, pointerId);
+function beginPointerManagedButtonPress(button: HTMLButtonElement, pointerId: number): void {
+  const presses = pointerManagedButtonPresses.get(button) ?? {
+    pointerIds: new Set<number>(),
+    cleanups: new Map<number, number>(),
+  };
+  const cleanup = presses.cleanups.get(pointerId);
+  if (cleanup !== undefined) window.clearTimeout(cleanup);
+  presses.cleanups.delete(pointerId);
+  presses.pointerIds.add(pointerId);
+  pointerManagedButtonPresses.set(button, presses);
+}
+
+function finishPointerManagedButtonPress(button: HTMLButtonElement, pointerId: number): void {
+  const presses = pointerManagedButtonPresses.get(button);
+  if (!presses || !presses.pointerIds.has(pointerId)) return;
+  const previousCleanup = presses.cleanups.get(pointerId);
+  if (previousCleanup !== undefined) window.clearTimeout(previousCleanup);
+  const cleanup = window.setTimeout(() => {
+    if (pointerManagedButtonPresses.get(button) === presses) {
+      presses.pointerIds.delete(pointerId);
+      presses.cleanups.delete(pointerId);
+      if (presses.pointerIds.size === 0) pointerManagedButtonPresses.delete(button);
+    }
+  }, CLICK_DEDUPLICATION_MS);
+  presses.cleanups.set(pointerId, cleanup);
+}
+
+function cancelPointerManagedButtonPress(button: HTMLButtonElement, pointerId: number): void {
+  const presses = pointerManagedButtonPresses.get(button);
+  if (!presses) return;
+  presses.pointerIds.delete(pointerId);
+  const cleanup = presses.cleanups.get(pointerId);
+  if (cleanup !== undefined) window.clearTimeout(cleanup);
+  presses.cleanups.delete(pointerId);
+  if (presses.pointerIds.size === 0) {
+    pointerManagedButtonPresses.delete(button);
+  }
 }
 
 document.addEventListener("pointerdown", (event) => {
@@ -4235,6 +4297,7 @@ document.addEventListener("pointerdown", (event) => {
   if (!button) return;
   clearCompletedButtonClick(recoveredOrdinaryButtonClicks, button);
   if (button.dataset.pointerActivation === "hold") {
+    beginPointerManagedButtonPress(button, event.pointerId);
     pressedPointerManagedButtons.set(event.pointerId, button);
   } else {
     pressedButtons.set(event.pointerId, button);
@@ -4246,10 +4309,7 @@ document.addEventListener("pointerup", (event) => {
   const pointerManaged = pressedPointerManagedButtons.get(event.pointerId);
   pressedPointerManagedButtons.delete(event.pointerId);
   if (pointerManaged) {
-    // Pointer-managed buttons already activated on pointerdown. Some iOS
-    // WebViews retarget pointerup after capture changes, but the subsequent
-    // compatibility click still belongs to this completed hold.
-    markPointerManagedClickCompleted(pointerManaged, event.pointerId);
+    finishPointerManagedButtonPress(pointerManaged, event.pointerId);
     return;
   }
   const pressed = pressedButtons.get(event.pointerId);
@@ -4270,14 +4330,16 @@ document.addEventListener("pointerup", (event) => {
 const cancelPressedButton = (event: PointerEvent): void => {
   noteNonMousePointerEvent(event);
   pressedButtons.delete(event.pointerId);
+  const pointerManaged = pressedPointerManagedButtons.get(event.pointerId);
   pressedPointerManagedButtons.delete(event.pointerId);
+  if (pointerManaged) cancelPointerManagedButtonPress(pointerManaged, event.pointerId);
 };
 document.addEventListener("pointercancel", cancelPressedButton, { capture: true });
 document.addEventListener("lostpointercapture", (event) => {
   pressedButtons.delete(event.pointerId);
   const pointerManaged = pressedPointerManagedButtons.get(event.pointerId);
   pressedPointerManagedButtons.delete(event.pointerId);
-  if (pointerManaged) markPointerManagedClickCompleted(pointerManaged, event.pointerId);
+  if (pointerManaged) finishPointerManagedButtonPress(pointerManaged, event.pointerId);
 }, { capture: true });
 document.addEventListener("click", (event) => {
   if (!(event.target instanceof Element)) return;

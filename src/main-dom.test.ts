@@ -256,8 +256,8 @@ test("ordinary buttons recover a click suppressed by native focus transitions", 
 });
 
 test("pointer-managed Audition and TAP buttons recover click-only activation without double-playing", () => {
-  assert.match(source, /const completedPointerManagedClicks = new WeakMap<HTMLButtonElement, CompletedButtonClick>\(\)/);
-  assert.match(source, /function shouldActivatePointerManagedButtonFromClick[\s\S]*?!consumeCompletedButtonClick\(completedPointerManagedClicks, button, event\)/);
+  assert.match(source, /const pointerManagedButtonPresses = new WeakMap<HTMLButtonElement, PointerManagedButtonPresses>\(\)/);
+  assert.match(source, /function shouldActivatePointerManagedButtonFromClick[\s\S]*?!event\.isTrusted[\s\S]*?pointerManagedButtonPresses\.get\(button\)[\s\S]*?return false/);
   assert.match(source, /app\.addEventListener\("click"[\s\S]*?shouldActivatePointerManagedButtonFromClick\(match\.button, event\)/);
   assert.match(source, /elements\.tap\.addEventListener\("click"[\s\S]*?shouldActivatePointerManagedButtonFromClick\(elements\.tap, event\)/);
   assert.doesNotMatch(source, /app\.addEventListener\("click", \(event\) => \{\s*if \(event\.detail !== 0\) return/);
@@ -267,13 +267,13 @@ test("pointer-managed Audition and TAP buttons recover click-only activation wit
 test("Audition and TAP recover immediate mouse-down holds when pointerdown is omitted", () => {
   assert.match(source, /app\.addEventListener\("mousedown"[\s\S]*?isPointerManagedButtonPressed\(match\.button\)[\s\S]*?auditionDown\(token, index, match\.target\.midiPitches\)[\s\S]*?createPointerHold/);
   assert.match(source, /elements\.tap\.addEventListener\("mousedown"[\s\S]*?isPointerManagedButtonPressed\(elements\.tap\)[\s\S]*?performDown\(token\)[\s\S]*?createPointerHold/);
-  assert.match(source, /window\.addEventListener\("mouseup"[\s\S]*?markPointerManagedClickCompleted\(button\)[\s\S]*?releasePointerHold\(hold\)/);
-  assert.match(source, /function markPointerManagedClickCompleted[\s\S]*?markCompletedButtonClick\(completedPointerManagedClicks, button, pointerId\)/);
+  assert.match(source, /window\.addEventListener\("mouseup"[\s\S]*?finishPointerManagedButtonPress\(button, -1\)[\s\S]*?releasePointerHold\(hold\)/);
+  assert.match(source, /function beginPointerManagedButtonPress[\s\S]*?pointerIds\.add\(pointerId\)/);
 });
 
 test("delayed iOS compatibility clicks are deduplicated after touch release", () => {
   assert.match(source, /const CLICK_DEDUPLICATION_MS = 2_000/);
-  assert.match(source, /markPointerManagedClickCompleted\(pointerManaged, event\.pointerId\)/);
+  assert.match(source, /finishPointerManagedButtonPress\(pointerManaged, event\.pointerId\)/);
   assert.match(source, /function consumeCompletedButtonClick[\s\S]*?!event\.isTrusted[\s\S]*?completed\.pointerId !== eventPointerId[\s\S]*?clearCompletedButtonClick/);
   assert.match(source, /markCompletedButtonClick\(recoveredOrdinaryButtonClicks, pressed, fallback\.pointerId\)/);
   assert.match(source, /consumeCompletedButtonClick\(recoveredOrdinaryButtonClicks, button, event\)[\s\S]*?event\.stopImmediatePropagation\(\)/);
@@ -281,15 +281,15 @@ test("delayed iOS compatibility clicks are deduplicated after touch release", ()
 
 test("iOS pointer retargeting and lost capture still complete held-button clicks", () => {
   const pointerUpRecovery = source.match(/document\.addEventListener\("pointerup"[\s\S]*?\}, \{ capture: true \}\);/)?.[0] ?? "";
-  assert.match(pointerUpRecovery, /if \(pointerManaged\)[\s\S]*?markPointerManagedClickCompleted\(pointerManaged, event\.pointerId\)/);
+  assert.match(pointerUpRecovery, /if \(pointerManaged\)[\s\S]*?finishPointerManagedButtonPress\(pointerManaged, event\.pointerId\)/);
   assert.doesNotMatch(pointerUpRecovery, /enabledButtonFromPointer\(event\) === pointerManaged/);
-  assert.match(source, /document\.addEventListener\("lostpointercapture"[\s\S]*?markPointerManagedClickCompleted\(pointerManaged, event\.pointerId\)/);
+  assert.match(source, /document\.addEventListener\("lostpointercapture"[\s\S]*?finishPointerManagedButtonPress\(pointerManaged, event\.pointerId\)/);
 });
 
 test("iOS compatibility mouse events cannot start a second hold after touch release", () => {
   assert.match(source, /const COMPATIBILITY_MOUSE_BLOCK_MS = 1_500/);
   assert.match(source, /function noteNonMousePointerEvent[\s\S]*?event\.pointerType !== "mouse"[\s\S]*?compatibilityMouseBlockedUntil/);
-  assert.match(source, /function isTouchCompatibilityMouseEvent[\s\S]*?firesTouchEvents[\s\S]*?compatibilityMouseBlockedUntil/);
+  assert.match(source, /function isTouchCompatibilityMouseEvent[\s\S]*?appleUiPlatform === "ios"[\s\S]*?firesTouchEvents[\s\S]*?compatibilityMouseBlockedUntil/);
   assert.match(source, /app\.addEventListener\("mousedown"[\s\S]*?isTouchCompatibilityMouseEvent\(event\)/);
   assert.match(source, /elements\.tap\.addEventListener\("mousedown"[\s\S]*?isTouchCompatibilityMouseEvent\(event\)/);
   assert.match(source, /document\.addEventListener\("pointerup"[\s\S]*?noteNonMousePointerEvent\(event\)/);

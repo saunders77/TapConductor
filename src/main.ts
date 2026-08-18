@@ -3986,8 +3986,16 @@ elements.partsButton.addEventListener("click", () => togglePopover(elements.part
 // pointer lifecycle did not already activate them.
 const pressedButtons = new Map<number, HTMLButtonElement>();
 const pressedPointerManagedButtons = new Map<number, HTMLButtonElement>();
-const completedPointerManagedClicks = new WeakSet<HTMLButtonElement>();
-const buttonClickFallbacks = new WeakMap<HTMLButtonElement, number>();
+const CLICK_DEDUPLICATION_MS = 2_000;
+type CompletedButtonClick = {
+  pointerId: number | null;
+  expiresAt: number;
+  cleanup: number;
+};
+type ButtonClickFallback = { timer: number; pointerId: number };
+const completedPointerManagedClicks = new WeakMap<HTMLButtonElement, CompletedButtonClick>();
+const recoveredOrdinaryButtonClicks = new WeakMap<HTMLButtonElement, CompletedButtonClick>();
+const buttonClickFallbacks = new WeakMap<HTMLButtonElement, ButtonClickFallback>();
 
 function enabledButtonFromPointer(event: PointerEvent): HTMLButtonElement | null {
   if (event.button !== 0 || !(event.target instanceof Element)) return null;
@@ -4005,24 +4013,74 @@ function shouldActivatePointerManagedButtonFromClick(
   button: HTMLButtonElement,
   event: MouseEvent,
 ): boolean {
-  if (event.detail === 0) return true;
-  if (!completedPointerManagedClicks.has(button)) return true;
-  completedPointerManagedClicks.delete(button);
-  return false;
+  return !consumeCompletedButtonClick(completedPointerManagedClicks, button, event);
 }
 
 function isPointerManagedButtonPressed(button: HTMLButtonElement): boolean {
   return [...pressedPointerManagedButtons.values()].includes(button);
 }
 
-function markPointerManagedClickCompleted(button: HTMLButtonElement): void {
-  completedPointerManagedClicks.add(button);
-  window.setTimeout(() => completedPointerManagedClicks.delete(button), 0);
+function clearCompletedButtonClick(
+  completions: WeakMap<HTMLButtonElement, CompletedButtonClick>,
+  button: HTMLButtonElement,
+): void {
+  const completed = completions.get(button);
+  if (completed) window.clearTimeout(completed.cleanup);
+  completions.delete(button);
+}
+
+function markCompletedButtonClick(
+  completions: WeakMap<HTMLButtonElement, CompletedButtonClick>,
+  button: HTMLButtonElement,
+  pointerId: number | null,
+): void {
+  clearCompletedButtonClick(completions, button);
+  const completed: CompletedButtonClick = {
+    pointerId,
+    expiresAt: performance.now() + CLICK_DEDUPLICATION_MS,
+    cleanup: 0,
+  };
+  completed.cleanup = window.setTimeout(() => {
+    if (completions.get(button) === completed) completions.delete(button);
+  }, CLICK_DEDUPLICATION_MS);
+  completions.set(button, completed);
+}
+
+function consumeCompletedButtonClick(
+  completions: WeakMap<HTMLButtonElement, CompletedButtonClick>,
+  button: HTMLButtonElement,
+  event: MouseEvent,
+): boolean {
+  // Programmatic and keyboard clicks have detail 0 and represent intentional
+  // activations, not delayed compatibility clicks from a pointer release.
+  if (event.detail === 0) return false;
+  const completed = completions.get(button);
+  if (!completed) return false;
+  if (performance.now() > completed.expiresAt) {
+    clearCompletedButtonClick(completions, button);
+    return false;
+  }
+  const eventPointerId = typeof (event as PointerEvent).pointerId === "number"
+    && (event as PointerEvent).pointerId > 0
+    ? (event as PointerEvent).pointerId
+    : null;
+  if (
+    completed.pointerId !== null
+    && eventPointerId !== null
+    && completed.pointerId !== eventPointerId
+  ) return false;
+  clearCompletedButtonClick(completions, button);
+  return true;
+}
+
+function markPointerManagedClickCompleted(button: HTMLButtonElement, pointerId: number | null = null): void {
+  markCompletedButtonClick(completedPointerManagedClicks, button, pointerId);
 }
 
 document.addEventListener("pointerdown", (event) => {
   const button = enabledButtonFromPointer(event);
   if (!button) return;
+  clearCompletedButtonClick(recoveredOrdinaryButtonClicks, button);
   if (button.dataset.pointerActivation === "hold") {
     pressedPointerManagedButtons.set(event.pointerId, button);
   } else {
@@ -4034,15 +4092,20 @@ document.addEventListener("pointerup", (event) => {
   const pointerManaged = pressedPointerManagedButtons.get(event.pointerId);
   pressedPointerManagedButtons.delete(event.pointerId);
   if (pointerManaged && enabledButtonFromPointer(event) === pointerManaged) {
-    markPointerManagedClickCompleted(pointerManaged);
+    markPointerManagedClickCompleted(pointerManaged, event.pointerId);
     return;
   }
   const pressed = pressedButtons.get(event.pointerId);
   pressedButtons.delete(event.pointerId);
   if (!pressed || ordinaryButtonFromPointer(event) !== pressed) return;
-  const fallback = window.setTimeout(() => {
+  const fallback: ButtonClickFallback = { timer: 0, pointerId: event.pointerId };
+  fallback.timer = window.setTimeout(() => {
+    if (buttonClickFallbacks.get(pressed) !== fallback) return;
     buttonClickFallbacks.delete(pressed);
-    if (pressed.isConnected && !pressed.disabled) pressed.click();
+    if (pressed.isConnected && !pressed.disabled) {
+      markCompletedButtonClick(recoveredOrdinaryButtonClicks, pressed, fallback.pointerId);
+      pressed.click();
+    }
   }, 0);
   buttonClickFallbacks.set(pressed, fallback);
 }, { capture: true });
@@ -4058,9 +4121,14 @@ document.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!(button instanceof HTMLButtonElement)) return;
   const fallback = buttonClickFallbacks.get(button);
-  if (fallback === undefined) return;
-  window.clearTimeout(fallback);
-  buttonClickFallbacks.delete(button);
+  if (fallback !== undefined) {
+    window.clearTimeout(fallback.timer);
+    buttonClickFallbacks.delete(button);
+    return;
+  }
+  if (!consumeCompletedButtonClick(recoveredOrdinaryButtonClicks, button, event)) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
 }, { capture: true });
 
 for (const control of controlDeck?.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select") ?? []) {

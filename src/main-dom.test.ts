@@ -248,7 +248,7 @@ test("normal position changes do not mutate OSMD or animate the engraving stack"
 test("ordinary buttons recover a click suppressed by native focus transitions", () => {
   assert.match(source, /const pressedButtons = new Map<number, HTMLButtonElement>\(\)/);
   assert.match(source, /document\.addEventListener\("pointerup"[\s\S]*?window\.setTimeout\([\s\S]*?pressed\.click\(\)/);
-  assert.match(source, /document\.addEventListener\("click"[\s\S]*?window\.clearTimeout\(fallback\)/);
+  assert.match(source, /document\.addEventListener\("click"[\s\S]*?window\.clearTimeout\(fallback\.timer\)/);
   assert.match(source, /start\.addEventListener\("click", reposition\)/);
   assert.doesNotMatch(source, /start\.addEventListener\("pointerdown", reposition\)/);
   assert.match(source, /data-pointer-activation="hold"/);
@@ -256,8 +256,8 @@ test("ordinary buttons recover a click suppressed by native focus transitions", 
 });
 
 test("pointer-managed Audition and TAP buttons recover click-only activation without double-playing", () => {
-  assert.match(source, /const completedPointerManagedClicks = new WeakSet<HTMLButtonElement>\(\)/);
-  assert.match(source, /function shouldActivatePointerManagedButtonFromClick[\s\S]*?event\.detail === 0[\s\S]*?!completedPointerManagedClicks\.has\(button\)[\s\S]*?return false/);
+  assert.match(source, /const completedPointerManagedClicks = new WeakMap<HTMLButtonElement, CompletedButtonClick>\(\)/);
+  assert.match(source, /function shouldActivatePointerManagedButtonFromClick[\s\S]*?!consumeCompletedButtonClick\(completedPointerManagedClicks, button, event\)/);
   assert.match(source, /app\.addEventListener\("click"[\s\S]*?shouldActivatePointerManagedButtonFromClick\(match\.button, event\)/);
   assert.match(source, /elements\.tap\.addEventListener\("click"[\s\S]*?shouldActivatePointerManagedButtonFromClick\(elements\.tap, event\)/);
   assert.doesNotMatch(source, /app\.addEventListener\("click", \(event\) => \{\s*if \(event\.detail !== 0\) return/);
@@ -268,5 +268,13 @@ test("Audition and TAP recover immediate mouse-down holds when pointerdown is om
   assert.match(source, /app\.addEventListener\("mousedown"[\s\S]*?isPointerManagedButtonPressed\(match\.button\)[\s\S]*?auditionDown\(token, index, match\.target\.midiPitches\)[\s\S]*?createPointerHold/);
   assert.match(source, /elements\.tap\.addEventListener\("mousedown"[\s\S]*?isPointerManagedButtonPressed\(elements\.tap\)[\s\S]*?performDown\(token\)[\s\S]*?createPointerHold/);
   assert.match(source, /window\.addEventListener\("mouseup"[\s\S]*?markPointerManagedClickCompleted\(button\)[\s\S]*?releasePointerHold\(hold\)/);
-  assert.match(source, /function markPointerManagedClickCompleted[\s\S]*?completedPointerManagedClicks\.add\(button\)/);
+  assert.match(source, /function markPointerManagedClickCompleted[\s\S]*?markCompletedButtonClick\(completedPointerManagedClicks, button, pointerId\)/);
+});
+
+test("delayed iOS compatibility clicks are deduplicated after touch release", () => {
+  assert.match(source, /const CLICK_DEDUPLICATION_MS = 2_000/);
+  assert.match(source, /markPointerManagedClickCompleted\(pointerManaged, event\.pointerId\)/);
+  assert.match(source, /function consumeCompletedButtonClick[\s\S]*?event\.detail === 0[\s\S]*?completed\.pointerId !== eventPointerId[\s\S]*?clearCompletedButtonClick/);
+  assert.match(source, /markCompletedButtonClick\(recoveredOrdinaryButtonClicks, pressed, fallback\.pointerId\)/);
+  assert.match(source, /consumeCompletedButtonClick\(recoveredOrdinaryButtonClicks, button, event\)[\s\S]*?event\.stopImmediatePropagation\(\)/);
 });

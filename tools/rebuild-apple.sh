@@ -8,13 +8,12 @@ FAST=0
 
 usage() {
   cat <<'EOF'
-Usage: bash tools/rebuild-apple.sh [all|mac|ios|iphone|ipad] [--fast]
+Usage: bash tools/rebuild-apple.sh [all|mac|ipad|ios] [--fast]
 
-  all      Run quality checks once, then build macOS and the iPhone/iPad Simulator app.
+  all      Run quality checks once, then build macOS and the iPad Simulator app.
   mac      Build the universal macOS app and DMG.
-  ios      Build the arm64 iPhone/iPad Simulator app.
-  iphone   Alias for ios.
-  ipad     Backward-compatible alias for ios.
+  ipad     Build the arm64 iPad Simulator app.
+  ios      Alias for ipad.
   --fast   Skip tests, formatting, and Clippy for this packaging pass.
 
 With no arguments, the script builds both platforms and runs all checks.
@@ -26,7 +25,7 @@ for argument in "$@"; do
     all|mac|ios)
       TARGET="${argument}"
       ;;
-    iphone|ipad)
+    ipad)
       TARGET="ios"
       ;;
     --fast)
@@ -115,5 +114,5 @@ if [[ "${TARGET}" == "all" || "${TARGET}" == "mac" ]]; then
   echo "macOS DMG: ${ROOT}/target/apple-artifacts/macos-ad-hoc/TapConductor_${VERSION}_universal.dmg"
 fi
 if [[ "${TARGET}" == "all" || "${TARGET}" == "ios" ]]; then
-  echo "iPhone/iPad Simulator app: ${ROOT}/src-tauri/gen/apple/build/arm64-sim/TapConductor.app"
+  echo "iPad Simulator app: ${ROOT}/src-tauri/gen/apple/build/arm64-sim/TapConductor.app"
 fi

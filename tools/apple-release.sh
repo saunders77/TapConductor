@@ -62,6 +62,26 @@ initialize_ios() {
   if [[ ! -d "${ROOT}/src-tauri/gen/apple" ]]; then
     npm run tauri -- ios init --ci
   fi
+
+  # Tauri currently generates a universal iPhone/iPad Xcode target. TapConductor's
+  # iOS distribution is iPad-only, so keep both XcodeGen's source metadata and the
+  # generated Xcode project constrained to device family 2 (iPad).
+  local project_yml="${ROOT}/src-tauri/gen/apple/project.yml"
+  local xcode_project="${ROOT}/src-tauri/gen/apple/tapconductor-app.xcodeproj/project.pbxproj"
+  if ! grep -q 'TARGETED_DEVICE_FAMILY:' "${project_yml}"; then
+    sed -i '' '/ENABLE_BITCODE: false/a\
+        TARGETED_DEVICE_FAMILY: 2
+' "${project_yml}"
+  else
+    sed -i '' -E 's/TARGETED_DEVICE_FAMILY: .*/TARGETED_DEVICE_FAMILY: 2/' "${project_yml}"
+  fi
+  sed -i '' -E 's/TARGETED_DEVICE_FAMILY = "?1,2"?;/TARGETED_DEVICE_FAMILY = 2;/g' \
+    "${xcode_project}"
+  [[ "$(grep -c 'TARGETED_DEVICE_FAMILY = 2;' "${xcode_project}")" -eq 2 ]] || {
+    echo "Could not constrain the generated Xcode target to iPad-only." >&2
+    exit 1
+  }
+
   cp \
     "${ROOT}"/src-tauri/icons/ios/*.png \
     "${ROOT}/src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset/"

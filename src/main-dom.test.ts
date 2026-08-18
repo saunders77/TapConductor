@@ -58,9 +58,11 @@ test("short iPhone landscape keeps empty-state actions visible and compacts only
   const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 
   assert.match(source, /class="empty-landscape-extra"> \(like MuseScore[\s\S]*?class="empty-landscape-extra"> \(free options/);
+  assert.match(source, /appleUiPlatform === "ios"\)\s*{\s*elements\.iphoneMenuActions\.append\(\s*elements\.open,\s*elements\.helpButton,/s);
+  assert.match(source, /shell\?\.classList\.remove\("score-empty"\);[\s\S]*?appleUiPlatform === "ios"[\s\S]*?elements\.helpButton\.before\(elements\.demoChoirOpen, elements\.demoPianoOpen\);/s);
   assert.match(
     styles,
-    /@media \(orientation: landscape\) and \(max-height: 500px\)\s*{[\s\S]*?\.platform-ios \.empty-landscape-extra\s*{[^}]*display:\s*none;[^}]*}[\s\S]*?\.platform-ios \.empty-devices\s*{[^}]*width:\s*50%;/s,
+    /@media \(orientation: landscape\) and \(max-height: 500px\)\s*{[\s\S]*?\.platform-ios \.empty-landscape-extra\s*{[^}]*display:\s*none;[^}]*}[\s\S]*?\.platform-ios \.empty-devices\s*{[^}]*display:\s*none;/s,
   );
 });
 

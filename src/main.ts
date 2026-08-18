@@ -601,8 +601,6 @@ if (performanceStrip) {
 if (appleUiPlatform === "ios") {
   elements.iphoneMenuActions.append(
     elements.open,
-    elements.demoChoirOpen,
-    elements.demoPianoOpen,
     elements.helpButton,
   );
   if (controlDeck) elements.iphonePerformanceSettings.append(controlDeck);
@@ -1610,6 +1608,11 @@ async function displayScore(loaded: LoadedScore, preserved?: ScoreViewState): Pr
   const preservedScrollLeft = preserved?.scrollLeft ?? 0;
   score = loaded;
   shell?.classList.remove("score-empty");
+  // Keep the demos beside "Open a score" on the iPhone welcome view. Once a
+  // score is open, restore them to the settings sheet for later access.
+  if (appleUiPlatform === "ios") {
+    elements.helpButton.before(elements.demoChoirOpen, elements.demoPianoOpen);
+  }
   osmdBeatSteps = [];
   eventHorizontalPositions = [];
   beatHorizontalPositions = [];

@@ -617,7 +617,7 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
  * platform class prevents compact desktop windows from receiving the layout. */
 @media (orientation: landscape) and (max-height: 500px) {
   .platform-ios .empty-landscape-extra { display: none; }
-  .platform-ios .empty-devices { width: 50%; }
+  .platform-ios .empty-devices { display: none; }
 }
 
 .platform-ios .iphone-menu-overlay {

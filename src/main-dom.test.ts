@@ -274,7 +274,23 @@ test("Audition and TAP recover immediate mouse-down holds when pointerdown is om
 test("delayed iOS compatibility clicks are deduplicated after touch release", () => {
   assert.match(source, /const CLICK_DEDUPLICATION_MS = 2_000/);
   assert.match(source, /markPointerManagedClickCompleted\(pointerManaged, event\.pointerId\)/);
-  assert.match(source, /function consumeCompletedButtonClick[\s\S]*?event\.detail === 0[\s\S]*?completed\.pointerId !== eventPointerId[\s\S]*?clearCompletedButtonClick/);
+  assert.match(source, /function consumeCompletedButtonClick[\s\S]*?!event\.isTrusted[\s\S]*?completed\.pointerId !== eventPointerId[\s\S]*?clearCompletedButtonClick/);
   assert.match(source, /markCompletedButtonClick\(recoveredOrdinaryButtonClicks, pressed, fallback\.pointerId\)/);
   assert.match(source, /consumeCompletedButtonClick\(recoveredOrdinaryButtonClicks, button, event\)[\s\S]*?event\.stopImmediatePropagation\(\)/);
+});
+
+test("iOS pointer retargeting and lost capture still complete held-button clicks", () => {
+  const pointerUpRecovery = source.match(/document\.addEventListener\("pointerup"[\s\S]*?\}, \{ capture: true \}\);/)?.[0] ?? "";
+  assert.match(pointerUpRecovery, /if \(pointerManaged\)[\s\S]*?markPointerManagedClickCompleted\(pointerManaged, event\.pointerId\)/);
+  assert.doesNotMatch(pointerUpRecovery, /enabledButtonFromPointer\(event\) === pointerManaged/);
+  assert.match(source, /document\.addEventListener\("lostpointercapture"[\s\S]*?markPointerManagedClickCompleted\(pointerManaged, event\.pointerId\)/);
+});
+
+test("iOS compatibility mouse events cannot start a second hold after touch release", () => {
+  assert.match(source, /const COMPATIBILITY_MOUSE_BLOCK_MS = 1_500/);
+  assert.match(source, /function noteNonMousePointerEvent[\s\S]*?event\.pointerType !== "mouse"[\s\S]*?compatibilityMouseBlockedUntil/);
+  assert.match(source, /function isTouchCompatibilityMouseEvent[\s\S]*?firesTouchEvents[\s\S]*?compatibilityMouseBlockedUntil/);
+  assert.match(source, /app\.addEventListener\("mousedown"[\s\S]*?isTouchCompatibilityMouseEvent\(event\)/);
+  assert.match(source, /elements\.tap\.addEventListener\("mousedown"[\s\S]*?isTouchCompatibilityMouseEvent\(event\)/);
+  assert.match(source, /document\.addEventListener\("pointerup"[\s\S]*?noteNonMousePointerEvent\(event\)/);
 });

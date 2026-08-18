@@ -549,7 +549,7 @@ function isInsideDialog(target: EventTarget | null): boolean {
 // Safari's selection loupe and page-zoom gestures are particularly easy to
 // trigger while conducting. Keep them off the performance UI without changing
 // the behavior of Info, settings, and other dialogs.
-if (appleUiPlatform === "ipados" && shell) {
+if ((appleUiPlatform === "ipados" || appleUiPlatform === "ios") && shell) {
   shell.addEventListener("selectstart", (event) => {
     if (!isInsideDialog(event.target)) event.preventDefault();
   });
@@ -4562,15 +4562,38 @@ function showZoomPercent(percent: number): number {
   return normalized;
 }
 
-function commitZoomPercent(percent: number): void {
+type ScoreZoomAnchor = {
+  clientX: number;
+  clientY: number;
+  scrollLeft: number;
+  scrollTop: number;
+  zoom: number;
+};
+
+function restoreScoreZoomAnchor(anchor: ScoreZoomAnchor, nextZoom: number): void {
+  const viewport = elements.scoreScroll.getBoundingClientRect();
+  const localX = anchor.clientX - viewport.left;
+  const localY = anchor.clientY - viewport.top;
+  const scale = nextZoom / anchor.zoom;
+  // Scroll assignments are natively clamped to zero/the scrollable extent, so
+  // an axis with no overflow cannot be moved by a zoom gesture.
+  elements.scoreScroll.scrollLeft = (anchor.scrollLeft + localX) * scale - localX;
+  elements.scoreScroll.scrollTop = (anchor.scrollTop + localY) * scale - localY;
+}
+
+function commitZoomPercent(percent: number, anchor?: ScoreZoomAnchor): void {
   const normalized = showZoomPercent(percent);
   elements.zoomRange.value = String(normalized);
   persistedSettings.zoomPercent = normalized;
   persistSettings();
   const nextZoom = normalized / 100;
   if (nextZoom === zoom) return;
+  const previousZoom = zoom;
   zoom = nextZoom;
-  if (!osmd) return;
+  if (!osmd) {
+    if (anchor) restoreScoreZoomAnchor(anchor, nextZoom);
+    return;
+  }
   const currentTarget = Math.max(
     renderedThroughSourceMeasure,
     score
@@ -4578,7 +4601,10 @@ function commitZoomPercent(percent: number): void {
       : -1,
   );
   void restartIncrementalRendering(currentTarget).then(() => {
-    updateVisualPosition();
+    if (anchor && anchor.zoom === previousZoom) restoreScoreZoomAnchor(anchor, nextZoom);
+    // A pinch is an explicit viewport gesture; keep its focal point instead of
+    // immediately auto-following the playback cursor after engraving.
+    updateVisualPosition(anchor === undefined);
   }).catch((error: unknown) => {
     toast(t("resizeFailed", { message: String(error) }), "error", false, "notation.resize");
   });
@@ -4606,6 +4632,89 @@ elements.zoomRange.addEventListener("input", () => {
 elements.zoomRange.addEventListener("change", () => {
   commitZoomPercent(Number(elements.zoomRange.value));
 });
+
+type ScoreTouchGesture = {
+  startCenterX: number;
+  startCenterY: number;
+  startDistance: number;
+  startScrollLeft: number;
+  startScrollTop: number;
+  startZoomPercent: number;
+  previewZoomPercent: number;
+  currentCenterX: number;
+  currentCenterY: number;
+};
+
+let scoreTouchGesture: ScoreTouchGesture | null = null;
+
+function twoTouchGeometry(touches: TouchList): { centerX: number; centerY: number; distance: number } | null {
+  const first = touches.item(0);
+  const second = touches.item(1);
+  if (!first || !second) return null;
+  const dx = second.clientX - first.clientX;
+  const dy = second.clientY - first.clientY;
+  return {
+    centerX: (first.clientX + second.clientX) / 2,
+    centerY: (first.clientY + second.clientY) / 2,
+    distance: Math.max(1, Math.hypot(dx, dy)),
+  };
+}
+
+function beginScoreTouchGesture(event: TouchEvent): void {
+  if (event.touches.length !== 2 || !score) return;
+  const geometry = twoTouchGeometry(event.touches);
+  if (!geometry) return;
+  scoreTouchGesture = {
+    startCenterX: geometry.centerX,
+    startCenterY: geometry.centerY,
+    startDistance: geometry.distance,
+    startScrollLeft: elements.scoreScroll.scrollLeft,
+    startScrollTop: elements.scoreScroll.scrollTop,
+    startZoomPercent: Math.round(zoom * 100),
+    previewZoomPercent: Math.round(zoom * 100),
+    currentCenterX: geometry.centerX,
+    currentCenterY: geometry.centerY,
+  };
+  event.preventDefault();
+}
+
+function moveScoreTouchGesture(event: TouchEvent): void {
+  if (!scoreTouchGesture || event.touches.length < 2) return;
+  const geometry = twoTouchGeometry(event.touches);
+  if (!geometry) return;
+  event.preventDefault();
+  scoreTouchGesture.currentCenterX = geometry.centerX;
+  scoreTouchGesture.currentCenterY = geometry.centerY;
+  elements.scoreScroll.scrollLeft = scoreTouchGesture.startScrollLeft
+    - (geometry.centerX - scoreTouchGesture.startCenterX);
+  elements.scoreScroll.scrollTop = scoreTouchGesture.startScrollTop
+    - (geometry.centerY - scoreTouchGesture.startCenterY);
+  scoreTouchGesture.previewZoomPercent = showZoomPercent(
+    scoreTouchGesture.startZoomPercent * geometry.distance / scoreTouchGesture.startDistance,
+  );
+  elements.zoomRange.value = String(scoreTouchGesture.previewZoomPercent);
+}
+
+function finishScoreTouchGesture(event: TouchEvent): void {
+  if (!scoreTouchGesture || event.touches.length >= 2) return;
+  event.preventDefault();
+  const finished = scoreTouchGesture;
+  scoreTouchGesture = null;
+  commitZoomPercent(finished.previewZoomPercent, {
+    clientX: finished.currentCenterX,
+    clientY: finished.currentCenterY,
+    scrollLeft: elements.scoreScroll.scrollLeft,
+    scrollTop: elements.scoreScroll.scrollTop,
+    zoom,
+  });
+}
+
+if (appleUiPlatform === "ios" || appleUiPlatform === "ipados") {
+  elements.scoreScroll.addEventListener("touchstart", beginScoreTouchGesture, { passive: false });
+  elements.scoreScroll.addEventListener("touchmove", moveScoreTouchGesture, { passive: false });
+  elements.scoreScroll.addEventListener("touchend", finishScoreTouchGesture, { passive: false });
+  elements.scoreScroll.addEventListener("touchcancel", finishScoreTouchGesture, { passive: false });
+}
 
 const ipadLandscapeQuery = window.matchMedia("(orientation: landscape)");
 let lastIpadLandscape = ipadLandscapeQuery.matches;

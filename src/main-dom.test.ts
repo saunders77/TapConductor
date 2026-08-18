@@ -69,12 +69,22 @@ test("iPad header selects use light native menu arrows", () => {
   );
 });
 
-test("iPad performance UI suppresses browser gestures but leaves dialogs alone", () => {
+test("Apple mobile performance UI suppresses browser gestures but leaves dialogs alone", () => {
   const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 
   assert.match(styles, /\.platform-ipados \.shell > :not\(\[role="dialog"\]\)\s*{[^}]*-webkit-user-select:\s*none;[^}]*touch-action:\s*pan-x pan-y;/s);
-  assert.match(source, /appleUiPlatform === "ipados"[\s\S]*?"selectstart"[\s\S]*?"gesturestart"[\s\S]*?event\.touches\.length > 1/);
+  assert.match(source, /appleUiPlatform === "ipados" \|\| appleUiPlatform === "ios"[\s\S]*?"selectstart"[\s\S]*?"gesturestart"[\s\S]*?event\.touches\.length > 1/);
   assert.match(source, /target\.closest\('\[role="dialog"\]'\)/);
+});
+
+test("Apple mobile score gestures support bounded two-finger pan and pinch zoom", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(styles, /\.platform-ios \.score-scroll,[\s\S]*?\.platform-ipados \.score-scroll\s*{[^}]*touch-action:\s*pan-x pan-y;/s);
+  assert.match(source, /function moveScoreTouchGesture[\s\S]*?scrollLeft = scoreTouchGesture\.startScrollLeft[\s\S]*?scrollTop = scoreTouchGesture\.startScrollTop/);
+  assert.match(source, /startZoomPercent \* geometry\.distance \/ scoreTouchGesture\.startDistance/);
+  assert.match(source, /commitZoomPercent\(finished\.previewZoomPercent,[\s\S]*?scrollLeft:[\s\S]*?scrollTop:[\s\S]*?zoom,/);
+  assert.match(source, /scoreScroll\.addEventListener\("touchstart"[\s\S]*?"touchmove"[\s\S]*?"touchend"[\s\S]*?"touchcancel"/);
 });
 
 test("iPad score actions use tighter platform-specific top spacing", () => {

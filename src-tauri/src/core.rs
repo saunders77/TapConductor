@@ -224,9 +224,8 @@ impl AppCore {
         if !gain.is_finite() {
             return Err("Volume must be a finite number.".to_owned());
         }
-        self.audio.set_volume(gain)?;
         self.non_midi_output_velocity = volume_to_midi_velocity(gain);
-        Ok(())
+        self.audio.set_volume(gain)
     }
 
     pub fn set_roll_delays(&mut self, regular_ms: u16, audition_ms: u16) -> Result<(), String> {

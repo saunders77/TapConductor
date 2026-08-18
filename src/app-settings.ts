@@ -2,6 +2,7 @@
 import type { DeviceDto } from "./types";
 
 export const APP_SETTINGS_KEY = "tapconductor.app-settings-v1";
+export const MIN_LAUNCH_VOLUME_PERCENT = 10;
 
 export type DevicePreference = {
   id: string;
@@ -83,7 +84,12 @@ export function loadAppSettings(storage: SettingsStorage): AppSettings {
       instrument: value.instrument === "synth" ? "synth" : "piano",
       tapMode: value.tapMode === "beat" ? "beat" : "rhythm",
       legato: typeof value.legato === "boolean" ? value.legato : DEFAULT_APP_SETTINGS.legato,
-      volumePercent: boundedInteger(value.volumePercent, 0, 100, DEFAULT_APP_SETTINGS.volumePercent),
+      volumePercent: boundedInteger(
+        value.volumePercent,
+        MIN_LAUNCH_VOLUME_PERCENT,
+        100,
+        DEFAULT_APP_SETTINGS.volumePercent,
+      ),
       tapRollMs: boundedInteger(value.tapRollMs, 0, 250, DEFAULT_APP_SETTINGS.tapRollMs),
       chordRollMs: boundedInteger(value.chordRollMs, 0, 250, DEFAULT_APP_SETTINGS.chordRollMs),
       zoomPercent: boundedInteger(value.zoomPercent, 50, 175, DEFAULT_APP_SETTINGS.zoomPercent),

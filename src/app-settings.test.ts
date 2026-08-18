@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   APP_SETTINGS_KEY,
   DEFAULT_APP_SETTINGS,
+  MIN_LAUNCH_VOLUME_PERCENT,
   loadAppSettings,
   resolveDevicePreference,
   saveAppSettings,
@@ -65,6 +66,22 @@ test("invalid or out-of-range persisted values fall back or clamp safely", () =>
     zoomPercent: 50,
     pianoShortcutPitch: 127,
   });
+});
+
+test("launch volume defaults to full and never restores below ten percent", () => {
+  assert.equal(loadAppSettings(memoryStorage()).volumePercent, 100);
+  for (const persistedVolume of [0, 1, 9]) {
+    const storage = memoryStorage(JSON.stringify({
+      ...DEFAULT_APP_SETTINGS,
+      volumePercent: persistedVolume,
+    }));
+    assert.equal(loadAppSettings(storage).volumePercent, MIN_LAUNCH_VOLUME_PERCENT);
+  }
+  const storage = memoryStorage(JSON.stringify({
+    ...DEFAULT_APP_SETTINGS,
+    volumePercent: 42,
+  }));
+  assert.equal(loadAppSettings(storage).volumePercent, 42);
 });
 
 test("unavailable storage does not prevent defaults or active setting changes", () => {

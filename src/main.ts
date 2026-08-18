@@ -668,6 +668,7 @@ type ScorePerformance = {
 let scorePerformance: ScorePerformance | null = null;
 let lastDiagnostics: DiagnosticsDto | null = null;
 let lastUiNativeRoundTripMs: number | null = null;
+const firstRunDeviceSetupErrors: Array<{ label: string; message: string }> = [];
 let unlisteners: UnlistenFn[] = [];
 const heldTokens = new Set<string>();
 let midiFreePlay = false;
@@ -688,6 +689,7 @@ let audioRestorePending = desiredAudioOutput !== undefined && desiredAudioOutput
 let midiInputRestorePending = desiredMidiInput !== undefined && desiredMidiInput.id !== "";
 let midiOutputRestorePending = desiredMidiOutput !== undefined && desiredMidiOutput.id !== "";
 let restoringDevices = false;
+let firstRunMidiFallback: Promise<void> | null = null;
 const RELOAD_AUDIO_SYSTEMS_VALUE = "__reload_audio_systems__";
 let midiDeviceRefreshTimer: number | undefined;
 let currentAnnouncementId: string | null = null;
@@ -1108,12 +1110,43 @@ function audioReloadInstruction(message: string): string {
     : `${message} Reload devices from the AUDIO menu.`;
 }
 
+function isFirstRunScreen(): boolean {
+  return shell?.classList.contains("score-empty") ?? score === null;
+}
+
+function isDeviceSetupNotification(type: string): boolean {
+  return type === "devices.discovery"
+    || type.startsWith("audio.")
+    || type.startsWith("midi.")
+    || /^command:set_(?:audio|midi|instrument|volume)/.test(type);
+}
+
+function addFirstRunDeviceSetupError(label: string, error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  if (!firstRunDeviceSetupErrors.some((item) => item.label === label && item.message === message)) {
+    firstRunDeviceSetupErrors.push({ label, message });
+  }
+  elements.diagnosticsButton.classList.add("not-ready");
+  elements.diagnosticsValue.textContent = t("needsAttention");
+  elements.diagnosticsButton.setAttribute(
+    "aria-label",
+    `${t("audioDiagnostics")}: ${t("needsAttention")}`,
+  );
+  if (lastDiagnostics && !elements.diagnostics.classList.contains("hidden")) {
+    showDiagnostics(lastDiagnostics, true);
+  }
+}
+
 function toast(
   message: string,
   kind: NotificationKind = "info",
   audioReloadAction = false,
   type = `${kind}:${message}`,
 ): void {
+  // Device setup can run several times while the welcome/first-run screen is
+  // visible. Do not retain hidden notifications that would appear as soon as
+  // the first score opens; diagnostics remains the durable error surface.
+  if (isFirstRunScreen() && isDeviceSetupNotification(type)) return;
   const history = notificationHistory.get(type) ?? { count: 0, messages: [], item: null };
   recordNotificationOccurrence(history, message);
   if (history.item) {
@@ -2692,6 +2725,62 @@ function populateAudioSelect(devices: DeviceDto[]): void {
   fitSelect(elements.audioOutput);
 }
 
+async function resetFirstRunMidiAndAudioToDefaults(): Promise<void> {
+  if (!isFirstRunScreen()) return;
+  if (firstRunMidiFallback) return firstRunMidiFallback;
+
+  const fallback = (async (): Promise<void> => {
+    desiredMidiInput = undefined;
+    desiredMidiOutput = undefined;
+    desiredAudioOutput = undefined;
+    midiInputRestorePending = false;
+    midiOutputRestorePending = false;
+    audioRestorePending = false;
+    selectedMidiInputId = "";
+    selectedMidiOutputId = "";
+    selectedAudioDeviceId = "";
+    midiFreePlay = false;
+    delete persistedSettings.midiInput;
+    delete persistedSettings.midiOutput;
+    delete persistedSettings.audioOutput;
+    persistedSettings.midiFreePlay = false;
+
+    const results = await Promise.allSettled([
+      invoke("set_midi_input", { id: null }),
+      invoke("set_midi_output", { id: null }),
+      invoke("set_midi_free_play", { enabled: false }),
+      invoke("set_audio_device", { id: "" }),
+    ]);
+    const labels = [
+      "MIDI input reset error",
+      "MIDI output reset error",
+      "MIDI mode reset error",
+      "Default audio device error",
+    ];
+    results.forEach((result, index) => {
+      if (result.status === "rejected") {
+        addFirstRunDeviceSetupError(labels[index]!, result.reason);
+      }
+    });
+
+    elements.midiInput.value = "";
+    elements.midiOutput.value = "";
+    elements.audioOutput.value = "";
+    fitSelect(elements.midiInput);
+    fitSelect(elements.midiOutput);
+    fitSelect(elements.audioOutput);
+    syncMidiInputChromeState();
+    updateMidiFreePlayButton();
+    persistSettings();
+  })();
+  firstRunMidiFallback = fallback;
+  try {
+    await fallback;
+  } finally {
+    if (firstRunMidiFallback === fallback) firstRunMidiFallback = null;
+  }
+}
+
 async function attemptPersistedDeviceRestoration(): Promise<void> {
   if (restoringDevices) return;
   restoringDevices = true;
@@ -2733,7 +2822,8 @@ async function attemptPersistedDeviceRestoration(): Promise<void> {
           fitSelect(elements.midiInput);
           persistSettings();
         } catch {
-          // Keep the desired route so a later device refresh can retry it.
+          if (isFirstRunScreen()) await resetFirstRunMidiAndAudioToDefaults();
+          // Outside first run, keep the desired route so a later refresh can retry it.
         }
       }
     }
@@ -2751,7 +2841,8 @@ async function attemptPersistedDeviceRestoration(): Promise<void> {
           fitSelect(elements.midiOutput);
           persistSettings();
         } catch {
-          // Keep the desired route so a later device refresh can retry it.
+          if (isFirstRunScreen()) await resetFirstRunMidiAndAudioToDefaults();
+          // Outside first run, keep the desired route so a later refresh can retry it.
         }
       }
     }
@@ -2797,6 +2888,7 @@ async function refreshDevices(): Promise<void> {
     invoke<DiagnosticsDto>("diagnostics"),
   ]);
   const errors: string[] = [];
+  let midiSetupFailed = false;
   if (audioResult.status === "fulfilled") {
     availableAudioDevices = audioResult.value;
     populateAudioSelect(audioResult.value);
@@ -2830,6 +2922,7 @@ async function refreshDevices(): Promise<void> {
       .filter((message): message is string => Boolean(message));
     if (midiDirectionErrors.length > 0) {
       const message = midiDirectionErrors.join(" ");
+      midiSetupFailed = true;
       telemetry.recordError({
         errorCode: "midi.discovery_failed",
         component: "midi",
@@ -2842,11 +2935,15 @@ async function refreshDevices(): Promise<void> {
       toast(t("midiDiscoveryFailed", { message }), "warning", false, "midi.discovery");
     }
   } else {
+    midiSetupFailed = true;
     errors.push(t("midiDiscoveryFailed", { message: String(midiResult.reason) }));
   }
   if (diagnosticsResult.status === "fulfilled") {
     showDiagnostics(diagnosticsResult.value);
-    elements.diagnosticsButton.classList.toggle("not-ready", !diagnosticsResult.value.ready);
+    elements.diagnosticsButton.classList.toggle(
+      "not-ready",
+      !diagnosticsResult.value.ready || firstRunDeviceSetupErrors.length > 0,
+    );
     if (isWebBuild()) {
       setStatus(
         diagnosticsResult.value.ready ? "ready" : "fault",
@@ -2867,7 +2964,16 @@ async function refreshDevices(): Promise<void> {
       telemetry.recordError({ errorCode: "diagnostics.unavailable", component: "audio", operation: "diagnostics" });
     }
     elements.diagnosticsButton.classList.add("not-ready");
-    toast(errors.join(" "), "error", false, "devices.discovery");
+    if (isFirstRunScreen()) {
+      if (diagnosticsResult.status === "rejected") {
+        addFirstRunDeviceSetupError("Diagnostics error", diagnosticsResult.reason);
+      }
+    } else {
+      toast(errors.join(" "), "error", false, "devices.discovery");
+    }
+  }
+  if (midiSetupFailed && isFirstRunScreen()) {
+    await resetFirstRunMidiAndAudioToDefaults();
   }
   await attemptPersistedDeviceRestoration();
   await syncMacosMenu();
@@ -2880,6 +2986,7 @@ async function reloadAudioSystems(): Promise<void> {
     setStatus("loading", t("reloadingDevices"));
     try {
       await invokeSafe("reload_audio_systems");
+      firstRunDeviceSetupErrors.length = 0;
       toast(t("devicesReloaded"), "info");
     } finally {
       try {
@@ -2909,16 +3016,21 @@ async function reloadAudioSystems(): Promise<void> {
 function showDiagnostics(diagnostics: DiagnosticsDto, renderDetails = !elements.diagnostics.classList.contains("hidden")): void {
   lastDiagnostics = diagnostics;
   if (diagnostics.ready) dismissInactiveAudioError();
-  elements.diagnosticsValue.textContent = diagnostics.ready ? t("ready") : t("needsAttention");
+  const ready = diagnostics.ready && firstRunDeviceSetupErrors.length === 0;
+  elements.diagnosticsValue.textContent = ready ? t("ready") : t("needsAttention");
+  elements.diagnosticsButton.classList.toggle("not-ready", !ready);
   elements.diagnosticsButton.setAttribute(
     "aria-label",
-    `${t("audioDiagnostics")}: ${diagnostics.ready ? t("ready") : t("needsAttention")}`,
+    `${t("audioDiagnostics")}: ${ready ? t("ready") : t("needsAttention")}`,
   );
   // Health polling remains active during a performance, but a hidden panel
   // does not need twenty-plus DOM nodes rebuilt every second.
   if (!renderDetails) return;
+  const stateMessage = diagnostics.ready
+    ? firstRunDeviceSetupErrors[0]?.message ?? t("ready")
+    : diagnostics.message ?? t("unavailable");
   const rows: Array<[string, string]> = [
-    [t("state"), diagnostics.ready ? t("ready") : diagnostics.message ?? t("unavailable")],
+    [t("state"), stateMessage],
     [t("backend"), diagnostics.audioBackend],
     [t("mode"), isWebBuild() ? "Browser Web Audio" : diagnostics.asioStream ? "ASIO low latency" : "Shared low latency"],
     [t("output"), diagnostics.outputDevice],
@@ -2995,6 +3107,9 @@ function showDiagnostics(diagnostics: DiagnosticsDto, renderDetails = !elements.
   if (diagnostics.midiOutputError) {
     rows.push(["MIDI OUT error", diagnostics.midiOutputError]);
   }
+  for (const error of firstRunDeviceSetupErrors) {
+    rows.push([error.label, error.message]);
+  }
   elements.diagnostics.replaceChildren();
   const heading = document.createElement("h3");
   heading.textContent = t("liveDiagnostics");
@@ -3028,6 +3143,7 @@ async function refreshDiagnostics(): Promise<void> {
         context: { output_enabled: Boolean(diagnostics.midiOutput) },
       });
       toast(diagnostics.midiOutputError, "warning", false, "midi.output");
+      if (isFirstRunScreen()) await resetFirstRunMidiAndAudioToDefaults();
     }
     if (
       !diagnostics.ready
@@ -3047,9 +3163,13 @@ async function refreshDiagnostics(): Promise<void> {
       }
       toast(message, "error", true, "audio.output-not-ready");
     }
-    elements.diagnosticsButton.classList.toggle("not-ready", !diagnostics.ready);
-  } catch {
+    elements.diagnosticsButton.classList.toggle(
+      "not-ready",
+      !diagnostics.ready || firstRunDeviceSetupErrors.length > 0,
+    );
+  } catch (error) {
     telemetry.recordError({ errorCode: "diagnostics.unavailable", component: "audio", operation: "diagnostics" });
+    if (isFirstRunScreen()) addFirstRunDeviceSetupError("Diagnostics error", error);
     elements.diagnosticsButton.classList.add("not-ready");
     elements.diagnosticsValue.textContent = t("unavailable");
     elements.diagnosticsButton.setAttribute("aria-label", `${t("audioDiagnostics")}: ${t("unavailable")}`);
@@ -3087,6 +3207,7 @@ async function installListeners(): Promise<void> {
       telemetry.recordError({ errorCode: "audio.lifecycle_error", component: "audio", operation: "lifecycle" });
       elements.diagnosticsButton.classList.add("not-ready");
       setStatus("fault", t("audioAttention"));
+      if (isFirstRunScreen()) addFirstRunDeviceSetupError("Default audio device error", payload);
       toast(audioReloadInstruction(payload), "error", true, "audio.lifecycle");
     }),
     listen<void>("audio-lifecycle-restored", () => {
@@ -3113,8 +3234,18 @@ async function installListeners(): Promise<void> {
 
 async function restorePersistedRuntimeSettings(): Promise<void> {
   await invokeSafe("set_piano_shortcut_pitch", { midiPitch: pianoShortcutPitch });
-  await invokeSafe("set_instrument", { instrument: persistedSettings.instrument });
-  await invokeSafe("set_volume", { value: persistedSettings.volumePercent / 100 });
+  try {
+    await invokeSafe("set_instrument", { instrument: persistedSettings.instrument });
+  } catch (error) {
+    if (isFirstRunScreen()) addFirstRunDeviceSetupError("Audio instrument setup error", error);
+    else throw error;
+  }
+  try {
+    await invokeSafe("set_volume", { value: persistedSettings.volumePercent / 100 });
+  } catch (error) {
+    if (isFirstRunScreen()) addFirstRunDeviceSetupError("Default audio device error", error);
+    else throw error;
+  }
   await invokeSafe("set_roll_delays", {
     regularMs: persistedSettings.tapRollMs,
     auditionMs: persistedSettings.chordRollMs,
@@ -4458,7 +4589,8 @@ if (isWebBuild()) {
 }
 
 void initializeApp().then(() => {
-  setStatus(lastDiagnostics?.ready ? "ready" : "fault", lastDiagnostics?.ready ? t("audioReady") : t("audioAttention"));
+  const ready = Boolean(lastDiagnostics?.ready) && firstRunDeviceSetupErrors.length === 0;
+  setStatus(ready ? "ready" : "fault", ready ? t("audioReady") : t("audioAttention"));
   endBlockingWait(startupWait);
 }).catch((error: unknown) => {
   endBlockingWait(startupWait);

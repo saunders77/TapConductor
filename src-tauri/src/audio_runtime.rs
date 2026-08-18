@@ -457,6 +457,10 @@ impl AudioManager {
         } else {
             return Err("Volume must be a finite number.".to_owned());
         };
+        // Remember the user's choice even while the default endpoint is
+        // unavailable. A later successful restart seeds the replacement
+        // stream with this gain instead of briefly or permanently using zero.
+        self.master_gain = gain;
         let at = self.now_sample().saturating_sub(self.clock_epoch);
         let runtime = self
             .runtime
@@ -469,7 +473,6 @@ impl AudioManager {
                 at,
             })
             .map_err(|_| "The real-time audio command queue is full.".to_owned())?;
-        self.master_gain = gain;
         Ok(())
     }
 

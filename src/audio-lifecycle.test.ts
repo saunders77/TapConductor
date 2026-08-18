@@ -102,3 +102,40 @@ test("CoreMIDI setup changes refresh MIDI devices on macOS and iOS", () => {
   assert.match(source, /MIDI inputs detected[\s\S]*?midiInputsAvailable/);
   assert.match(source, /MIDI input discovery error[\s\S]*?midiInputDiscoveryError/);
 });
+
+test("first-run device failures stay out of notifications and remain visible in diagnostics", () => {
+  assert.match(
+    source,
+    /function toast\([\s\S]*?if \(isFirstRunScreen\(\) && isDeviceSetupNotification\(type\)\) return;[\s\S]*?notificationHistory\.get/,
+  );
+  assert.match(
+    source,
+    /function isDeviceSetupNotification[\s\S]*?type\.startsWith\("audio\."\)[\s\S]*?type\.startsWith\("midi\."\)/,
+  );
+  assert.match(
+    source,
+    /for \(const error of firstRunDeviceSetupErrors\)[\s\S]*?rows\.push\(\[error\.label, error\.message\]\)/,
+  );
+});
+
+test("a first-run MIDI failure disables MIDI and restores the system audio route", () => {
+  assert.match(
+    source,
+    /async function resetFirstRunMidiAndAudioToDefaults[\s\S]*?invoke\("set_midi_input", \{ id: null \}\)[\s\S]*?invoke\("set_midi_output", \{ id: null \}\)[\s\S]*?invoke\("set_audio_device", \{ id: "" \}\)/,
+  );
+  assert.match(
+    source,
+    /delete persistedSettings\.midiInput;[\s\S]*?delete persistedSettings\.midiOutput;[\s\S]*?delete persistedSettings\.audioOutput;/,
+  );
+  assert.match(
+    source,
+    /if \(midiSetupFailed && isFirstRunScreen\(\)\) \{\s*await resetFirstRunMidiAndAudioToDefaults\(\);/,
+  );
+});
+
+test("native audio remembers launch volume even before an endpoint is ready", () => {
+  assert.match(
+    audioRuntimeSource,
+    /pub fn set_volume[\s\S]*?self\.master_gain = gain;[\s\S]*?\.runtime[\s\S]*?ok_or_else\(\|\| "Audio is not ready\."/,
+  );
+});

@@ -4565,38 +4565,15 @@ function showZoomPercent(percent: number): number {
   return normalized;
 }
 
-type ScoreZoomAnchor = {
-  clientX: number;
-  clientY: number;
-  scrollLeft: number;
-  scrollTop: number;
-  zoom: number;
-};
-
-function restoreScoreZoomAnchor(anchor: ScoreZoomAnchor, nextZoom: number): void {
-  const viewport = elements.scoreScroll.getBoundingClientRect();
-  const localX = anchor.clientX - viewport.left;
-  const localY = anchor.clientY - viewport.top;
-  const scale = nextZoom / anchor.zoom;
-  // Scroll assignments are natively clamped to zero/the scrollable extent, so
-  // an axis with no overflow cannot be moved by a zoom gesture.
-  elements.scoreScroll.scrollLeft = (anchor.scrollLeft + localX) * scale - localX;
-  elements.scoreScroll.scrollTop = (anchor.scrollTop + localY) * scale - localY;
-}
-
-function commitZoomPercent(percent: number, anchor?: ScoreZoomAnchor): void {
+function commitZoomPercent(percent: number): void {
   const normalized = showZoomPercent(percent);
   elements.zoomRange.value = String(normalized);
   persistedSettings.zoomPercent = normalized;
   persistSettings();
   const nextZoom = normalized / 100;
   if (nextZoom === zoom) return;
-  const previousZoom = zoom;
   zoom = nextZoom;
-  if (!osmd) {
-    if (anchor) restoreScoreZoomAnchor(anchor, nextZoom);
-    return;
-  }
+  if (!osmd) return;
   const currentTarget = Math.max(
     renderedThroughSourceMeasure,
     score
@@ -4604,10 +4581,7 @@ function commitZoomPercent(percent: number, anchor?: ScoreZoomAnchor): void {
       : -1,
   );
   void restartIncrementalRendering(currentTarget).then(() => {
-    if (anchor && anchor.zoom === previousZoom) restoreScoreZoomAnchor(anchor, nextZoom);
-    // A pinch is an explicit viewport gesture; keep its focal point instead of
-    // immediately auto-following the playback cursor after engraving.
-    updateVisualPosition(anchor === undefined);
+    updateVisualPosition();
   }).catch((error: unknown) => {
     toast(t("resizeFailed", { message: String(error) }), "error", false, "notation.resize");
   });
@@ -4639,77 +4613,50 @@ elements.zoomRange.addEventListener("change", () => {
 type ScoreTouchGesture = {
   startCenterX: number;
   startCenterY: number;
-  startDistance: number;
   startScrollLeft: number;
   startScrollTop: number;
-  startZoomPercent: number;
-  previewZoomPercent: number;
-  currentCenterX: number;
-  currentCenterY: number;
 };
 
 let scoreTouchGesture: ScoreTouchGesture | null = null;
 
-function twoTouchGeometry(touches: TouchList): { centerX: number; centerY: number; distance: number } | null {
+function twoTouchCenter(touches: TouchList): { centerX: number; centerY: number } | null {
   const first = touches.item(0);
   const second = touches.item(1);
   if (!first || !second) return null;
-  const dx = second.clientX - first.clientX;
-  const dy = second.clientY - first.clientY;
   return {
     centerX: (first.clientX + second.clientX) / 2,
     centerY: (first.clientY + second.clientY) / 2,
-    distance: Math.max(1, Math.hypot(dx, dy)),
   };
 }
 
 function beginScoreTouchGesture(event: TouchEvent): void {
   if (event.touches.length !== 2 || !score) return;
-  const geometry = twoTouchGeometry(event.touches);
-  if (!geometry) return;
+  const center = twoTouchCenter(event.touches);
+  if (!center) return;
   scoreTouchGesture = {
-    startCenterX: geometry.centerX,
-    startCenterY: geometry.centerY,
-    startDistance: geometry.distance,
+    startCenterX: center.centerX,
+    startCenterY: center.centerY,
     startScrollLeft: elements.scoreScroll.scrollLeft,
     startScrollTop: elements.scoreScroll.scrollTop,
-    startZoomPercent: Math.round(zoom * 100),
-    previewZoomPercent: Math.round(zoom * 100),
-    currentCenterX: geometry.centerX,
-    currentCenterY: geometry.centerY,
   };
   event.preventDefault();
 }
 
 function moveScoreTouchGesture(event: TouchEvent): void {
   if (!scoreTouchGesture || event.touches.length < 2) return;
-  const geometry = twoTouchGeometry(event.touches);
-  if (!geometry) return;
+  const center = twoTouchCenter(event.touches);
+  if (!center) return;
   event.preventDefault();
-  scoreTouchGesture.currentCenterX = geometry.centerX;
-  scoreTouchGesture.currentCenterY = geometry.centerY;
   elements.scoreScroll.scrollLeft = scoreTouchGesture.startScrollLeft
-    - (geometry.centerX - scoreTouchGesture.startCenterX);
+    - (center.centerX - scoreTouchGesture.startCenterX);
   elements.scoreScroll.scrollTop = scoreTouchGesture.startScrollTop
-    - (geometry.centerY - scoreTouchGesture.startCenterY);
-  scoreTouchGesture.previewZoomPercent = showZoomPercent(
-    scoreTouchGesture.startZoomPercent * geometry.distance / scoreTouchGesture.startDistance,
-  );
-  elements.zoomRange.value = String(scoreTouchGesture.previewZoomPercent);
+    - (center.centerY - scoreTouchGesture.startCenterY);
 }
 
 function finishScoreTouchGesture(event: TouchEvent): void {
   if (!scoreTouchGesture || event.touches.length >= 2) return;
   event.preventDefault();
-  const finished = scoreTouchGesture;
   scoreTouchGesture = null;
-  commitZoomPercent(finished.previewZoomPercent, {
-    clientX: finished.currentCenterX,
-    clientY: finished.currentCenterY,
-    scrollLeft: elements.scoreScroll.scrollLeft,
-    scrollTop: elements.scoreScroll.scrollTop,
-    zoom,
-  });
 }
 
 if (appleUiPlatform === "ios" || appleUiPlatform === "ipados") {

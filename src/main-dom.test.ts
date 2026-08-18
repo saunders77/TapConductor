@@ -89,13 +89,12 @@ test("Apple mobile performance UI suppresses browser gestures but leaves dialogs
   assert.match(source, /target\.closest\('\[role="dialog"\]'\)/);
 });
 
-test("Apple mobile score gestures support bounded two-finger pan and pinch zoom", () => {
+test("Apple mobile score gestures support bounded two-finger pan without pinch zoom", () => {
   const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 
   assert.match(styles, /\.platform-ios \.score-scroll,[\s\S]*?\.platform-ipados \.score-scroll\s*{[^}]*touch-action:\s*pan-x pan-y;/s);
   assert.match(source, /function moveScoreTouchGesture[\s\S]*?scrollLeft = scoreTouchGesture\.startScrollLeft[\s\S]*?scrollTop = scoreTouchGesture\.startScrollTop/);
-  assert.match(source, /startZoomPercent \* geometry\.distance \/ scoreTouchGesture\.startDistance/);
-  assert.match(source, /commitZoomPercent\(finished\.previewZoomPercent,[\s\S]*?scrollLeft:[\s\S]*?scrollTop:[\s\S]*?zoom,/);
+  assert.doesNotMatch(source, /startZoomPercent|previewZoomPercent|startDistance/);
   assert.match(source, /scoreScroll\.addEventListener\("touchstart"[\s\S]*?"touchmove"[\s\S]*?"touchend"[\s\S]*?"touchcancel"/);
 });
 

@@ -34,7 +34,7 @@ test("audio recovery instructions expose Reload as a direct action", () => {
   );
   assert.match(
     source,
-    /toast\(message, "error", true\)/,
+    /toast\(message, "error", true, "audio\.output-not-ready"\)/,
   );
   assert.match(
     source,

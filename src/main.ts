@@ -23,6 +23,10 @@ import {
 } from "./score-top-spacing";
 import { groupScoreWarnings, warningContext, type ScoreWarningGroup } from "./score-warning-groups";
 import {
+  recordNotificationOccurrence,
+  type NotificationOccurrences,
+} from "./notification-groups";
+import {
   appInvoke as invoke,
   appListen as listen,
   isWebBuild,
@@ -1032,6 +1036,17 @@ function setStatus(kind: "ready" | "loading" | "fault", label: string): void {
 
 const displayedErrorToasts = new Map<string, HTMLElement>();
 const displayedScoreWarningGroups = new Set<HTMLElement>();
+type NotificationKind = "info" | "warning" | "error";
+type NotificationHistory = NotificationOccurrences & {
+  item: HTMLElement | null;
+};
+const notificationHistory = new Map<string, NotificationHistory>();
+
+function forgetDisplayedErrorItem(item: HTMLElement): void {
+  for (const [message, displayed] of displayedErrorToasts) {
+    if (displayed === item) displayedErrorToasts.delete(message);
+  }
+}
 
 const INACTIVE_AUDIO_ERROR =
   t("inactiveAudio");
@@ -1095,18 +1110,38 @@ function audioReloadInstruction(message: string): string {
 
 function toast(
   message: string,
-  kind: "info" | "warning" | "error" = "info",
+  kind: NotificationKind = "info",
   audioReloadAction = false,
+  type = `${kind}:${message}`,
 ): void {
-  if (kind === "error") {
-    if (displayedErrorToasts.has(message)) return;
+  const history = notificationHistory.get(type) ?? { count: 0, messages: [], item: null };
+  recordNotificationOccurrence(history, message);
+  if (history.item) {
+    history.item.remove();
+    forgetDisplayedErrorItem(history.item);
   }
 
   const item = document.createElement("div");
   item.className = `toast ${kind}`;
   item.setAttribute("role", kind === "error" ? "alert" : "status");
   item.setAttribute("aria-atomic", "true");
-  const text = document.createElement("span");
+  const content = history.count === 1
+    ? document.createElement("span")
+    : document.createElement("details");
+  if (history.count === 1) {
+    if (!audioReloadAction) content.textContent = message;
+  } else {
+    item.classList.add("grouped-warning");
+    const summary = document.createElement("summary");
+    summary.textContent = `${history.count} notifications: ${message}`;
+    const messages = document.createElement("ol");
+    for (const occurrence of history.messages) {
+      const row = document.createElement("li");
+      row.textContent = occurrence;
+      messages.append(row);
+    }
+    content.append(summary, messages);
+  }
   const dismiss = document.createElement("button");
   dismiss.type = "button";
   dismiss.className = "toast-dismiss";
@@ -1114,18 +1149,27 @@ function toast(
   dismiss.textContent = "×";
   const remove = (): void => {
     item.remove();
-    if (kind === "error" && displayedErrorToasts.get(message) === item) {
-      displayedErrorToasts.delete(message);
-    }
+    if (history.item === item) history.item = null;
+    if (kind === "error") forgetDisplayedErrorItem(item);
   };
-  if (audioReloadAction) appendAudioReloadPrompt(text, message, remove);
-  else text.textContent = message;
-  item.append(text);
+  if (history.count === 1 && audioReloadAction) {
+    appendAudioReloadPrompt(content, message, remove);
+  } else if (history.count > 1 && audioReloadAction) {
+    const action = document.createElement("div");
+    action.className = "grouped-notification-action";
+    appendAudioReloadPrompt(action, "Reload", remove);
+    content.append(action);
+  }
+  item.append(content);
   dismiss.addEventListener("click", remove);
   item.append(dismiss);
   elements.toasts.append(item);
+  history.item = item;
+  notificationHistory.set(type, history);
   if (kind === "error") displayedErrorToasts.set(message, item);
-  if (kind !== "error") window.setTimeout(remove, kind === "warning" ? 12_000 : 7_000);
+  if (kind !== "error" && history.count === 1) {
+    window.setTimeout(remove, kind === "warning" ? 12_000 : 7_000);
+  }
 }
 
 function groupedScoreWarningToast(group: ScoreWarningGroup): void {
@@ -1171,7 +1215,7 @@ function showScoreWarnings(warnings: LoadedScore["warnings"]): void {
   dismissScoreWarningGroups();
   for (const item of groupScoreWarnings(warnings)) {
     if (item.kind === "group") groupedScoreWarningToast(item.group);
-    else toast(item.warning.message, "warning");
+    else toast(item.warning.message, "warning", false, `score-warning:${item.warning.code}`);
   }
 }
 
@@ -1270,7 +1314,7 @@ function reportIncrementalRenderError(error: unknown): void {
   const message = error instanceof Error ? error.message : String(error);
   if (message === incrementalRenderError) return;
   incrementalRenderError = message;
-  toast(t("moreNotationFailed", { message }), "error");
+  toast(t("moreNotationFailed", { message }), "error", false, "notation.incremental-render");
 }
 
 function updateVisualPosition(follow = true): void {
@@ -1351,7 +1395,7 @@ async function invokeSafe<T>(
       });
     }
     const message = error instanceof Error ? error.message : String(error);
-    toast(message, "error");
+    toast(message, "error", false, `command:${command}`);
     throw error;
   }
 }
@@ -1445,7 +1489,7 @@ async function loadScore(
     // unresponsive file picker.
     if (loaded) {
       const message = error instanceof Error ? error.message : String(error);
-      toast(t("notationDisplayFailed", { message }), "error");
+      toast(t("notationDisplayFailed", { message }), "error", false, "notation.display");
     }
     telemetry.capture("score_loaded", {
       source_kind: telemetryContext.sourceKind,
@@ -2795,7 +2839,7 @@ async function refreshDevices(): Promise<void> {
           output_count: midiPorts.outputs.length,
         },
       });
-      toast(t("midiDiscoveryFailed", { message }), "warning");
+      toast(t("midiDiscoveryFailed", { message }), "warning", false, "midi.discovery");
     }
   } else {
     errors.push(t("midiDiscoveryFailed", { message: String(midiResult.reason) }));
@@ -2823,7 +2867,7 @@ async function refreshDevices(): Promise<void> {
       telemetry.recordError({ errorCode: "diagnostics.unavailable", component: "audio", operation: "diagnostics" });
     }
     elements.diagnosticsButton.classList.add("not-ready");
-    toast(errors.join(" "), "error");
+    toast(errors.join(" "), "error", false, "devices.discovery");
   }
   await attemptPersistedDeviceRestoration();
   await syncMacosMenu();
@@ -2983,7 +3027,7 @@ async function refreshDiagnostics(): Promise<void> {
         operation: "output",
         context: { output_enabled: Boolean(diagnostics.midiOutput) },
       });
-      toast(diagnostics.midiOutputError, "warning");
+      toast(diagnostics.midiOutputError, "warning", false, "midi.output");
     }
     if (
       !diagnostics.ready
@@ -3001,7 +3045,7 @@ async function refreshDiagnostics(): Promise<void> {
       if (diagnostics.message === NATIVE_INACTIVE_AUDIO_ERROR) {
         nativeInactiveAudioToast = message;
       }
-      toast(message, "error", true);
+      toast(message, "error", true, "audio.output-not-ready");
     }
     elements.diagnosticsButton.classList.toggle("not-ready", !diagnostics.ready);
   } catch {
@@ -3018,7 +3062,7 @@ async function installListeners(): Promise<void> {
       if (payload.type === "fault") {
         telemetry.recordError({ errorCode: "performance.fault", component: "performance", operation: "core_event" });
         elements.diagnosticsButton.classList.add("not-ready");
-        toast(payload.message, "error");
+        toast(payload.message, "error", false, "performance.fault");
         return;
       }
       if (!score || payload.generation !== score.generation) return;
@@ -3029,7 +3073,7 @@ async function installListeners(): Promise<void> {
         if (payload.playedIndex !== undefined) mostRecentChordIndex = payload.playedIndex;
         if (replayWasUnavailable && mostRecentChordIndex !== null) void syncMacosMenu();
       }
-      if (payload.type === "ended") toast(t("endScore"), "info");
+      if (payload.type === "ended") toast(t("endScore"), "info", false, "performance.ended");
       updatePosition();
     }),
     listen<DiagnosticsDto>("audio-diagnostics", ({ payload }) => showDiagnostics(payload)),
@@ -3043,7 +3087,7 @@ async function installListeners(): Promise<void> {
       telemetry.recordError({ errorCode: "audio.lifecycle_error", component: "audio", operation: "lifecycle" });
       elements.diagnosticsButton.classList.add("not-ready");
       setStatus("fault", t("audioAttention"));
-      toast(audioReloadInstruction(payload), "error", true);
+      toast(audioReloadInstruction(payload), "error", true, "audio.lifecycle");
     }),
     listen<void>("audio-lifecycle-restored", () => {
       if (audioRecoveryWait) endBlockingWait(audioRecoveryWait);
@@ -4243,7 +4287,7 @@ function commitZoomPercent(percent: number): void {
   void restartIncrementalRendering(currentTarget).then(() => {
     updateVisualPosition();
   }).catch((error: unknown) => {
-    toast(t("resizeFailed", { message: String(error) }), "error");
+    toast(t("resizeFailed", { message: String(error) }), "error", false, "notation.resize");
   });
 }
 
@@ -4309,7 +4353,7 @@ function scheduleIpadOrientationLayoutRefresh(): void {
     if (settledLandscape === lastIpadLandscape) return;
     lastIpadLandscape = settledLandscape;
     void refreshIpadOrientationLayout(settledLandscape).catch((error: unknown) => {
-      toast(t("rotationFailed", { message: String(error) }), "error");
+      toast(t("rotationFailed", { message: String(error) }), "error", false, "display.rotation");
     });
   }, 120);
 }
@@ -4351,6 +4395,6 @@ void initializeApp().then(() => {
 }).catch((error: unknown) => {
   endBlockingWait(startupWait);
   setStatus("fault", t("coreUnavailable"));
-  toast(String(error), "error");
+  toast(String(error), "error", false, "application.startup");
 });
 window.setInterval(() => void refreshDiagnostics(), 1_000);

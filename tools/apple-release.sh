@@ -21,6 +21,23 @@ require_env() {
   }
 }
 
+configure_apple_developer_dir() {
+  if xcrun --find simctl >/dev/null 2>&1; then
+    return
+  fi
+
+  local xcode_developer_dir="/Applications/Xcode.app/Contents/Developer"
+  if [[ -x "${xcode_developer_dir}/usr/bin/simctl" ]]; then
+    export DEVELOPER_DIR="${xcode_developer_dir}"
+    echo "Using Xcode developer tools from ${DEVELOPER_DIR}"
+    return
+  fi
+
+  echo "The active developer tools do not include simctl. Install full Xcode or run:" >&2
+  echo "  sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer" >&2
+  exit 1
+}
+
 validate_apple_files() {
   require_command plutil
   plutil -lint \
@@ -232,6 +249,7 @@ case "${MODE}" in
     ;;
 
   ios-simulator)
+    configure_apple_developer_dir
     validate_apple_files
     quality_checks
     initialize_ios
@@ -244,6 +262,7 @@ case "${MODE}" in
     ;;
 
   ios-development)
+    configure_apple_developer_dir
     require_env APPLE_DEVELOPMENT_TEAM
     validate_apple_files
     quality_checks
@@ -257,6 +276,7 @@ case "${MODE}" in
     ;;
 
   ios-app-store)
+    configure_apple_developer_dir
     require_env APPLE_DEVELOPMENT_TEAM
     validate_apple_files
     quality_checks

@@ -610,8 +610,15 @@ input[type="range"] { accent-color: #75ffb3; width: 125px; }
 }
 .platform-ios .tap-button span { font-size: 19px; line-height: .5in; }
 .platform-ios .tap-button small { display: none; }
-.platform-ios .empty-actions { display: none; }
 .platform-ios .toast-region { bottom: calc(.5in + env(safe-area-inset-bottom, 0px) + 8px); }
+
+/* Keep the welcome actions above the fold on short iPhone landscape screens.
+ * The height breakpoint is below every iPad landscape viewport, while the
+ * platform class prevents compact desktop windows from receiving the layout. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .platform-ios .empty-landscape-extra { display: none; }
+  .platform-ios .empty-devices { width: 50%; }
+}
 
 .platform-ios .iphone-menu-overlay {
   position: fixed;

@@ -51,7 +51,17 @@ test("iPhone uses one settings sheet and a dedicated device-family class", () =>
   assert.match(styles, /\.platform-ios \.workspace[\s\S]*?grid-template-rows:\s*minmax\(0, 1fr\) calc\(\.5in \+ env\(safe-area-inset-bottom, 0px\)\);/s);
   assert.match(styles, /\.platform-ios \.tap-button\s*{[^}]*width:\s*100%;[^}]*height:\s*calc\(\.5in \+ env\(safe-area-inset-bottom, 0px\)\);[^}]*border-radius:\s*0;/s);
   assert.match(styles, /\.platform-ios \.performance-strip > :not\(\.tap-button\)\s*{[^}]*display:\s*none\s*!important;/s);
-  assert.match(styles, /\.platform-ios \.empty-actions\s*{[^}]*display:\s*none;/s);
+  assert.doesNotMatch(styles, /\.platform-ios \.empty-actions\s*{[^}]*display:\s*none;/s);
+});
+
+test("short iPhone landscape keeps empty-state actions visible and compacts only supporting content", () => {
+  const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(source, /class="empty-landscape-extra"> \(like MuseScore[\s\S]*?class="empty-landscape-extra"> \(free options/);
+  assert.match(
+    styles,
+    /@media \(orientation: landscape\) and \(max-height: 500px\)\s*{[\s\S]*?\.platform-ios \.empty-landscape-extra\s*{[^}]*display:\s*none;[^}]*}[\s\S]*?\.platform-ios \.empty-devices\s*{[^}]*width:\s*50%;/s,
+  );
 });
 
 test("iPhone settings selects do not retain a focus highlight after choosing an option", () => {

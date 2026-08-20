@@ -1483,6 +1483,25 @@ async function chooseScore(): Promise<void> {
   );
 }
 
+let openedScoreHandlingReady = false;
+let openedScoreLoadQueue: Promise<void> = Promise.resolve();
+
+function loadPendingOpenedScores(): Promise<void> {
+  if (isWebBuild() || !openedScoreHandlingReady) return Promise.resolve();
+  const pending = openedScoreLoadQueue.then(async () => {
+    const paths = await invokeSafe<string[]>("take_pending_opened_scores", undefined, false);
+    for (const path of paths) {
+      await loadScore(
+        () => invokeSafe<LoadedScore>("load_score", { path }, false),
+        t("loadingScore"),
+        { sourceKind: "user_file", fileFormat: scoreFileFormat(path) },
+      );
+    }
+  });
+  openedScoreLoadQueue = pending.catch(() => undefined);
+  return pending;
+}
+
 async function loadDemoScore(kind: "choir" | "piano"): Promise<void> {
   await loadScore(
     () => invokeSafe<LoadedScore>("load_demo_score", { kind }, false),
@@ -3271,6 +3290,9 @@ async function installListeners(): Promise<void> {
     listen<string>("macos-menu-action", ({ payload }) => {
       void handleMacosMenuAction(payload);
     }),
+    listen<void>("open-score-requested", () => {
+      void loadPendingOpenedScores();
+    }),
     listen<void>("midi-devices-changed", scheduleMidiDeviceRefresh),
   ]);
   unlisteners.push(...listeners);
@@ -4772,6 +4794,8 @@ void initializeApp().then(() => {
   const ready = Boolean(lastDiagnostics?.ready) && firstRunDeviceSetupErrors.length === 0;
   setStatus(ready ? "ready" : "fault", ready ? t("audioReady") : t("audioAttention"));
   endBlockingWait(startupWait);
+  openedScoreHandlingReady = true;
+  void loadPendingOpenedScores();
 }).catch((error: unknown) => {
   endBlockingWait(startupWait);
   setStatus("fault", t("coreUnavailable"));

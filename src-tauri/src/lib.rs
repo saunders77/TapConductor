@@ -7,6 +7,7 @@ mod dto;
 mod macos_menu;
 mod macos_window;
 mod midi_runtime;
+mod opened_scores;
 mod session;
 
 use crate::{
@@ -107,6 +108,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::load_score,
             commands::load_demo_score,
+            commands::take_pending_opened_scores,
             commands::set_part_enabled,
             commands::set_roll_delays,
             commands::set_tap_mode,
@@ -135,6 +137,7 @@ pub fn run() {
             macos_menu::sync_macos_menu,
         ])
         .setup(move |app| {
+            app.manage(opened_scores::OpenedScores::default());
             #[cfg(target_os = "macos")]
             {
                 macos_menu::install(app.handle(), &macos_menu::MacosMenuState::default())?;
@@ -288,6 +291,20 @@ pub fn run() {
                 })?;
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("failed to run TapConductor");
+        .build(tauri::generate_context!())
+        .expect("failed to build TapConductor")
+        .run(|_app, _event| {
+            #[cfg(target_os = "ios")]
+            if let tauri::RunEvent::Opened { urls } = _event
+                && let Some(opened_scores) = _app.try_state::<opened_scores::OpenedScores>()
+            {
+                match opened_scores.enqueue_urls(urls) {
+                    Ok(count) if count > 0 => {
+                        let _ = _app.emit("open-score-requested", ());
+                    }
+                    Ok(_) => {}
+                    Err(error) => tracing::warn!(error, "Unable to queue an iOS-opened score"),
+                }
+            }
+        });
 }

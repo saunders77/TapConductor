@@ -5,6 +5,7 @@ use crate::{
     core::AppCore,
     crash_marker::NativeTelemetryState,
     dto::{DeviceDto, DiagnosticsDto, LoadedScoreDto, MidiPortsDto},
+    opened_scores::OpenedScores,
 };
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -23,6 +24,11 @@ fn emit_event(app: &AppHandle, event: Option<crate::dto::CoreEventDto>) -> Resul
             .map_err(|error| error.to_string())?;
     }
     Ok(())
+}
+
+#[tauri::command]
+pub fn take_pending_opened_scores(state: State<'_, OpenedScores>) -> Result<Vec<String>, String> {
+    state.take()
 }
 
 #[tauri::command]

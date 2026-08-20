@@ -15,6 +15,30 @@ test("every required UI element is present in the application markup", () => {
   assert.deepEqual(requiredIds.filter((id) => !markupIds.has(id)), []);
 });
 
+test("iOS advertises every score type and drains system open requests after startup", () => {
+  const plist = readFileSync(
+    new URL("../src-tauri/apple/Info.ios.plist", import.meta.url),
+    "utf8",
+  );
+  const nativeSource = readFileSync(
+    new URL("../src-tauri/src/lib.rs", import.meta.url),
+    "utf8",
+  );
+
+  for (const type of [
+    "com.recordare.musicxml.uncompressed",
+    "com.recordare.musicxml",
+    "public.xml",
+    "public.midi-audio",
+  ]) {
+    assert.match(plist, new RegExp(`<string>${type.replaceAll(".", "\\.")}</string>`));
+  }
+  assert.match(plist, /<key>LSSupportsOpeningDocumentsInPlace<\/key>\s*<false\/>/);
+  assert.match(nativeSource, /tauri::RunEvent::Opened \{ urls \}/);
+  assert.match(source, /listen<void>\("open-score-requested"[\s\S]*?loadPendingOpenedScores\(\)/);
+  assert.match(source, /openedScoreHandlingReady = true;\s*void loadPendingOpenedScores\(\);/);
+});
+
 test("the empty score view stands alone and defers errors until a score opens", () => {
   const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 

@@ -4793,12 +4793,12 @@ if (isWebBuild()) {
 void initializeApp().then(() => {
   const ready = Boolean(lastDiagnostics?.ready) && firstRunDeviceSetupErrors.length === 0;
   setStatus(ready ? "ready" : "fault", ready ? t("audioReady") : t("audioAttention"));
+}).catch((error: unknown) => {
+  setStatus("fault", t("coreUnavailable"));
+  toast(String(error), "error", false, "application.startup");
+}).finally(() => {
   endBlockingWait(startupWait);
   openedScoreHandlingReady = true;
   void loadPendingOpenedScores();
-}).catch((error: unknown) => {
-  endBlockingWait(startupWait);
-  setStatus("fault", t("coreUnavailable"));
-  toast(String(error), "error", false, "application.startup");
 });
 window.setInterval(() => void refreshDiagnostics(), 1_000);

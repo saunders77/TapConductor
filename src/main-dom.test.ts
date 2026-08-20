@@ -39,8 +39,15 @@ test("Apple bundles advertise every score type as an alternate handler", () => {
   assert.match(plists[0]!, /<key>LSSupportsOpeningDocumentsInPlace<\/key>\s*<false\/>/);
   assert.match(nativeSource, /cfg\(any\(target_os = "ios", target_os = "macos"\)\)/);
   assert.match(nativeSource, /tauri::RunEvent::Opened \{ urls \}/);
+  assert.match(
+    nativeSource,
+    /Builder::default\(\)[\s\S]*?\.manage\(opened_scores\)[\s\S]*?\.setup\(/,
+  );
   assert.match(source, /listen<void>\("open-score-requested"[\s\S]*?loadPendingOpenedScores\(\)/);
-  assert.match(source, /openedScoreHandlingReady = true;\s*void loadPendingOpenedScores\(\);/);
+  assert.match(
+    source,
+    /\.finally\(\(\) => \{[\s\S]*?openedScoreHandlingReady = true;\s*void loadPendingOpenedScores\(\);/,
+  );
 });
 
 test("Windows installers register Open with support without assigning file defaults", () => {

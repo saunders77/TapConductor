@@ -33,8 +33,17 @@ struct AppleMidiWatcher {
 pub fn run() {
     let (midi_sender, midi_receiver) = mpsc::channel();
     let midi_shutdown_sender = midi_sender.clone();
+    let opened_scores = opened_scores::OpenedScores::default();
+    #[cfg(target_os = "windows")]
+    if let Err(error) = opened_scores.enqueue_arguments(std::env::args_os().skip(1)) {
+        tracing::warn!(error, "Unable to queue a Windows-opened score");
+    }
 
-    let builder = tauri::Builder::default().plugin(tauri_plugin_opener::init());
+    // This state must exist before setup: Apple can deliver the cold-launch
+    // Opened event before the Ready event that invokes the setup callback.
+    let builder = tauri::Builder::default()
+        .manage(opened_scores)
+        .plugin(tauri_plugin_opener::init());
     #[cfg(target_os = "ios")]
     let builder = builder.plugin(tauri_plugin_apple_audio_session::init());
 
@@ -137,12 +146,6 @@ pub fn run() {
             macos_menu::sync_macos_menu,
         ])
         .setup(move |app| {
-            let opened_scores = opened_scores::OpenedScores::default();
-            #[cfg(target_os = "windows")]
-            if let Err(error) = opened_scores.enqueue_arguments(std::env::args_os().skip(1)) {
-                tracing::warn!(error, "Unable to queue a Windows-opened score");
-            }
-            app.manage(opened_scores);
             #[cfg(target_os = "macos")]
             {
                 macos_menu::install(app.handle(), &macos_menu::MacosMenuState::default())?;

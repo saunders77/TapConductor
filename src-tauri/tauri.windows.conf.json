@@ -5,6 +5,12 @@
     "resources": {
       "../WINDOWS-LICENSE": "LICENSE",
       "../LICENSING.md": "LICENSING.md"
+    },
+    "windows": {
+      "wix": {
+        "fragmentPaths": ["windows/open-with.wxs"],
+        "componentRefs": ["TapConductorOpenWithRegistration"]
+      }
     }
   }
 }

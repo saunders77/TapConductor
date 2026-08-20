@@ -15,28 +15,63 @@ test("every required UI element is present in the application markup", () => {
   assert.deepEqual(requiredIds.filter((id) => !markupIds.has(id)), []);
 });
 
-test("iOS advertises every score type and drains system open requests after startup", () => {
-  const plist = readFileSync(
-    new URL("../src-tauri/apple/Info.ios.plist", import.meta.url),
+test("Apple bundles advertise every score type as an alternate handler", () => {
+  const plists = ["Info.ios.plist", "Info.macos.plist"].map((name) => readFileSync(
+    new URL(`../src-tauri/apple/${name}`, import.meta.url),
     "utf8",
-  );
+  ));
   const nativeSource = readFileSync(
     new URL("../src-tauri/src/lib.rs", import.meta.url),
     "utf8",
   );
 
-  for (const type of [
-    "com.recordare.musicxml.uncompressed",
-    "com.recordare.musicxml",
-    "public.xml",
-    "public.midi-audio",
-  ]) {
-    assert.match(plist, new RegExp(`<string>${type.replaceAll(".", "\\.")}</string>`));
+  for (const plist of plists) {
+    for (const type of [
+      "com.recordare.musicxml.uncompressed",
+      "com.recordare.musicxml",
+      "public.xml",
+      "public.midi-audio",
+    ]) {
+      assert.match(plist, new RegExp(`<string>${type.replaceAll(".", "\\.")}</string>`));
+    }
+    assert.match(plist, /<key>LSHandlerRank<\/key>\s*<string>Alternate<\/string>/);
   }
-  assert.match(plist, /<key>LSSupportsOpeningDocumentsInPlace<\/key>\s*<false\/>/);
+  assert.match(plists[0]!, /<key>LSSupportsOpeningDocumentsInPlace<\/key>\s*<false\/>/);
+  assert.match(nativeSource, /cfg\(any\(target_os = "ios", target_os = "macos"\)\)/);
   assert.match(nativeSource, /tauri::RunEvent::Opened \{ urls \}/);
   assert.match(source, /listen<void>\("open-score-requested"[\s\S]*?loadPendingOpenedScores\(\)/);
   assert.match(source, /openedScoreHandlingReady = true;\s*void loadPendingOpenedScores\(\);/);
+});
+
+test("Windows installers register Open with support without assigning file defaults", () => {
+  const nsis = readFileSync(
+    new URL("../src-tauri/installer.nsi", import.meta.url),
+    "utf8",
+  );
+  const wix = readFileSync(
+    new URL("../src-tauri/windows/open-with.wxs", import.meta.url),
+    "utf8",
+  );
+  const windowsConfig = JSON.parse(readFileSync(
+    new URL("../src-tauri/tauri.windows.conf.json", import.meta.url),
+    "utf8",
+  ));
+  const nativeSource = readFileSync(
+    new URL("../src-tauri/src/lib.rs", import.meta.url),
+    "utf8",
+  );
+
+  for (const extension of ["musicxml", "xml", "mxl", "mid", "midi"]) {
+    assert.match(nsis, new RegExp(`SupportedTypes\" \"\\.${extension}\"`));
+    assert.match(wix, new RegExp(`Name=\"\\.${extension}\"`));
+  }
+  assert.doesNotMatch(nsis, /APP_ASSOCIATE|Software\\Classes\\\.[a-z]/);
+  assert.doesNotMatch(wix, /Key="Software\\Classes\\\.[a-z]/);
+  assert.deepEqual(windowsConfig.bundle.windows.wix, {
+    fragmentPaths: ["windows/open-with.wxs"],
+    componentRefs: ["TapConductorOpenWithRegistration"],
+  });
+  assert.match(nativeSource, /opened_scores\.enqueue_arguments\(std::env::args_os\(\)\.skip\(1\)\)/);
 });
 
 test("the empty score view stands alone and defers errors until a score opens", () => {

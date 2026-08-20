@@ -1,12 +1,14 @@
 // Copyright (c) 2026 Michael Saunders
 use std::{collections::VecDeque, sync::Mutex};
 
-#[cfg(any(target_os = "ios", test))]
+#[cfg(any(target_os = "windows", test))]
+use std::ffi::OsString;
+#[cfg(any(target_os = "ios", target_os = "macos", target_os = "windows", test))]
 use std::path::{Path, PathBuf};
-#[cfg(any(target_os = "ios", test))]
+#[cfg(any(target_os = "ios", target_os = "macos", target_os = "windows", test))]
 use tauri::Url;
 
-#[cfg(any(target_os = "ios", test))]
+#[cfg(any(target_os = "ios", target_os = "macos", target_os = "windows", test))]
 const SUPPORTED_SCORE_EXTENSIONS: &[&str] = &["musicxml", "xml", "mxl", "mid", "midi"];
 
 #[derive(Default)]
@@ -15,11 +17,35 @@ pub struct OpenedScores {
 }
 
 impl OpenedScores {
-    #[cfg(any(target_os = "ios", test))]
+    #[cfg(any(target_os = "ios", target_os = "macos", test))]
     pub fn enqueue_urls(&self, urls: Vec<Url>) -> Result<usize, String> {
         let paths = urls
             .into_iter()
             .filter_map(|url| score_path_from_url(&url))
+            .collect::<Vec<_>>();
+        self.enqueue_paths(paths)
+    }
+
+    #[cfg(any(target_os = "windows", test))]
+    pub fn enqueue_arguments<I>(&self, arguments: I) -> Result<usize, String>
+    where
+        I: IntoIterator<Item = OsString>,
+    {
+        let paths = arguments
+            .into_iter()
+            .filter_map(score_path_from_argument)
+            .collect::<Vec<_>>();
+        self.enqueue_paths(paths)
+    }
+
+    #[cfg(any(target_os = "ios", target_os = "macos", target_os = "windows", test))]
+    fn enqueue_paths<I>(&self, paths: I) -> Result<usize, String>
+    where
+        I: IntoIterator<Item = PathBuf>,
+    {
+        let paths = paths
+            .into_iter()
+            .filter(|path| supported_score_path(path))
             .filter_map(|path| path.into_os_string().into_string().ok())
             .collect::<Vec<_>>();
         let count = paths.len();
@@ -40,7 +66,7 @@ impl OpenedScores {
     }
 }
 
-#[cfg(any(target_os = "ios", test))]
+#[cfg(any(target_os = "ios", target_os = "macos", target_os = "windows", test))]
 fn score_path_from_url(url: &Url) -> Option<PathBuf> {
     if url.scheme() != "file" {
         return None;
@@ -49,7 +75,7 @@ fn score_path_from_url(url: &Url) -> Option<PathBuf> {
     supported_score_path(&path).then_some(path)
 }
 
-#[cfg(any(target_os = "ios", test))]
+#[cfg(any(target_os = "ios", target_os = "macos", target_os = "windows", test))]
 fn supported_score_path(path: &Path) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
@@ -58,6 +84,24 @@ fn supported_score_path(path: &Path) -> bool {
                 .iter()
                 .any(|supported| extension.eq_ignore_ascii_case(supported))
         })
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn score_path_from_argument(argument: OsString) -> Option<PathBuf> {
+    let text = argument.to_str()?;
+    if text.starts_with('-') {
+        return None;
+    }
+    if text.starts_with("file:") {
+        return Url::parse(text)
+            .ok()
+            .and_then(|url| score_path_from_url(&url));
+    }
+    if text.contains("://") {
+        return None;
+    }
+    let path = PathBuf::from(argument);
+    supported_score_path(&path).then_some(path)
 }
 
 #[cfg(test)]
@@ -103,5 +147,26 @@ mod tests {
             vec!["/private/tmp/one.mxl", "/private/tmp/two.mid"]
         );
         assert!(state.take().unwrap().is_empty());
+    }
+
+    #[test]
+    fn windows_style_startup_arguments_only_queue_supported_local_scores() {
+        let state = OpenedScores::default();
+        assert_eq!(
+            state
+                .enqueue_arguments([
+                    OsString::from("--flag"),
+                    OsString::from("C:\\Scores\\one.musicxml"),
+                    OsString::from("file:///C:/Scores/two.MXL"),
+                    OsString::from("https://example.com/remote.mid"),
+                    OsString::from("C:\\Scores\\notes.txt"),
+                ])
+                .unwrap(),
+            2
+        );
+        assert_eq!(
+            state.take().unwrap(),
+            vec!["C:\\Scores\\one.musicxml", "/C:/Scores/two.MXL"]
+        );
     }
 }

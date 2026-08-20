@@ -137,7 +137,12 @@ pub fn run() {
             macos_menu::sync_macos_menu,
         ])
         .setup(move |app| {
-            app.manage(opened_scores::OpenedScores::default());
+            let opened_scores = opened_scores::OpenedScores::default();
+            #[cfg(target_os = "windows")]
+            if let Err(error) = opened_scores.enqueue_arguments(std::env::args_os().skip(1)) {
+                tracing::warn!(error, "Unable to queue a Windows-opened score");
+            }
+            app.manage(opened_scores);
             #[cfg(target_os = "macos")]
             {
                 macos_menu::install(app.handle(), &macos_menu::MacosMenuState::default())?;
@@ -294,7 +299,7 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("failed to build TapConductor")
         .run(|_app, _event| {
-            #[cfg(target_os = "ios")]
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
             if let tauri::RunEvent::Opened { urls } = _event
                 && let Some(opened_scores) = _app.try_state::<opened_scores::OpenedScores>()
             {
@@ -303,7 +308,7 @@ pub fn run() {
                         let _ = _app.emit("open-score-requested", ());
                     }
                     Ok(_) => {}
-                    Err(error) => tracing::warn!(error, "Unable to queue an iOS-opened score"),
+                    Err(error) => tracing::warn!(error, "Unable to queue an Apple-opened score"),
                 }
             }
         });

@@ -26,7 +26,6 @@ ManifestDPIAwareness PerMonitorV2
 !include x64.nsh
 !include WordFunc.nsh
 !include "utils.nsh"
-!include "FileAssociation.nsh"
 !include "Win\COM.nsh"
 !include "Win\Propkey.nsh"
 !include "StrFunc.nsh"
@@ -688,12 +687,18 @@ Section Install
     File /a "/oname={{this}}" "{{no-escape @key}}"
   {{/each}}
 
-  ; Create file associations
-  {{#each file_associations as |association| ~}}
-    {{#each association.ext as |ext| ~}}
-       !insertmacro APP_ASSOCIATE "{{ext}}" "{{or association.name ext}}" "{{association-description association.description ext}}" "$INSTDIR\${MAINBINARYNAME}.exe,0" "Open with ${PRODUCTNAME}" "$INSTDIR\${MAINBINARYNAME}.exe $\"%1$\""
-    {{/each}}
-  {{/each}}
+  ; Advertise TapConductor in Windows' Open with menu without changing the
+  ; current default handler for any extension.
+  WriteRegStr SHCTX "Software\Classes\Applications\${MAINBINARYNAME}.exe" "FriendlyAppName" "${PRODUCTNAME}"
+  WriteRegStr SHCTX "Software\Classes\Applications\${MAINBINARYNAME}.exe" "ApplicationDescription" "Open and perform MusicXML and MIDI scores with ${PRODUCTNAME}."
+  WriteRegStr SHCTX "Software\Classes\Applications\${MAINBINARYNAME}.exe\DefaultIcon" "" "$\"$INSTDIR\${MAINBINARYNAME}.exe$\",0"
+  WriteRegStr SHCTX "Software\Classes\Applications\${MAINBINARYNAME}.exe\shell\open\command" "" "$\"$INSTDIR\${MAINBINARYNAME}.exe$\" $\"%1$\""
+  WriteRegStr SHCTX "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".musicxml" ""
+  WriteRegStr SHCTX "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".xml" ""
+  WriteRegStr SHCTX "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".mxl" ""
+  WriteRegStr SHCTX "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".mid" ""
+  WriteRegStr SHCTX "Software\Classes\Applications\${MAINBINARYNAME}.exe\SupportedTypes" ".midi" ""
+  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, i 0, i 0)'
 
   ; Register deep links
   {{#each deep_link_protocols as |protocol| ~}}
@@ -823,12 +828,13 @@ Section Uninstall
     Delete "$INSTDIR\\{{this}}"
   {{/each}}
 
-  ; Delete app associations
-  {{#each file_associations as |association| ~}}
-    {{#each association.ext as |ext| ~}}
-      !insertmacro APP_UNASSOCIATE "{{ext}}" "{{or association.name ext}}"
-    {{/each}}
-  {{/each}}
+  ; Remove only TapConductor's Open with entry. The command comparison avoids
+  ; deleting a registration belonging to another installation.
+  ReadRegStr $R7 SHCTX "Software\Classes\Applications\${MAINBINARYNAME}.exe\shell\open\command" ""
+  ${If} $R7 == "$\"$INSTDIR\${MAINBINARYNAME}.exe$\" $\"%1$\""
+    DeleteRegKey SHCTX "Software\Classes\Applications\${MAINBINARYNAME}.exe"
+    System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, i 0, i 0)'
+  ${EndIf}
 
   ; Delete deep links
   {{#each deep_link_protocols as |protocol| ~}}

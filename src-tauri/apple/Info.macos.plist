@@ -23,8 +23,9 @@
       <string>Alternate</string>
       <key>LSItemContentTypes</key>
       <array>
-        <string>com.tapconductor.musicxml</string>
-        <string>com.tapconductor.compressed-musicxml</string>
+        <string>com.recordare.musicxml.uncompressed</string>
+        <string>com.recordare.musicxml</string>
+        <string>public.xml</string>
       </array>
     </dict>
     <dict>
@@ -42,7 +43,7 @@
   <array>
     <dict>
       <key>UTTypeIdentifier</key>
-      <string>com.tapconductor.musicxml</string>
+      <string>com.recordare.musicxml.uncompressed</string>
       <key>UTTypeDescription</key>
       <string>MusicXML Score</string>
       <key>UTTypeConformsTo</key>
@@ -50,14 +51,14 @@
       <key>UTTypeTagSpecification</key>
       <dict>
         <key>public.filename-extension</key>
-        <array><string>musicxml</string><string>xml</string></array>
+        <string>musicxml</string>
         <key>public.mime-type</key>
         <string>application/vnd.recordare.musicxml+xml</string>
       </dict>
     </dict>
     <dict>
       <key>UTTypeIdentifier</key>
-      <string>com.tapconductor.compressed-musicxml</string>
+      <string>com.recordare.musicxml</string>
       <key>UTTypeDescription</key>
       <string>Compressed MusicXML Score</string>
       <key>UTTypeConformsTo</key>

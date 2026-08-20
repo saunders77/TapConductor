@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Register as an optional Open with application without assigning defaults. -->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <DirectoryRef Id="TARGETDIR">
+      <Component Id="TapConductorOpenWithRegistration" Guid="*">
+        <RegistryKey
+          Root="HKCU"
+          Key="Software\Classes\Applications\tapconductor-app.exe"
+          Action="createAndRemoveOnUninstall"
+        >
+          <RegistryValue
+            Name="FriendlyAppName"
+            Type="string"
+            Value="TapConductor"
+            KeyPath="yes"
+          />
+          <RegistryValue
+            Name="ApplicationDescription"
+            Type="string"
+            Value="Open and perform MusicXML and MIDI scores with TapConductor."
+          />
+        </RegistryKey>
+        <RegistryValue
+          Root="HKCU"
+          Key="Software\Classes\Applications\tapconductor-app.exe\DefaultIcon"
+          Type="string"
+          Value="&quot;[INSTALLDIR]tapconductor-app.exe&quot;,0"
+        />
+        <RegistryValue
+          Root="HKCU"
+          Key="Software\Classes\Applications\tapconductor-app.exe\shell\open\command"
+          Type="string"
+          Value="&quot;[INSTALLDIR]tapconductor-app.exe&quot; &quot;%1&quot;"
+        />
+        <RegistryKey
+          Root="HKCU"
+          Key="Software\Classes\Applications\tapconductor-app.exe\SupportedTypes"
+        >
+          <RegistryValue Name=".musicxml" Type="string" Value="" />
+          <RegistryValue Name=".xml" Type="string" Value="" />
+          <RegistryValue Name=".mxl" Type="string" Value="" />
+          <RegistryValue Name=".mid" Type="string" Value="" />
+          <RegistryValue Name=".midi" Type="string" Value="" />
+        </RegistryKey>
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+</Wix>

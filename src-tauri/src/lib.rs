@@ -185,6 +185,12 @@ pub fn run() {
                 .name("tapconductor-midi-input".to_owned())
                 .spawn(move || {
                     while let Ok(action) = midi_receiver.recv() {
+                        if matches!(&action, MidiInputAction::Panic) {
+                            // The UI owns beat-mode timing and its physical-token
+                            // set. Tell it to discard both when a MIDI mapper is
+                            // reset or a selected input is disconnected.
+                            let _ = handle.emit("midi-input-reset", ());
+                        }
                         let action = match action {
                             MidiInputAction::Shortcut {
                                 command,

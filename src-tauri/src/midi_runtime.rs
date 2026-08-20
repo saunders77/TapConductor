@@ -4,7 +4,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::{
         Arc, Mutex,
-        atomic::{AtomicU8, Ordering},
+        atomic::{AtomicBool, AtomicU8, Ordering},
         mpsc::{self, Receiver, RecvTimeoutError, Sender},
     },
     thread,
@@ -179,6 +179,7 @@ pub struct MidiManager {
     backend: MidirBackend,
     input_action_sender: Sender<MidiInputAction>,
     input_connection: Option<Box<dyn MidiInputConnection>>,
+    input_callback_enabled: Option<Arc<AtomicBool>>,
     output_worker: Option<OutputWorker>,
     selected_input_id: Option<String>,
     selected_output_id: Option<String>,
@@ -200,6 +201,7 @@ impl MidiManager {
             backend: MidirBackend,
             input_action_sender,
             input_connection: None,
+            input_callback_enabled: None,
             output_worker: None,
             selected_input_id: None,
             selected_output_id: None,
@@ -218,6 +220,18 @@ impl MidiManager {
 
     pub fn ports(&mut self) -> Result<MidiPortsDto, String> {
         let (input_result, output_result) = self.discover_ports()?;
+        if selection_missing_from_successful_discovery(
+            self.selected_input_id.as_deref(),
+            &input_result,
+        ) {
+            self.set_input(None)?;
+        }
+        if selection_missing_from_successful_discovery(
+            self.selected_output_id.as_deref(),
+            &output_result,
+        ) {
+            self.set_output(None)?;
+        }
         self.last_input_discovery_error = input_result.as_ref().err().cloned();
         self.last_output_discovery_error = output_result.as_ref().err().cloned();
         let inputs = input_result.unwrap_or_default();
@@ -317,6 +331,12 @@ impl MidiManager {
     }
 
     pub fn set_input(&mut self, device_id: Option<String>) -> Result<(), String> {
+        if let Some(enabled) = self.input_callback_enabled.take() {
+            // Stop accepting events immediately. Native connection teardown
+            // can block after an unplug, especially in CoreMIDI, and must not
+            // keep a logically-Off input alive while it closes in the background.
+            enabled.store(false, Ordering::Release);
+        }
         if let Some(connection) = self.input_connection.take() {
             // Native disconnect has no portable cancellation API. Keep it away
             // from the shared application-state lock.
@@ -345,6 +365,8 @@ impl MidiManager {
         let sender = self.input_action_sender.clone();
         let shortcut_function_pitch = self.shortcut_function_pitch.clone();
         let instrument_selection_sender = Arc::clone(&self.instrument_selection_sender);
+        let callback_enabled = Arc::new(AtomicBool::new(true));
+        let connection_callback_enabled = Arc::clone(&callback_enabled);
         // In normal rhythm/free-play modes, keep a MIDI key's input token
         // latched while CC64 sustain is down. The mapper emits its matching
         // Up when the pedal is released, so the existing performance gate
@@ -363,6 +385,9 @@ impl MidiManager {
                 .connect_input(
                     &connection_id,
                     Box::new(move |message| {
+                        if !connection_callback_enabled.load(Ordering::Acquire) {
+                            return;
+                        }
                         if message.message.is_instrument_selection()
                             && let Ok(sender) = instrument_selection_sender.lock()
                             && let Some(sender) = sender.as_ref()
@@ -416,7 +441,9 @@ impl MidiManager {
                             ) {
                                 ShortcutGateOutput::Pass(action)
                                 | ShortcutGateOutput::Shortcut(action) => {
-                                    let _ = sender.send(action);
+                                    if connection_callback_enabled.load(Ordering::Acquire) {
+                                        let _ = sender.send(action);
+                                    }
                                 }
                                 ShortcutGateOutput::Consume => {}
                             }
@@ -426,6 +453,7 @@ impl MidiManager {
                 .map_err(|error| error.to_string())
         })?;
         self.input_connection = Some(connection);
+        self.input_callback_enabled = Some(callback_enabled);
         self.selected_input_id = Some(device_id);
         self.selected_input_name = Some(name);
         Ok(())
@@ -480,6 +508,9 @@ impl MidiManager {
         // A process restart closes every CoreMIDI client before discovery.
         // Reproduce that lifecycle here so MIDIRestart does not rescan while
         // TapConductor still owns clients backed by the previous registry.
+        if let Some(enabled) = self.input_callback_enabled.take() {
+            enabled.store(false, Ordering::Release);
+        }
         if let Some(connection) = self.input_connection.take()
             && let Err(error) = run_midi_operation("input shutdown", move || {
                 drop(connection);
@@ -628,6 +659,18 @@ impl MidiManager {
         self.selected_output_name = None;
         self.last_output_error = Some(format!("{message}; MIDI OUT was disabled."));
     }
+}
+
+fn selection_missing_from_successful_discovery(
+    selected_id: Option<&str>,
+    discovery: &MidiDeviceDiscoveryResult,
+) -> bool {
+    let Some(selected_id) = selected_id else {
+        return false;
+    };
+    discovery
+        .as_ref()
+        .is_ok_and(|devices| devices.iter().all(|device| device.id != selected_id))
 }
 
 fn device_dto(device: tapconductor_midi::backend::MidiDeviceInfo) -> DeviceDto {
@@ -794,7 +837,7 @@ fn command_due(command: &OutputWorkerCommand) -> Option<Instant> {
 mod piano_shortcut_tests {
     use super::{
         MidiInputAction, OutputWorkerCommand, PianoShortcutGate, ShortcutGateOutput,
-        spawn_output_worker,
+        selection_missing_from_successful_discovery, spawn_output_worker,
     };
     use crate::dto::PianoShortcutCommandDto;
     use std::sync::{
@@ -803,7 +846,7 @@ mod piano_shortcut_tests {
     };
     use tapconductor_midi::{
         MidiMessage,
-        backend::{MidiBackendError, MidiOutputConnection},
+        backend::{MidiBackendError, MidiDeviceInfo, MidiOutputConnection, MidiPortDirection},
     };
 
     struct DropTrackingOutput(Arc<AtomicBool>);
@@ -835,6 +878,33 @@ mod piano_shortcut_tests {
             midi_pitch: pitch,
             velocity: 96,
         }
+    }
+
+    #[test]
+    fn successful_discovery_invalidates_a_missing_selected_port() {
+        let devices = Ok(vec![MidiDeviceInfo {
+            id: "other".to_owned(),
+            name: "Other".to_owned(),
+            direction: MidiPortDirection::Input,
+        }]);
+        assert!(selection_missing_from_successful_discovery(
+            Some("selected"),
+            &devices,
+        ));
+        assert!(!selection_missing_from_successful_discovery(
+            Some("other"),
+            &devices,
+        ));
+        assert!(!selection_missing_from_successful_discovery(None, &devices));
+    }
+
+    #[test]
+    fn discovery_errors_do_not_invalidate_a_selected_port() {
+        let devices = Err("temporary discovery failure".to_owned());
+        assert!(!selection_missing_from_successful_discovery(
+            Some("selected"),
+            &devices,
+        ));
     }
 
     #[test]

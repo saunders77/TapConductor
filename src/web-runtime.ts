@@ -693,11 +693,14 @@ export class WebRuntime {
         this.midiAccess = access;
         access.onstatechange = () => {
           if (this.selectedMidiInput && !access.inputs.has(this.selectedMidiInput)) {
+            const disconnectedInput = this.selectedMidiInput;
             this.selectedMidiInput = null;
+            this.resetMidiInput(disconnectedInput);
           }
           if (this.selectedMidiOutput && !access.outputs.has(this.selectedMidiOutput)) {
             this.selectedMidiOutput = null;
           }
+          this.emit("midi-devices-changed", undefined);
         };
         this.lastMidiError = undefined;
         return access;
@@ -713,6 +716,20 @@ export class WebRuntime {
     if (!this.midiAccess && "requestMIDIAccess" in navigator) {
       const enable = { id: ENABLE_WEB_MIDI_ID, name: "Enable Web MIDI…" };
       return { inputs: [enable], outputs: [enable] };
+    }
+    if (
+      this.selectedMidiInput
+      && this.midiAccess?.inputs.get(this.selectedMidiInput)?.state !== "connected"
+    ) {
+      const disconnectedInput = this.selectedMidiInput;
+      this.selectedMidiInput = null;
+      this.resetMidiInput(disconnectedInput);
+    }
+    if (
+      this.selectedMidiOutput
+      && this.midiAccess?.outputs.get(this.selectedMidiOutput)?.state !== "connected"
+    ) {
+      this.selectedMidiOutput = null;
     }
     const toDevices = (ports: Iterable<MIDIPort>): DeviceDto[] =>
       [...ports]
@@ -735,13 +752,25 @@ export class WebRuntime {
       id = [...this.midiAccess?.inputs.keys() ?? []][0] ?? null;
     }
     for (const input of this.midiAccess?.inputs.values() ?? []) input.onmidimessage = null;
+    const previousInput = this.selectedMidiInput;
     this.selectedMidiInput = id;
+    if (previousInput) this.resetMidiInput(previousInput);
     if (!id) return;
     const input = this.midiAccess?.inputs.get(id);
     if (!input) throw new Error("The selected MIDI input is unavailable.");
     input.onmidimessage = (event) => {
       if (event.data) this.onMidiMessage(input.id, event.data);
     };
+  }
+
+  private resetMidiInput(inputId: string): void {
+    for (const token of [...this.midiTokenPitches.keys()]) {
+      if (!token.startsWith(`midi:${inputId}:`)) continue;
+      this.release(token);
+      this.midiTokenPitches.delete(token);
+    }
+    this.pianoShortcuts.reset();
+    this.emit("midi-input-reset", undefined);
   }
 
   private async selectMidiOutput(id: string | null): Promise<void> {

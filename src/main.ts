@@ -56,6 +56,7 @@ import type {
 } from "./types";
 import { shouldAutoMuteAudio } from "./output-policy";
 import { audioDeviceOptions } from "./audio-device-options";
+import { midiSelectionAfterRefresh } from "./midi-device-selection";
 import {
   APP_SETTINGS_KEY,
   loadAppSettings,
@@ -777,7 +778,8 @@ function updateMidiFreePlayButton(): void {
 
 function scheduleMidiDeviceRefresh(): void {
   if (
-    appleUiPlatform !== "macos"
+    !isWebBuild()
+    && appleUiPlatform !== "macos"
     && appleUiPlatform !== "ipados"
     && appleUiPlatform !== "ios"
   ) return;
@@ -2920,24 +2922,43 @@ async function refreshDevices(): Promise<void> {
   }
   if (midiResult.status === "fulfilled") {
     const midiPorts = midiResult.value;
+    const previousMidiInputId = selectedMidiInputId;
+    const previousMidiOutputId = selectedMidiOutputId;
     availableMidiInputs = midiPorts.inputs;
     availableMidiOutputs = midiPorts.outputs;
     populateSelect(elements.midiInput, midiPorts.inputs, t("off"));
     populateSelect(elements.midiOutput, midiPorts.outputs, t("off"));
-    const selectedInputStillExists = midiPorts.inputs
-      .some((device) => device.id === midiPorts.selectedInput);
-    selectedMidiInputId = selectedInputStillExists ? midiPorts.selectedInput ?? "" : "";
+    const inputSelection = midiSelectionAfterRefresh(
+      previousMidiInputId,
+      midiPorts.selectedInput,
+      midiPorts.inputs,
+      desiredMidiInput?.id,
+      !midiPorts.inputDiscoveryError,
+    );
+    selectedMidiInputId = inputSelection.selectedId;
     elements.midiInput.value = selectedMidiInputId;
     syncMidiInputChromeState();
-    if (desiredMidiInput?.id && desiredMidiInput.id !== selectedMidiInputId) {
-      midiInputRestorePending = true;
+    midiInputRestorePending = inputSelection.restorePending;
+    if (inputSelection.disconnected) {
+      desiredMidiInput = undefined;
+      delete persistedSettings.midiInput;
     }
-    const selectedOutputStillExists = midiPorts.outputs
-      .some((device) => device.id === midiPorts.selectedOutput);
-    selectedMidiOutputId = selectedOutputStillExists ? midiPorts.selectedOutput ?? "" : "";
+    const outputSelection = midiSelectionAfterRefresh(
+      previousMidiOutputId,
+      midiPorts.selectedOutput,
+      midiPorts.outputs,
+      desiredMidiOutput?.id,
+      !midiPorts.outputDiscoveryError,
+    );
+    selectedMidiOutputId = outputSelection.selectedId;
     elements.midiOutput.value = selectedMidiOutputId;
-    if (desiredMidiOutput?.id && desiredMidiOutput.id !== selectedMidiOutputId) {
-      midiOutputRestorePending = true;
+    midiOutputRestorePending = outputSelection.restorePending;
+    if (outputSelection.disconnected) {
+      desiredMidiOutput = undefined;
+      delete persistedSettings.midiOutput;
+    }
+    if (inputSelection.disconnected || outputSelection.disconnected) {
+      persistSettings();
     }
     fitSelect(elements.midiInput);
     fitSelect(elements.midiOutput);
@@ -3243,6 +3264,17 @@ async function installListeners(): Promise<void> {
     listen<BeatMidiInput>("beat-midi-input", ({ payload }) => {
       if (payload.type === "down") void performDown(payload.token, payload.velocity);
       else void performUp(payload.token);
+    }),
+    listen<void>("midi-input-reset", () => {
+      for (const token of [...heldTokens]) {
+        if (
+          token.startsWith("midi:")
+          || token.startsWith("audition:piano-shortcut:midi:")
+        ) {
+          void performUp(token);
+        }
+      }
+      if (tapMode === "beat") resetBeatTap();
     }),
     listen<PianoShortcutInput>("piano-shortcut", ({ payload }) => {
       void handlePianoShortcut(payload);
@@ -3819,7 +3851,7 @@ const setCursorIndex = async (index: number): Promise<void> => {
 
 async function handlePianoShortcut(input: PianoShortcutInput): Promise<void> {
   if (isPlaybackBlocked()) return;
-  const replayToken = `piano-shortcut:${input.token}`;
+  const replayToken = `audition:piano-shortcut:${input.token}`;
   if (input.command === "replay") {
     if (input.pressed && mostRecentChordIndex !== null) {
       await auditionDown(replayToken, mostRecentChordIndex);
@@ -4445,8 +4477,11 @@ elements.midiInput.addEventListener("change", async () => {
     await invokeSafe("set_midi_input", { id: requested || null });
     selectedMidiInputId = requested;
     syncMidiInputChromeState();
-    desiredMidiInput = preferenceForDevice(requested, availableMidiInputs);
-    persistedSettings.midiInput = desiredMidiInput;
+    desiredMidiInput = requested
+      ? preferenceForDevice(requested, availableMidiInputs)
+      : undefined;
+    if (desiredMidiInput) persistedSettings.midiInput = desiredMidiInput;
+    else delete persistedSettings.midiInput;
     midiInputRestorePending = false;
     persistSettings();
     scheduleSettingsTelemetry("midi", "midi_settings_changed", () => ({
@@ -4480,8 +4515,11 @@ elements.midiOutput.addEventListener("change", async () => {
   try {
     await invokeSafe("set_midi_output", { id: requested || null });
     selectedMidiOutputId = requested;
-    desiredMidiOutput = preferenceForDevice(requested, availableMidiOutputs);
-    persistedSettings.midiOutput = desiredMidiOutput;
+    desiredMidiOutput = requested
+      ? preferenceForDevice(requested, availableMidiOutputs)
+      : undefined;
+    if (desiredMidiOutput) persistedSettings.midiOutput = desiredMidiOutput;
+    else delete persistedSettings.midiOutput;
     midiOutputRestorePending = false;
     persistSettings();
     if (shouldAutoMuteAudio(previous, requested)) {

@@ -158,7 +158,7 @@ test("iPad collapsed chrome hides the entire footer while MIDI input is active",
 
   assert.match(source, /function syncMidiInputChromeState\(\): void\s*{[^}]*classList\.toggle\("midi-input-active", selectedMidiInputId\.length > 0\);/s);
   assert.match(source, /selectedMidiInputId = requested;\s*syncMidiInputChromeState\(\);/s);
-  assert.match(source, /selectedMidiInputId = selectedInputStillExists[\s\S]*?elements\.midiInput\.value = selectedMidiInputId;\s*syncMidiInputChromeState\(\);/s);
+  assert.match(source, /selectedMidiInputId = inputSelection\.selectedId;[\s\S]*?elements\.midiInput\.value = selectedMidiInputId;\s*syncMidiInputChromeState\(\);/s);
   assert.match(source, /selectedMidiInputId = resolved\.id;\s*elements\.midiInput\.value = resolved\.id;\s*syncMidiInputChromeState\(\);/s);
   assert.match(styles, /\.platform-ipados \.shell\.chrome-hidden\.midi-input-active \.workspace\s*{[^}]*grid-template-rows:\s*minmax\(0, 1fr\) 0;/s);
   assert.match(styles, /\.platform-ipados \.shell\.chrome-hidden\.midi-input-active \.performance-strip\s*{[^}]*display:\s*none;/s);

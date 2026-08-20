@@ -12,9 +12,9 @@ use std::{
     time::{Duration, Instant},
 };
 use tapconductor_performance::{
-    Chord, EngineConfig, EventId, Generation, IgnoreReason, InputId, MidiPitch, PerformanceCommand,
-    PerformanceEngine, PerformanceEvent, SampleRate, SampleTime, ScoreSequence, Slice, StaffSlice,
-    Transition, TriggerKind, Velocity,
+    Chord, EngineConfig, EventId, Generation, IgnoreReason, InputId, InputReleaseScope, MidiPitch,
+    PerformanceCommand, PerformanceEngine, PerformanceEvent, SampleRate, SampleTime, ScoreSequence,
+    Slice, StaffSlice, Transition, TriggerKind, Velocity,
 };
 
 const MIN_TAP_INTERVAL: Duration = Duration::from_millis(60);
@@ -438,7 +438,11 @@ impl AppCore {
             &mut self.performance
         };
         let transition = engine
-            .handle(PerformanceCommand::InputReleased { input, at })
+            .handle(PerformanceCommand::InputReleased {
+                input,
+                at,
+                scope: input_release_scope(token),
+            })
             .map_err(|error| error.to_string())?;
         // The engine has now accepted the physical release and removed its
         // latch. Keep the token if handle() rejects so a later release can retry.
@@ -684,6 +688,20 @@ impl AppCore {
     }
 }
 
+fn input_release_scope(token: &str) -> InputReleaseScope {
+    input_release_scope_for_platform(token, cfg!(target_os = "ios"))
+}
+
+fn input_release_scope_for_platform(token: &str, is_ios: bool) -> InputReleaseScope {
+    // An older overlapping CoreMIDI key-up must not end the newer note that
+    // precedes a rest. Its own Note Off remains the authoritative release.
+    if is_ios && token.starts_with("midi:") {
+        InputReleaseScope::OriginatingInput
+    } else {
+        InputReleaseScope::AllEligible
+    }
+}
+
 fn direct_midi_sequence() -> ScoreSequence {
     let chord = Chord::from_midi_numbers(&[60]).expect("middle C is a valid MIDI chord");
     ScoreSequence::new(vec![Slice::new(EventId::new(1), chord)])
@@ -794,9 +812,12 @@ fn rhythm_release_boundary(
 
 #[cfg(test)]
 mod tests {
-    use super::{MIN_TAP_INTERVAL, TapInputGate, rhythm_release_boundary, volume_to_midi_velocity};
+    use super::{
+        MIN_TAP_INTERVAL, TapInputGate, input_release_scope_for_platform, rhythm_release_boundary,
+        volume_to_midi_velocity,
+    };
     use std::time::{Duration, Instant};
-    use tapconductor_performance::{EventId, SliceReleaseBoundary};
+    use tapconductor_performance::{EventId, InputReleaseScope, SliceReleaseBoundary};
     use tapconductor_score::{Rational, ScorePosition, TapEvent};
 
     fn event_at(position: i64) -> TapEvent {
@@ -851,6 +872,22 @@ mod tests {
         assert!(gate.accept(start + Duration::from_millis(60)));
         assert!(!gate.accept(start + Duration::from_millis(119)));
         assert!(gate.accept(start + Duration::from_millis(120)));
+    }
+
+    #[test]
+    fn only_ios_midi_releases_are_scoped_to_the_originating_input() {
+        assert_eq!(
+            input_release_scope_for_platform("midi:17", true),
+            InputReleaseScope::OriginatingInput
+        );
+        assert_eq!(
+            input_release_scope_for_platform("pointer:17", true),
+            InputReleaseScope::AllEligible
+        );
+        assert_eq!(
+            input_release_scope_for_platform("midi:17", false),
+            InputReleaseScope::AllEligible
+        );
     }
 
     #[test]

@@ -12,7 +12,10 @@ mod engine;
 mod gate;
 mod types;
 
-pub use engine::{ActiveGroup, EngineConfig, EngineError, PerformanceCommand, PerformanceEngine};
+pub use engine::{
+    ActiveGroup, EngineConfig, EngineError, InputReleaseScope, PerformanceCommand,
+    PerformanceEngine,
+};
 pub use gate::{DefaultPianoGate, GateError, GatePolicy};
 pub use types::{
     AudioCommand, Chord, ChordError, ChordRollOrder, EventId, Generation, IgnoreReason, InputId,

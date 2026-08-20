@@ -136,6 +136,7 @@ pub enum PerformanceCommand {
     InputReleased {
         input: InputId,
         at: SampleTime,
+        scope: InputReleaseScope,
     },
     Reposition {
         generation: Generation,
@@ -152,6 +153,15 @@ pub enum PerformanceCommand {
     AdvanceClock {
         to: SampleTime,
     },
+}
+
+/// Selects which score notes a physical input release may end in Legato mode.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InputReleaseScope {
+    /// Preserve the traditional gesture where any key-up may begin a rest.
+    AllEligible,
+    /// Only end rest-boundary notes struck by this same physical input.
+    OriginatingInput,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -403,7 +413,9 @@ impl<G: GatePolicy> PerformanceEngine<G> {
                 at,
                 velocity,
             } => self.audition_chord(generation, event, chord, input, at, velocity),
-            PerformanceCommand::InputReleased { input, at } => self.release_input(input, at),
+            PerformanceCommand::InputReleased { input, at, scope } => {
+                self.release_input(input, at, scope)
+            }
             PerformanceCommand::Reposition {
                 generation,
                 event,
@@ -800,7 +812,12 @@ impl<G: GatePolicy> PerformanceEngine<G> {
         Ok(transition)
     }
 
-    fn release_input(&mut self, input: InputId, at: SampleTime) -> Result<Transition, EngineError> {
+    fn release_input(
+        &mut self,
+        input: InputId,
+        at: SampleTime,
+        scope: InputReleaseScope,
+    ) -> Result<Transition, EngineError> {
         self.observe_time(at)?;
         let Some(binding_index) = self.held_inputs.iter().position(|held| held.id == input) else {
             return Ok(Transition::with_event(PerformanceEvent::Ignored {
@@ -810,7 +827,8 @@ impl<G: GatePolicy> PerformanceEngine<G> {
         let releases_group = |group: &VoiceGroup| {
             group.release_scheduled_at.is_none()
                 && if self.legato_mode {
-                    matches!(group.release_boundary, SliceReleaseBoundary::InputRelease)
+                    (matches!(group.release_boundary, SliceReleaseBoundary::InputRelease)
+                        && (scope == InputReleaseScope::AllEligible || group.input == input))
                         || (group.input == input
                             && matches!(
                                 group.release_boundary,
@@ -842,7 +860,8 @@ impl<G: GatePolicy> PerformanceEngine<G> {
             }
             if group.release_scheduled_at.is_some()
                 || if self.legato_mode {
-                    !matches!(group.release_boundary, SliceReleaseBoundary::InputRelease)
+                    !(matches!(group.release_boundary, SliceReleaseBoundary::InputRelease)
+                        && (scope == InputReleaseScope::AllEligible || group.input == input))
                         && !(group.input == input
                             && matches!(
                                 group.release_boundary,
@@ -1047,10 +1066,20 @@ mod tests {
     }
 
     fn release(engine: &mut PerformanceEngine, input_id: u64, at: u64) -> Transition {
+        release_with_scope(engine, input_id, at, InputReleaseScope::AllEligible)
+    }
+
+    fn release_with_scope(
+        engine: &mut PerformanceEngine,
+        input_id: u64,
+        at: u64,
+        scope: InputReleaseScope,
+    ) -> Transition {
         engine
             .handle(PerformanceCommand::InputReleased {
                 input: input(input_id),
                 at: time(at),
+                scope,
             })
             .unwrap()
     }
@@ -1132,6 +1161,7 @@ mod tests {
             .handle(PerformanceCommand::InputReleased {
                 input: input(1),
                 at: time(overflowing_release),
+                scope: InputReleaseScope::AllEligible,
             })
             .unwrap_err();
         assert_eq!(error, EngineError::Gate(GateError::SampleTimeOverflow));
@@ -1543,6 +1573,59 @@ mod tests {
             })
             .collect();
         assert_eq!(dampened, vec![first_group, second_group]);
+    }
+
+    #[test]
+    fn origin_scoped_key_up_does_not_release_a_newer_note_before_a_rest() {
+        let mut engine = engine();
+        engine.set_legato_mode(true);
+        let score = ScoreSequence::new(vec![
+            Slice::from_staff_groups(
+                event(10),
+                &[StaffSlice::new(
+                    1,
+                    chord(&[60]),
+                    SliceReleaseBoundary::OnEvent(event(20)),
+                )],
+            )
+            .unwrap(),
+            Slice::from_staff_groups(
+                event(20),
+                &[StaffSlice::new(
+                    1,
+                    chord(&[62]),
+                    SliceReleaseBoundary::InputRelease,
+                )],
+            )
+            .unwrap(),
+        ])
+        .unwrap();
+        engine.load_score(score, time(0)).unwrap();
+        let generation = engine.generation().unwrap();
+        tap(&mut engine, generation, 1, 100);
+        let before_rest = tap(&mut engine, generation, 2, 200);
+        let before_rest_group = match commands(&before_rest).last().unwrap() {
+            AudioCommand::PlaySlice { group, .. } => *group,
+            _ => unreachable!(),
+        };
+
+        let older_key_up =
+            release_with_scope(&mut engine, 1, 300, InputReleaseScope::OriginatingInput);
+        assert!(!commands(&older_key_up).iter().any(|command| matches!(
+            command,
+            AudioCommand::DampenGroup { group, .. }
+                | AudioCommand::ReleaseGroup { group, .. } if *group == before_rest_group
+        )));
+        assert!(engine.active_groups().any(|group| {
+            group.id == before_rest_group && group.release_scheduled_at.is_none()
+        }));
+
+        let own_key_up =
+            release_with_scope(&mut engine, 2, 400, InputReleaseScope::OriginatingInput);
+        assert!(commands(&own_key_up).iter().any(|command| matches!(
+            command,
+            AudioCommand::DampenGroup { group, .. } if *group == before_rest_group
+        )));
     }
 
     #[test]

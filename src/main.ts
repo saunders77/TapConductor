@@ -2939,10 +2939,6 @@ async function refreshDevices(): Promise<void> {
     elements.midiInput.value = selectedMidiInputId;
     syncMidiInputChromeState();
     midiInputRestorePending = inputSelection.restorePending;
-    if (inputSelection.disconnected) {
-      desiredMidiInput = undefined;
-      delete persistedSettings.midiInput;
-    }
     const outputSelection = midiSelectionAfterRefresh(
       previousMidiOutputId,
       midiPorts.selectedOutput,
@@ -2953,13 +2949,6 @@ async function refreshDevices(): Promise<void> {
     selectedMidiOutputId = outputSelection.selectedId;
     elements.midiOutput.value = selectedMidiOutputId;
     midiOutputRestorePending = outputSelection.restorePending;
-    if (outputSelection.disconnected) {
-      desiredMidiOutput = undefined;
-      delete persistedSettings.midiOutput;
-    }
-    if (inputSelection.disconnected || outputSelection.disconnected) {
-      persistSettings();
-    }
     fitSelect(elements.midiInput);
     fitSelect(elements.midiOutput);
     const midiDirectionErrors = [midiPorts.inputDiscoveryError, midiPorts.outputDiscoveryError]

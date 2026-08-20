@@ -10,9 +10,9 @@ export type MidiSelectionAfterRefresh = {
 /**
  * Reconcile the runtime's selected port with a fresh device snapshot.
  *
- * A preference that was unavailable when the app launched remains eligible
- * for restoration. Once an active port disappears, however, Off is the new
- * durable state: reconnecting hardware must not silently reactivate MIDI.
+ * The live selection becomes Off whenever its runtime port is unavailable,
+ * while the separately persisted desired ID remains eligible for restoration.
+ * A manual Off supplies no desired ID and therefore cannot auto-reactivate.
  */
 export function midiSelectionAfterRefresh(
   previousSelectedId: string,
@@ -30,7 +30,6 @@ export function midiSelectionAfterRefresh(
   return {
     selectedId,
     disconnected,
-    restorePending: !disconnected
-      && Boolean(desiredId && desiredId !== selectedId),
+    restorePending: Boolean(desiredId && desiredId !== selectedId),
   };
 }

@@ -6,10 +6,10 @@ import { midiSelectionAfterRefresh } from "./midi-device-selection.ts";
 
 const keyboard = { id: "keyboard", name: "Keyboard" };
 
-test("disconnecting an active MIDI port makes Off durable", () => {
+test("disconnecting an active MIDI port turns it Off but keeps restoration pending", () => {
   assert.deepEqual(
     midiSelectionAfterRefresh("keyboard", "keyboard", [], "keyboard"),
-    { selectedId: "", disconnected: true, restorePending: false },
+    { selectedId: "", disconnected: true, restorePending: true },
   );
 });
 
@@ -28,5 +28,12 @@ test("a discovery failure is not mistaken for a physical disconnect", () => {
   assert.deepEqual(
     midiSelectionAfterRefresh("keyboard", "keyboard", [], "keyboard", false),
     { selectedId: "", disconnected: false, restorePending: true },
+  );
+});
+
+test("manual Off has no desired port to restore", () => {
+  assert.deepEqual(
+    midiSelectionAfterRefresh("", undefined, [keyboard], undefined),
+    { selectedId: "", disconnected: false, restorePending: false },
   );
 });

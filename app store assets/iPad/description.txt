@@ -19,5 +19,3 @@ Features include:
   • Piano key shortcut keys to navigate and control the app
   • Quickly flip between playing the actual notes from your piano and the notes from the score
   • Optional Legato mode to automatically hold notes until the next note or rest
-
-TapConductor is free and open-source!

@@ -3444,7 +3444,35 @@ window.addEventListener("error", () => {
 window.addEventListener("unhandledrejection", () => {
   telemetry.recordError({ errorCode: "javascript.unhandled_rejection", component: "ui", operation: "promise" });
 });
-document.addEventListener("visibilitychange", () => telemetry.setForeground(!document.hidden));
+let foregroundAudioRecovery: Promise<void> | null = null;
+
+function restoreAudioAfterForeground(): void {
+  if (
+    document.hidden
+    || isWebBuild()
+    || (appleUiPlatform !== "ios" && appleUiPlatform !== "ipados")
+    || foregroundAudioRecovery
+  ) return;
+
+  // Tauri's native lifecycle events are not consistently paired on every iOS
+  // scene configuration. WebKit visibility/focus is a reliable fallback when
+  // the already-open app becomes interactive again. The native command is
+  // idempotent, so receiving both triggers does not reopen the stream twice.
+  foregroundAudioRecovery = invoke<void>("restore_audio_after_foreground")
+    .catch((error: unknown) => {
+      // The native command emits the user-facing lifecycle error event.
+      console.warn("Audio could not be restored after returning to TapConductor.", error);
+    })
+    .finally(() => {
+      foregroundAudioRecovery = null;
+    });
+}
+
+document.addEventListener("visibilitychange", () => {
+  telemetry.setForeground(!document.hidden);
+  if (!document.hidden) restoreAudioAfterForeground();
+});
+window.addEventListener("focus", restoreAudioAfterForeground);
 document.addEventListener("pointerdown", () => telemetry.markActivity(), { capture: true, passive: true });
 document.addEventListener("keydown", () => telemetry.markActivity(), { capture: true });
 

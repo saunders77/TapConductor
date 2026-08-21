@@ -16,12 +16,46 @@ use crate::{
     midi_runtime::MidiInputAction,
 };
 use std::sync::{Arc, Mutex, mpsc};
+#[cfg(mobile)]
+use tauri::AppHandle;
 use tauri::{Emitter, Manager};
 #[cfg(target_os = "ios")]
 use tauri_plugin_apple_audio_session::AppleAudioSessionExt;
 
 pub struct AppState {
     core: Mutex<AppCore>,
+}
+
+/// Restore the mobile audio session and output stream after the app becomes
+/// active. Both the native lifecycle callback and WebKit's foreground fallback
+/// call this function, so it must remain safe to invoke more than once.
+#[cfg(mobile)]
+pub(crate) fn restore_mobile_audio(app: &AppHandle, state: &Arc<AppState>) -> Result<(), String> {
+    let mut core = state.core.lock().map_err(|_| {
+        "TapConductor's native state was poisoned after an unexpected failure.".to_owned()
+    })?;
+    if !core.audio.is_suspended() {
+        return Ok(());
+    }
+
+    let _ = app.emit("audio-lifecycle-restoring", ());
+    #[cfg(target_os = "ios")]
+    if let Err(error) = app.apple_audio_session().activate() {
+        let message = error.to_string();
+        let _ = app.emit("audio-lifecycle-error", message.clone());
+        return Err(message);
+    }
+
+    match core.resume_audio() {
+        Ok(()) => {
+            let _ = app.emit("audio-lifecycle-restored", ());
+            Ok(())
+        }
+        Err(message) => {
+            let _ = app.emit("audio-lifecycle-error", message.clone());
+            Err(message)
+        }
+    }
 }
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -87,28 +121,9 @@ pub fn run() {
                     // common Resumed/Focused pair.
                     let _ = _window.emit("midi-devices-changed", ());
                     if let Some(state) = _window.try_state::<Arc<AppState>>() {
-                        if let Ok(mut core) = state.core.lock() {
-                            // Resumed and Focused(true) commonly arrive as a
-                            // pair after foregrounding. Only rebuild the stream
-                            // once, and do nothing on ordinary focus changes.
-                            if !core.audio.is_suspended() {
-                                return;
-                            }
-                            let _ = _window.emit("audio-lifecycle-restoring", ());
-                            #[cfg(target_os = "ios")]
-                            if let Err(error) = _window.apple_audio_session().activate() {
-                                let _ = _window.emit("audio-lifecycle-error", error.to_string());
-                                return;
-                            }
-                            match core.resume_audio() {
-                                Ok(()) => {
-                                    let _ = _window.emit("audio-lifecycle-restored", ());
-                                }
-                                Err(message) => {
-                                    let _ = _window.emit("audio-lifecycle-error", message);
-                                }
-                            }
-                        }
+                        // Resumed and Focused(true) commonly arrive as a pair.
+                        // The shared helper ignores the second recovery.
+                        let _ = restore_mobile_audio(_window.app_handle(), state.inner());
                     }
                 }
                 _ => {}
@@ -133,6 +148,7 @@ pub fn run() {
             commands::set_piano_shortcut_pitch,
             commands::audio_devices,
             commands::set_audio_device,
+            commands::restore_audio_after_foreground,
             commands::reload_audio_systems,
             commands::set_instrument,
             commands::set_volume,

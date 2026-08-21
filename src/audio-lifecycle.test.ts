@@ -48,7 +48,10 @@ test("iOS restores suspended audio whenever its scene becomes active", () => {
     /WindowEvent::Resumed \| tauri::WindowEvent::Focused\(true\)/,
   );
   assert.match(nativeSource, /if !core\.audio\.is_suspended\(\)/);
-  assert.match(nativeSource, /emit\("audio-lifecycle-restoring", \(\)\)[\s\S]*?core\.resume_audio\(\)/);
+  assert.match(
+    nativeSource,
+    /fn restore_mobile_audio[\s\S]*?emit\("audio-lifecycle-restoring", \(\)\)[\s\S]*?core\.resume_audio\(\)/,
+  );
   assert.match(nativeSource, /emit\("audio-lifecycle-restored", \(\)\)/);
   assert.match(
     source,
@@ -60,6 +63,20 @@ test("iOS restores suspended audio whenever its scene becomes active", () => {
   );
   assert.match(audioRuntimeSource, /pub const fn is_suspended\(&self\) -> bool/);
   assert.match(audioRuntimeSource, /self\.suspended = false/);
+});
+
+test("iOS WebKit foreground events provide an idempotent audio recovery fallback", () => {
+  assert.match(
+    source,
+    /function restoreAudioAfterForeground[\s\S]*?appleUiPlatform !== "ios"[\s\S]*?appleUiPlatform !== "ipados"[\s\S]*?invoke<void>\("restore_audio_after_foreground"\)/,
+  );
+  assert.match(
+    source,
+    /visibilitychange[\s\S]*?if \(!document\.hidden\) restoreAudioAfterForeground\(\)/,
+  );
+  assert.match(source, /window\.addEventListener\("focus", restoreAudioAfterForeground\)/);
+  assert.match(nativeSource, /restore_mobile_audio\(_window\.app_handle\(\), state\.inner\(\)\)/);
+  assert.match(audioRuntimeSource, /Err\(resume_error\) => self\.reload\(\)/);
 });
 
 test("changing audio output releases the native selector before performance input resumes", () => {

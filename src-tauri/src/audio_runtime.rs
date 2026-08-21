@@ -236,10 +236,23 @@ impl AudioManager {
     #[cfg(mobile)]
     pub fn resume(&mut self) -> Result<(), String> {
         let selected_device = self.selected_device.clone();
-        match self.restart(selected_device.clone()) {
-            Ok(()) => Ok(()),
-            Err(_) if selected_device.is_some() => self.restart(None),
+        let restart_result = match self.restart(selected_device.clone()) {
+            Ok(()) => return Ok(()),
+            Err(selected_error) if selected_device.is_some() => {
+                self.restart(None).map_err(|fallback_error| {
+                    format!(
+                        "The selected audio output could not be resumed ({selected_error}). \
+                         The system default output also failed ({fallback_error})."
+                    )
+                })
+            }
             Err(error) => Err(error),
+        };
+        match restart_result {
+            Ok(()) => Ok(()),
+            Err(resume_error) => self.reload().map_err(|reload_error| {
+                format!("Audio could not be resumed ({resume_error}) or reloaded ({reload_error}).")
+            }),
         }
     }
 

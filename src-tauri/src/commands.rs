@@ -257,6 +257,25 @@ pub fn set_audio_device(
     emit_event(&app, event)
 }
 
+/// WebKit's visibility/focus events are the most reliable indication that an
+/// already-running iOS scene is interactive again. They provide a fallback for
+/// devices/OS versions where Tauri does not deliver a matching window event.
+#[tauri::command]
+pub fn restore_audio_after_foreground(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+) -> Result<(), String> {
+    #[cfg(mobile)]
+    {
+        return crate::restore_mobile_audio(&app, state.inner());
+    }
+    #[cfg(not(mobile))]
+    {
+        let _ = (app, state);
+        Ok(())
+    }
+}
+
 #[tauri::command]
 pub fn reload_audio_systems(app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<(), String> {
     let event = lock_core(&state)?.reload_audio_systems()?;

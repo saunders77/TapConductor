@@ -306,7 +306,17 @@ pub fn run() {
             if let tauri::RunEvent::Opened { urls } = _event
                 && let Some(opened_scores) = _app.try_state::<opened_scores::OpenedScores>()
             {
-                match opened_scores.enqueue_urls(urls) {
+                #[cfg(target_os = "ios")]
+                let queued = _app
+                    .path()
+                    .app_cache_dir()
+                    .map_err(|error| error.to_string())
+                    .and_then(|cache| {
+                        opened_scores.enqueue_ios_urls(urls, &cache.join("opened-scores"))
+                    });
+                #[cfg(target_os = "macos")]
+                let queued = opened_scores.enqueue_urls(urls);
+                match queued {
                     Ok(count) if count > 0 => {
                         let _ = _app.emit("open-score-requested", ());
                     }

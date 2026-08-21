@@ -13,7 +13,7 @@
   <key>ITSAppUsesNonExemptEncryption</key>
   <false/>
   <key>LSSupportsOpeningDocumentsInPlace</key>
-  <false/>
+  <true/>
   <key>UIFileSharingEnabled</key>
   <false/>
   <key>UIStatusBarStyle</key>
@@ -36,6 +36,17 @@
       <string>Viewer</string>
       <key>LSHandlerRank</key>
       <string>Alternate</string>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>musicxml</string>
+        <string>xml</string>
+        <string>mxl</string>
+      </array>
+      <key>CFBundleTypeMIMETypes</key>
+      <array>
+        <string>application/vnd.recordare.musicxml+xml</string>
+        <string>application/vnd.recordare.musicxml</string>
+      </array>
       <key>LSItemContentTypes</key>
       <array>
         <string>com.recordare.musicxml.uncompressed</string>
@@ -50,6 +61,10 @@
       <string>Viewer</string>
       <key>LSHandlerRank</key>
       <string>Alternate</string>
+      <key>CFBundleTypeExtensions</key>
+      <array><string>mid</string><string>midi</string></array>
+      <key>CFBundleTypeMIMETypes</key>
+      <array><string>audio/midi</string><string>audio/x-midi</string></array>
       <key>LSItemContentTypes</key>
       <array><string>public.midi-audio</string></array>
     </dict>
@@ -59,31 +74,43 @@
     <dict>
       <key>UTTypeIdentifier</key>
       <string>com.recordare.musicxml.uncompressed</string>
+      <key>UTTypeReferenceURL</key>
+      <string>https://www.w3.org/2021/06/musicxml40/</string>
       <key>UTTypeDescription</key>
       <string>MusicXML Score</string>
       <key>UTTypeConformsTo</key>
-      <array><string>public.xml</string></array>
+      <array>
+        <string>public.xml</string>
+        <string>public.data</string>
+        <string>public.content</string>
+      </array>
       <key>UTTypeTagSpecification</key>
       <dict>
         <key>public.filename-extension</key>
-        <string>musicxml</string>
+        <array><string>musicxml</string></array>
         <key>public.mime-type</key>
-        <string>application/vnd.recordare.musicxml+xml</string>
+        <array><string>application/vnd.recordare.musicxml+xml</string></array>
       </dict>
     </dict>
     <dict>
       <key>UTTypeIdentifier</key>
       <string>com.recordare.musicxml</string>
+      <key>UTTypeReferenceURL</key>
+      <string>https://www.w3.org/2021/06/musicxml40/</string>
       <key>UTTypeDescription</key>
       <string>Compressed MusicXML Score</string>
       <key>UTTypeConformsTo</key>
-      <array><string>public.zip-archive</string></array>
+      <array>
+        <string>public.zip-archive</string>
+        <string>public.data</string>
+        <string>public.content</string>
+      </array>
       <key>UTTypeTagSpecification</key>
       <dict>
         <key>public.filename-extension</key>
-        <string>mxl</string>
+        <array><string>mxl</string></array>
         <key>public.mime-type</key>
-        <string>application/vnd.recordare.musicxml</string>
+        <array><string>application/vnd.recordare.musicxml</string></array>
       </dict>
     </dict>
   </array>

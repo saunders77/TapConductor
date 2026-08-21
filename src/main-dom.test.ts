@@ -35,10 +35,22 @@ test("Apple bundles advertise every score type as an alternate handler", () => {
       assert.match(plist, new RegExp(`<string>${type.replaceAll(".", "\\.")}</string>`));
     }
     assert.match(plist, /<key>LSHandlerRank<\/key>\s*<string>Alternate<\/string>/);
+    assert.match(
+      plist,
+      /<key>public\.filename-extension<\/key>\s*<array><string>mxl<\/string><\/array>/,
+    );
+    assert.match(
+      plist,
+      /<key>public\.mime-type<\/key>\s*<array><string>application\/vnd\.recordare\.musicxml<\/string><\/array>/,
+    );
   }
-  assert.match(plists[0]!, /<key>LSSupportsOpeningDocumentsInPlace<\/key>\s*<false\/>/);
+  assert.match(plists[0]!, /<key>LSSupportsOpeningDocumentsInPlace<\/key>\s*<true\/>/);
+  assert.match(plists[0]!, /<key>CFBundleTypeExtensions<\/key>[\s\S]*?<string>mxl<\/string>/);
+  assert.match(plists[0]!, /<string>public\.data<\/string>/);
+  assert.match(plists[0]!, /<string>public\.content<\/string>/);
   assert.match(nativeSource, /cfg\(any\(target_os = "ios", target_os = "macos"\)\)/);
   assert.match(nativeSource, /tauri::RunEvent::Opened \{ urls \}/);
+  assert.match(nativeSource, /opened_scores\.enqueue_ios_urls\(urls,/);
   assert.match(
     nativeSource,
     /Builder::default\(\)[\s\S]*?\.manage\(opened_scores\)[\s\S]*?\.setup\(/,

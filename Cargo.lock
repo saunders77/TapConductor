@@ -3684,6 +3684,7 @@ version = "1.2.0"
 dependencies = [
  "coremidi",
  "objc2-app-kit",
+ "objc2-foundation",
  "serde",
  "serde_json",
  "tapconductor-audio",

@@ -1,15 +1,21 @@
 // Copyright (c) 2026 Michael Saunders
 use std::{collections::VecDeque, sync::Mutex};
 
+#[cfg(target_os = "ios")]
+use objc2_foundation::NSURL;
 #[cfg(any(target_os = "windows", test))]
 use std::ffi::OsString;
 #[cfg(any(target_os = "ios", target_os = "macos", target_os = "windows", test))]
 use std::path::{Path, PathBuf};
+#[cfg(any(target_os = "ios", test))]
+use std::sync::atomic::{AtomicU64, Ordering};
 #[cfg(any(target_os = "ios", target_os = "macos", target_os = "windows", test))]
 use tauri::Url;
 
 #[cfg(any(target_os = "ios", target_os = "macos", target_os = "windows", test))]
 const SUPPORTED_SCORE_EXTENSIONS: &[&str] = &["musicxml", "xml", "mxl", "mid", "midi"];
+#[cfg(any(target_os = "ios", test))]
+static IMPORT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Default)]
 pub struct OpenedScores {
@@ -24,6 +30,36 @@ impl OpenedScores {
             .filter_map(|url| score_path_from_url(&url))
             .collect::<Vec<_>>();
         self.enqueue_paths(paths)
+    }
+
+    #[cfg(target_os = "ios")]
+    pub fn enqueue_ios_urls(
+        &self,
+        urls: Vec<Url>,
+        import_directory: &Path,
+    ) -> Result<usize, String> {
+        std::fs::create_dir_all(import_directory).map_err(|error| {
+            format!("TapConductor could not prepare its imported-score directory: {error}")
+        })?;
+        let mut imported = Vec::new();
+        for source in urls.iter().filter_map(score_path_from_url) {
+            let foundation_url = NSURL::from_file_path(&source).ok_or_else(|| {
+                format!(
+                    "TapConductor could not access the selected score: {}",
+                    source.display()
+                )
+            })?;
+            // SAFETY: The NSURL is retained for the full balanced access scope,
+            // and the selected file is copied synchronously before access ends.
+            let scoped = unsafe { foundation_url.startAccessingSecurityScopedResource() };
+            let result = import_score_path(&source, import_directory);
+            if scoped {
+                // SAFETY: This balances the successful start call above.
+                unsafe { foundation_url.stopAccessingSecurityScopedResource() };
+            }
+            imported.push(result?);
+        }
+        self.enqueue_paths(imported)
     }
 
     #[cfg(any(target_os = "windows", test))]
@@ -84,6 +120,35 @@ fn supported_score_path(path: &Path) -> bool {
                 .iter()
                 .any(|supported| extension.eq_ignore_ascii_case(supported))
         })
+}
+
+#[cfg(any(target_os = "ios", test))]
+fn import_score_path(source: &Path, import_directory: &Path) -> Result<PathBuf, String> {
+    if !supported_score_path(source) {
+        return Err(format!(
+            "TapConductor does not support this file: {}",
+            source.display()
+        ));
+    }
+    let file_name = source.file_name().ok_or_else(|| {
+        format!(
+            "The selected score does not have a file name: {}",
+            source.display()
+        )
+    })?;
+    let sequence = IMPORT_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let destination = import_directory.join(format!(
+        "{}-{sequence}-{}",
+        std::process::id(),
+        file_name.to_string_lossy()
+    ));
+    std::fs::copy(source, &destination).map_err(|error| {
+        format!(
+            "TapConductor could not import {}: {error}",
+            source.display()
+        )
+    })?;
+    Ok(destination)
 }
 
 #[cfg(any(target_os = "windows", test))]
@@ -168,5 +233,26 @@ mod tests {
             state.take().unwrap(),
             vec!["C:\\Scores\\one.musicxml", "/C:/Scores/two.MXL"]
         );
+    }
+
+    #[test]
+    fn ios_style_import_copies_a_supported_score_before_security_access_ends() {
+        let root = std::env::temp_dir().join(format!(
+            "tapconductor-opened-score-test-{}-{}",
+            std::process::id(),
+            IMPORT_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let source_directory = root.join("provider");
+        let import_directory = root.join("imported");
+        std::fs::create_dir_all(&source_directory).unwrap();
+        std::fs::create_dir_all(&import_directory).unwrap();
+        let source = source_directory.join("score.mxl");
+        std::fs::write(&source, b"MusicXML test archive").unwrap();
+
+        let imported = import_score_path(&source, &import_directory).unwrap();
+        assert_ne!(imported, source);
+        assert_eq!(std::fs::read(imported).unwrap(), b"MusicXML test archive");
+
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

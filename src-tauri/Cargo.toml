@@ -45,4 +45,5 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = [
 ] }
 
 [target.'cfg(target_os = "ios")'.dependencies]
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["NSURL", "std"] }
 tauri-plugin-apple-audio-session = { path = "../crates/tauri-plugin-apple-audio-session" }

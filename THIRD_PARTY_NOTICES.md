@@ -6,6 +6,12 @@ transitive dependencies remain subject to their own licenses. The lockfiles are 
 inventory for a particular source build. Release engineering should generate and retain a complete
 SBOM/license report for every distributed binary.
 
+## Sample musical works
+
+Two sample musical works are included. Both are in the public domain in all countries. They are: 
+- Bogoroditse Devo (Богородице Дѣво), from Rachmaninoff's All-Night Vigil (Всенощное бдѣніе) (1915)
+- Prelude, Op.28, No.20 in C minor by Frédéric Chopin (1839) 
+
 ## Slender Salamander Grand Piano
 
 TapConductor bundles the 44.1 kHz, 16-bit edition of **Slender Salamander Grand Piano**, Signal

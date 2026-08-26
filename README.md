@@ -64,7 +64,7 @@
             <p><a id="telemetry-settings-link" href="#">Configure telemetry settings</a></p>
             <p>TapConductor does not request access to your microphone, camera, location, contacts, or photos. The full policy is available in <b>PRIVACY.md</b> and at <span class="legal-url">github.com/saunders77/TapConductor</span>.</p>
             <h2>Acknowledgements</h2>
-            <p>The bundled grand piano is Slender Salamander Grand Piano, Signal Experiments' phase-aligned derivative of Salamander Grand Piano V3. The original Yamaha C5 recordings are by Alexander Holm, with phase alignment and Slender SFZ mappings by Signal Experiments. It is used under the Creative Commons Attribution 3.0 Unported license.</p>
+            <p>I generated almost all the code for TapConductor with Codex, from OpenAI. The bundled grand piano is Slender Salamander Grand Piano, Signal Experiments' phase-aligned derivative of Salamander Grand Piano V3. The original Yamaha C5 recordings are by Alexander Holm, with phase alignment and Slender SFZ mappings by Signal Experiments. It is used under the Creative Commons Attribution 3.0 Unported license.</p>
 
 
   <h2>Feedback and Support</h2>

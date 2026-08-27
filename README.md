@@ -1,20 +1,27 @@
 # TapConductor interactive score player
 
-<p>TapConductor is an interactive score-playing app for musicians like me whose piano skills aren't good enough or who have disabilities, or organizations without the budget to hire a real accompanist. You can use it <strong>with</strong> or <strong>without</strong> a piano for:
+<p>
+TapConductor (install for free on <a href="https://apps.apple.com/app/id6800979864">iPad</a>, <a href="https://github.com/saunders77/TapConductor/releases/download/TapConductor_v1.3/v1.3.0_TapConductor_universal.dmg">Mac</a>, or <a href="https://github.com/saunders77/TapConductor/releases/download/TapConductor_v1.3/v1.3.0_TapConductor_x64-setup.exe">Windows</a>) is an interactive score-playing app for musicians who need help playing piano because:
+<ul>
+  <li>The music is too hard to sight-read or has too many parts/voices/staves</li>
+  <li>You didn't have enough time to practice</li>
+  <li>The budget is too small for a real accompanist</li>
+  <li>You need to conduct or do something else while playing</li>
+  <li>You're disabled or lack fine motor coordination</li>
+</ul>
+You can use it <strong>with</strong> or <strong>without</strong> a piano for:
   <ul>
     <li>Leading a rehearsal, especially choirs learning <strong>unaccompanied</strong> or <strong>accompanied</strong> music</li>
-    <li>Accompanying other musicians in auditions or rehearsals</li>
-    <li>Accompanying yourself while you sing</li>
-    <li>Playing a piece on piano before you've learned the notes to experience the enjoyment of playing it before you learn how</li>
+    <li>Accompanying other musicians (or yourself while you sing)</li>
+    <li>Playing a piece on piano before you've learned the notes to experience the enjoyment of playing it before you know how</li>
     <li>Performing for an audience</li>
-    <li>Recording with MIDI to capture subtle expression, timing, and dynamics</li>
+    <li>Recording with MIDI for music production</li>
     <li>(Caution) Pretending you can play piano music that's actually too difficult for you</li>
   </ul>
 </p>
-
 <p>
-  TapConductor is open-source software. You can install it from the Apple App Store, build it from the code in this repository, or download the installer for Mac or Windows:
-  <h3><a href="https://apps.apple.com/app/id6800979864"><img src="app store assets/iPad/appstoreicon.png">Get it for iPad from the Apple App Store</a></h3>
+  TapConductor is open-source and vibe-coded. You can install it from the Apple App Store, build it from the code in this repository, or download the installer for Mac or Windows:
+  <h3><a href="https://apps.apple.com/app/id6800979864"><img src="app store assets/iPad/appstoreicon.png">  Get it for iPad from the Apple App Store</a></h3>
   <h3><a href="https://github.com/saunders77/TapConductor/releases/download/TapConductor_v1.3/v1.3.0_TapConductor_universal.dmg">⬇️ Download Mac installer v1.3.0_TapConductor_universal.dmg</a></h3>
   <h3><a href="https://github.com/saunders77/TapConductor/releases/download/TapConductor_v1.3/v1.3.0_TapConductor_x64-setup.exe">⬇️ Download Windows installer v1.3.0_TapConductor_x64-setup.exe</a></h3>
 </p>

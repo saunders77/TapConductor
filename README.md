@@ -15,8 +15,8 @@
 <p>
   TapConductor is open-source software. You can install it from the Apple App Store, build it from the code in this repository, or download the installer for Mac or Windows:
   <h3><a href="https://apps.apple.com/app/id6800979864"><img src="app store assets/iPad/appstoreicon.png">  Get it for iPad from the Apple App Store</a></h3>
-  <h3><a href="https://github.com/saunders77/TapConductor/releases/download/TapConductor_v1.3/v1.3.0_TapConductor_universal.dmg"><img src="app store assets/iPad/macdevice.png">  ⬇️ Download Mac installer v1.3.0_TapConductor_universal.dmg</a></h3>
-  <h3><a href="https://github.com/saunders77/TapConductor/releases/download/TapConductor_v1.3/v1.3.0_TapConductor_x64-setup.exe"><img src="app store assets/microsoft store/windowsicon.png">  ⬇️ Download Windows installer v1.3.0_TapConductor_x64-setup.exe</a></h3>
+  <h3><a href="https://github.com/saunders77/TapConductor/releases/download/TapConductor_v1.3/v1.3.0_TapConductor_universal.dmg">⬇️ Download Mac installer v1.3.0_TapConductor_universal.dmg</a></h3>
+  <h3><a href="https://github.com/saunders77/TapConductor/releases/download/TapConductor_v1.3/v1.3.0_TapConductor_x64-setup.exe">⬇️ Download Windows installer v1.3.0_TapConductor_x64-setup.exe</a></h3>
 </p>
 
 <p>For <b>support</b> beyond the help on this page, please open a ticket on the <a href="https://github.com/saunders77/TapConductor/issues">GitHub issues page</a> or email <a href="mailto:tapconductor@outlook.com">tapconductor@outlook.com</a>.</p>

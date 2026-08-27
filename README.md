@@ -30,6 +30,8 @@ You can use it <strong>with</strong> or <strong>without</strong> a piano for:
 
 ![TapConductor application screenshot](assets/screenshot.png) 
 
+[<img src="assets/ipadvideo.png">](https://www.youtube.com/watch?v=4NFnD9UvzjM)
+
 [<img src="assets/video.png">](https://www.youtube.com/shorts/d9GjJh0hbyc)
 
 <h2>Supported files</h2>
